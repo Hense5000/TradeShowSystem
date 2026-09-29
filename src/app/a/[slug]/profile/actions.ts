@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
 import { requireMembership } from "@/lib/tenant";
 import { contactSchema, firstError, profileSchema } from "@/lib/validation";
 
-export type SaveState = { error?: string; saved?: boolean } | undefined;
 
 export async function updateProfile(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
   const { organization } = await requireMembership(slug, "ADMIN");

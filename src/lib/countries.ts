@@ -33,3 +33,30 @@ export function countryName(code: string): string {
 export function countryOptions(): { code: CountryCode; name: string }[] {
   return COUNTRY_CODES.map((code) => ({ code, name: countryName(code) })).sort((a, b) => a.name.localeCompare(b.name, "en"));
 }
+
+const ALIASES: Record<string, CountryCode> = {
+  uk: "GB",
+  "great britain": "GB",
+  england: "GB",
+  usa: "US",
+  "united states of america": "US",
+  uae: "AE",
+  "south korea": "KR",
+  korea: "KR",
+  russia: "RU",
+  "czech republic": "CZ",
+  turkey: "TR",
+  holland: "NL",
+};
+
+let byName: Map<string, CountryCode> | undefined;
+
+/** A country code from a code ("de") or an English name ("Germany"), or null. */
+export function findCountryCode(value: string): CountryCode | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (isCountryCode(v.toUpperCase())) return v.toUpperCase() as CountryCode;
+  byName ??= new Map(COUNTRY_CODES.map((code) => [countryName(code).toLowerCase(), code]));
+  const key = v.toLowerCase();
+  return byName.get(key) ?? ALIASES[key] ?? null;
+}

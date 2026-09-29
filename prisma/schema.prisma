@@ -193,3 +193,21 @@ model StripeEvent {
   type        String
   processedAt DateTime @default(now())
 }
+
+// ---------------------------------------------------------------------------
+// Shared directory: the same lists for every account. Everyone who is logged
+// in can read them; only platform admins (PLATFORM_ADMIN_EMAILS) change them.
+// ---------------------------------------------------------------------------
+
+model ExhibitionCenter {
+  id        String   @id @default(cuid())
+  name      String
+  city      String?
+  country   String? // ISO 3166-1 alpha-2, e.g. "DE"
+  website   String?
+  eventsUrl String? // the center's own page listing its upcoming events
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}

@@ -1,7 +1,8 @@
 "use client";
 
 import { startTransition, useActionState, useEffect, useState } from "react";
-import type { SaveState } from "./actions";
+
+export type SaveState = { error?: string; saved?: boolean } | undefined;
 
 /**
  * A card with a form that saves through a server action. Shows the error the
