@@ -222,3 +222,21 @@ model ExhibitionOrganizer {
 
   @@index([name])
 }
+
+// A trade show. Its status (upcoming, running, finished) is worked out from
+// the dates when shown, so it is not stored.
+model TradeShow {
+  id                    String   @id @default(cuid())
+  name                  String
+  startDate             DateTime @db.Date
+  endDate               DateTime @db.Date
+  city                  String?
+  country               String? // ISO 3166-1 alpha-2, e.g. "DE"
+  website               String?
+  exhibitorDirectoryUrl String? // the show's own list of exhibitors
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([startDate])
+  @@index([name])
+}

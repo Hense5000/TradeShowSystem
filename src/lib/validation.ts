@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isCountryCode } from "@/lib/countries";
+import { parseDate } from "@/lib/dates";
 
 export const email = z
   .string()
@@ -103,6 +104,34 @@ export const organizerSchema = z.object({
 });
 
 export type OrganizerInput = z.infer<typeof organizerSchema>;
+
+const requiredDate = (label: string) =>
+  z.string().transform((v, ctx) => {
+    if (!v.trim()) {
+      ctx.addIssue({ code: "custom", message: `Enter the ${label.toLowerCase()}.` });
+      return z.NEVER;
+    }
+    const date = parseDate(v);
+    if (!date) {
+      ctx.addIssue({ code: "custom", message: `${label}: "${v.trim()}" is not a date. Use a date like 2026-09-22.` });
+      return z.NEVER;
+    }
+    return date;
+  });
+
+export const tradeShowSchema = z
+  .object({
+    name: z.string().trim().min(1, "Enter the trade show's name.").max(150, "Name can be at most 150 characters."),
+    startDate: requiredDate("Start date"),
+    endDate: requiredDate("End date"),
+    city: optionalText(100, "City"),
+    country,
+    website,
+    exhibitorDirectoryUrl: webAddress("Exhibitor directory URL"),
+  })
+  .refine((s) => s.endDate >= s.startDate, { message: "The end date can't be before the start date.", path: ["endDate"] });
+
+export type TradeShowInput = z.infer<typeof tradeShowSchema>;
 
 /** First error message from a failed parse, for showing in a form. */
 export function firstError(error: z.ZodError): string {

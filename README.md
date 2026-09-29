@@ -19,8 +19,9 @@ keep the company profile up to date; billing and features follow in the next ste
 | 1 | Login, accounts, users with roles, invitations | ✅ done |
 | 2 | Company profile and primary contact, approved design applied | ✅ done |
 | – | Shared directory: exhibition centers (list, search, add, edit, CSV import) | ✅ done |
-| – | Shared directory: exhibition organizers (same features) | ✅ this version |
-| – | Shared directory: trade shows, exhibitors | next |
+| – | Shared directory: exhibition organizers (same features) | ✅ done |
+| – | Shared directory: trade shows (status follows the dates) | ✅ this version |
+| – | Shared directory: exhibitors | next |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
 
