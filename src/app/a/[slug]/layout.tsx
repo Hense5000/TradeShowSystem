@@ -1,5 +1,7 @@
+import { db } from "@/lib/db";
 import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
+import { isProfileComplete } from "@/lib/profile";
 import { requireMembership } from "@/lib/tenant";
 import { AccountFrame } from "./sidebar";
 
@@ -7,6 +9,8 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const { slug } = await params;
   const { user, membership, organization } = await requireMembership(slug);
   const userName = user.name ?? user.email;
+  const primaryContact = await db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } });
+  const profileMissing = !isProfileComplete(organization, primaryContact);
 
   return (
     <AccountFrame
@@ -26,7 +30,12 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
         {
           title: "Account settings",
           items: [
-            { label: "Company profile", icon: "building", path: "profile", soon: true },
+            {
+              label: "Company profile",
+              icon: "building",
+              path: "profile",
+              badge: profileMissing ? <span className="block size-2 rounded-full bg-warn" title="Details missing" /> : undefined,
+            },
             { label: "Users", icon: "users", path: "members" },
             { label: "Billing", icon: "card", path: "billing", soon: true },
           ],
