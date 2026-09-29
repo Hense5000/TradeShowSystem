@@ -87,6 +87,9 @@
   .pill-neutral {
     @apply border border-line bg-subtle text-muted;
   }
+  .pill-ok {
+    @apply bg-ok-soft text-ok;
+  }
   .pill-warn {
     @apply bg-warn-soft text-warn;
   }
