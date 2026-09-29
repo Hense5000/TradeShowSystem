@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { hasRole } from "@/lib/permissions";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 
 /** The signed-in user, or a redirect to the login page. */
 export async function requireUser(callbackUrl?: string) {
@@ -30,4 +31,14 @@ export async function requireMembership(slug: string, minRole: Role = "MEMBER") 
   if (!membership) notFound();
   if (!hasRole(membership.role, minRole)) notFound();
   return { user, membership, organization: membership.organization };
+}
+
+/**
+ * Like requireMembership, but only for platform admins, who maintain the
+ * shared directory. Everyone else gets a 404.
+ */
+export async function requirePlatformAdmin(slug: string) {
+  const result = await requireMembership(slug);
+  if (!isPlatformAdmin(result.user.email)) notFound();
+  return result;
 }

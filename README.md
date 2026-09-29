@@ -9,6 +9,7 @@ keep the company profile up to date; billing and features follow in the next ste
 - Hver kunde er en **konto** (i koden hedder det `Organization`). En bruger kan være med i flere konti.
 - Roller: **Owner** (alt, inkl. betaling), **Admin** (brugere, profil, funktioner), **Member** (bruger systemet).
 - Brugere inviteres med et link, som en admin kopierer og sender. Automatisk e-mail kommer senere.
+- **Exhibition centers** (og senere messer, arrangører og udstillere) er én fælles liste for alle konti. Alle kan se den; kun e-mails i `PLATFORM_ADMIN_EMAILS` kan rette i den.
 - Kortoplysninger gemmes aldrig hos os. De ligger i Stripe, og vi gemmer kun Stripes id'er.
 
 ## Status
@@ -16,7 +17,9 @@ keep the company profile up to date; billing and features follow in the next ste
 | Step | What | State |
 | --- | --- | --- |
 | 1 | Login, accounts, users with roles, invitations | ✅ done |
-| 2 | Company profile and primary contact, approved design applied | ✅ this version |
+| 2 | Company profile and primary contact, approved design applied | ✅ done |
+| – | Shared directory: exhibition centers (list, search, add, edit, CSV import) | ✅ this version |
+| – | Shared directory: trade shows, organizers, exhibitors | next |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
 

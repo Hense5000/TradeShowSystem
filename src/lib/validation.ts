@@ -36,22 +36,32 @@ const optionalText = (max: number, label: string) =>
     .transform((v) => v || null);
 
 /** Accepts "example.com" as well as "https://example.com"; stores a full https URL. */
-export const website = z
+const webAddress = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(300, `${label} can be at most 300 characters.`)
+    .transform((v, ctx) => {
+      if (!v) return null;
+      const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+      try {
+        const url = new URL(withScheme);
+        if (!url.hostname.includes(".") || /\s/.test(v)) throw new Error();
+        return url.toString().replace(/\/$/, "");
+      } catch {
+        ctx.addIssue({ code: "custom", message: `${label}: enter a valid web address, for example example.com.` });
+        return z.NEVER;
+      }
+    });
+
+export const website = webAddress("Website");
+
+const country = z
   .string()
   .trim()
-  .max(200, "Website can be at most 200 characters.")
-  .transform((v, ctx) => {
-    if (!v) return null;
-    const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
-    try {
-      const url = new URL(withScheme);
-      if (!url.hostname.includes(".") || /\s/.test(v)) throw new Error();
-      return url.toString().replace(/\/$/, "");
-    } catch {
-      ctx.addIssue({ code: "custom", message: "Enter a valid website, for example example.com." });
-      return z.NEVER;
-    }
-  });
+  .toUpperCase()
+  .refine((v) => v === "" || isCountryCode(v), "Pick a country from the list.")
+  .transform((v) => v || null);
 
 export const profileSchema = z.object({
   name: z.string().trim().min(1, "Enter a company name.").max(100),
@@ -61,12 +71,7 @@ export const profileSchema = z.object({
   postalCode: optionalText(20, "Postal code"),
   city: optionalText(100, "City"),
   region: optionalText(100, "Region"),
-  country: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .refine((v) => v === "" || isCountryCode(v), "Pick a country from the list.")
-    .transform((v) => v || null),
+  country,
   website,
 });
 
@@ -80,6 +85,16 @@ export const contactSchema = z.object({
     .refine((v) => v === "" || /^\+?[\d\s().-]{5,}$/.test(v), "Enter a valid phone number, for example +45 12 34 56 78.")
     .transform((v) => v || null),
 });
+
+export const centerSchema = z.object({
+  name: z.string().trim().min(1, "Enter the exhibition center's name.").max(150, "Name can be at most 150 characters."),
+  city: optionalText(100, "City"),
+  country,
+  website,
+  eventsUrl: webAddress("Local events URL"),
+});
+
+export type CenterInput = z.infer<typeof centerSchema>;
 
 /** First error message from a failed parse, for showing in a form. */
 export function firstError(error: z.ZodError): string {

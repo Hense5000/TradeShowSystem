@@ -24,6 +24,10 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
         {
           items: [
             { label: "Overview", icon: "home", path: "" },
+            { label: "Trade shows", icon: "calendar", path: "trade-shows", soon: true },
+            { label: "Exhibitors", icon: "store", path: "exhibitors", soon: true },
+            { label: "Exhibition centers", icon: "pin", path: "centers" },
+            { label: "Organizers", icon: "briefcase", path: "organizers", soon: true },
             { label: "Features", icon: "grid", path: "features", soon: true },
           ],
         },
