@@ -3,14 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
+import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
 import { centerKey, parseCenterRows } from "@/lib/centers";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { type CenterInput, centerSchema, firstError } from "@/lib/validation";
-
-export type ImportState = { error?: string; imported?: number; alreadyThere?: number; problems?: string[] } | undefined;
 
 const MAX_IMPORT_BYTES = 2_000_000;
 
@@ -63,7 +62,7 @@ export async function importCenters(slug: string, _prev: ImportState, formData: 
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file to import." };
   if (file.size > MAX_IMPORT_BYTES) return { error: "The file is too large. Split it into files under 2 MB." };
 
-  const { centers, problems, error } = parseCenterRows(parseCsv(await file.text()));
+  const { items: centers, problems, error } = parseCenterRows(parseCsv(await file.text()));
   if (error) return { error };
 
   // Leave out centers that are already in the list, so importing the same

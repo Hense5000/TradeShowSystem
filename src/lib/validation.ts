@@ -96,6 +96,14 @@ export const centerSchema = z.object({
 
 export type CenterInput = z.infer<typeof centerSchema>;
 
+export const organizerSchema = z.object({
+  name: z.string().trim().min(1, "Enter the organizer's company name.").max(150, "Name can be at most 150 characters."),
+  website,
+  country,
+});
+
+export type OrganizerInput = z.infer<typeof organizerSchema>;
+
 /** First error message from a failed parse, for showing in a form. */
 export function firstError(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid input.";

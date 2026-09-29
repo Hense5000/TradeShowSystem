@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { ImportForm } from "@/components/import-form";
 import { PageHeader } from "@/components/page-header";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { importCenters } from "../actions";
-import { ImportForm } from "./import-form";
 
 export default async function ImportCentersPage({ params }: PageProps<"/a/[slug]/centers/import">) {
   const { slug } = await params;
@@ -48,7 +48,7 @@ export default async function ImportCentersPage({ params }: PageProps<"/a/[slug]
           skipped, so it is safe to import the same file again.
         </p>
       </section>
-      <ImportForm action={importCenters.bind(null, slug)} />
+      <ImportForm action={importCenters.bind(null, slug)} noun={["center", "centers"]} />
     </>
   );
 }
