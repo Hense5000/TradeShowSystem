@@ -22,7 +22,7 @@ export function SignupForm({ invite, inviteEmail }: { invite?: string; inviteEma
       <div>
         <label className="label" htmlFor="email">Email</label>
         <input
-          className="input read-only:bg-zinc-100"
+          className="input"
           id="email"
           name="email"
           type="email"

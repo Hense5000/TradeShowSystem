@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCountryCode } from "@/lib/countries";
 
 export const email = z
   .string()
@@ -25,6 +26,60 @@ export const accountSchema = z.object({
 export const roleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
 
 export const inviteSchema = z.object({ email, role: roleSchema });
+
+/** Optional text field: trimmed, and an empty field becomes null. */
+const optionalText = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${label} can be at most ${max} characters.`)
+    .transform((v) => v || null);
+
+/** Accepts "example.com" as well as "https://example.com"; stores a full https URL. */
+export const website = z
+  .string()
+  .trim()
+  .max(200, "Website can be at most 200 characters.")
+  .transform((v, ctx) => {
+    if (!v) return null;
+    const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+    try {
+      const url = new URL(withScheme);
+      if (!url.hostname.includes(".") || /\s/.test(v)) throw new Error();
+      return url.toString().replace(/\/$/, "");
+    } catch {
+      ctx.addIssue({ code: "custom", message: "Enter a valid website, for example example.com." });
+      return z.NEVER;
+    }
+  });
+
+export const profileSchema = z.object({
+  name: z.string().trim().min(1, "Enter a company name.").max(100),
+  vatNumber: optionalText(30, "VAT number"),
+  addressLine1: optionalText(100, "Address"),
+  addressLine2: optionalText(100, "Address line 2"),
+  postalCode: optionalText(20, "Postal code"),
+  city: optionalText(100, "City"),
+  region: optionalText(100, "Region"),
+  country: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === "" || isCountryCode(v), "Pick a country from the list.")
+    .transform((v) => v || null),
+  website,
+});
+
+export const contactSchema = z.object({
+  name: z.string().trim().min(1, "Enter the contact's name.").max(100),
+  email,
+  phone: z
+    .string()
+    .trim()
+    .max(30, "Phone can be at most 30 characters.")
+    .refine((v) => v === "" || /^\+?[\d\s().-]{5,}$/.test(v), "Enter a valid phone number, for example +45 12 34 56 78.")
+    .transform((v) => v || null),
+});
 
 /** First error message from a failed parse, for showing in a form. */
 export function firstError(error: z.ZodError): string {

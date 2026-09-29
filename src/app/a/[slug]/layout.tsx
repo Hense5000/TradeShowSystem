@@ -1,30 +1,48 @@
-import Link from "next/link";
+import { db } from "@/lib/db";
+import { initials } from "@/lib/initials";
+import { ROLE_LABEL } from "@/lib/permissions";
+import { isProfileComplete } from "@/lib/profile";
 import { requireMembership } from "@/lib/tenant";
+import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
-  const base = `/a/${slug}`;
+  const { user, membership, organization } = await requireMembership(slug);
+  const userName = user.name ?? user.email;
+  const primaryContact = await db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } });
+  const profileMissing = !isProfileComplete(organization, primaryContact);
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-200 pb-4">
-        <div>
-          <Link href="/accounts" className="text-sm text-zinc-500 hover:underline">
-            All accounts
-          </Link>
-          <h1 className="text-2xl font-semibold">{organization.name}</h1>
-        </div>
-        <nav className="flex gap-1 text-sm">
-          <Link href={base} className="btn-secondary">Overview</Link>
-          <Link href={`${base}/members`} className="btn-secondary">Users</Link>
-          {/* Coming in the next steps */}
-          <span className="btn-secondary cursor-not-allowed opacity-40" title="Coming soon">Profile</span>
-          <span className="btn-secondary cursor-not-allowed opacity-40" title="Coming soon">Billing</span>
-          <span className="btn-secondary cursor-not-allowed opacity-40" title="Coming soon">Features</span>
-        </nav>
-      </div>
+    <AccountFrame
+      base={`/a/${slug}`}
+      accountName={organization.name}
+      accountInitials={initials(organization.name)}
+      userName={userName}
+      userInitials={initials(userName)}
+      roleLabel={ROLE_LABEL[membership.role]}
+      groups={[
+        {
+          items: [
+            { label: "Overview", icon: "home", path: "" },
+            { label: "Features", icon: "grid", path: "features", soon: true },
+          ],
+        },
+        {
+          title: "Account settings",
+          items: [
+            {
+              label: "Company profile",
+              icon: "building",
+              path: "profile",
+              badge: profileMissing ? <span className="block size-2 rounded-full bg-warn" title="Details missing" /> : undefined,
+            },
+            { label: "Users", icon: "users", path: "members" },
+            { label: "Billing", icon: "card", path: "billing", soon: true },
+          ],
+        },
+      ]}
+    >
       {children}
-    </div>
+    </AccountFrame>
   );
 }

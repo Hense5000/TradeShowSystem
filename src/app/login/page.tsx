@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthShell } from "@/components/auth-shell";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
@@ -8,15 +9,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const inviteToken = next?.match(/^\/invite\/([\w-]+)$/)?.[1];
   const signupHref = inviteToken ? `/signup?invite=${inviteToken}` : "/signup";
   return (
-    <div className="card mx-auto max-w-sm">
-      <h1 className="mb-6 text-xl font-semibold">Log in</h1>
+    <AuthShell>
+      <h1 className="page-title">Log in</h1>
+      <p className="mt-1 mb-6 text-muted">Welcome back.</p>
       <LoginForm callbackUrl={next} />
-      <p className="mt-6 text-sm text-zinc-600">
-        No account yet?{" "}
-        <Link href={signupHref} className="font-medium underline">
-          Sign up
+      <p className="mt-6 text-center text-sm text-muted">
+        New here?{" "}
+        <Link href={signupHref} className="font-semibold text-brand hover:underline">
+          Create an account
         </Link>
       </p>
-    </div>
+    </AuthShell>
   );
 }

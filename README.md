@@ -1,8 +1,8 @@
 # Trade Show System
 
 A multi-tenant web app: every customer company gets its own **account** that
-its users log in to. Inside an account users are invited, given a role, and
-(in upcoming steps) manage the company profile, billing and features.
+its users log in to. Inside an account users are invited, given a role and
+keep the company profile up to date; billing and features follow in the next steps.
 
 ## Kort fortalt (dansk)
 
@@ -15,10 +15,17 @@ its users log in to. Inside an account users are invited, given a role, and
 
 | Step | What | State |
 | --- | --- | --- |
-| 1 | Login, accounts, users with roles, invitations | ✅ this version |
-| 2 | Company profile and primary contact | data model ready |
+| 1 | Login, accounts, users with roles, invitations | ✅ done |
+| 2 | Company profile and primary contact, approved design applied | ✅ this version |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
+
+## Design
+
+Approved in September 2026: white left sidebar with the current page as a solid
+blue pill, light grey page, white cards, and the logo blue (`#287bbf`) as the only
+accent colour. Green, amber and red are only used for small status badges. The
+tokens live in `src/app/globals.css`; logo files are in `public/brand`.
 
 ## Tech
 
