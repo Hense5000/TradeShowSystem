@@ -1,22 +1,102 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens for the approved design: one accent colour (the logo blue),
+ * a light grey page background, white cards. Green, amber and red are only
+ * used for small status badges.
+ */
+@theme {
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-brand: #287bbf;
+  --color-brand-hover: #1f67a3;
+  --color-brand-soft: #e8f1fa;
+
+  --color-page: #eef2f6;
+  --color-surface: #ffffff;
+  --color-subtle: #f5f7fa;
+  --color-line: #e3e8ef;
+  --color-line-strong: #cfd7e2;
+
+  --color-ink: #16202c;
+  --color-muted: #5d6b7c;
+  --color-faint: #8b97a6;
+
+  --color-ok: #1d8a52;
+  --color-ok-soft: #e4f5ec;
+  --color-warn: #a86500;
+  --color-warn-soft: #fdf1dc;
+  --color-bad: #c9372c;
+  --color-bad-soft: #fdeaea;
+}
+
+@layer base {
+  body {
+    @apply bg-page text-ink;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+}
+
 @layer components {
   .input {
-    @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900;
+    @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none;
+    @apply focus:border-brand focus:ring-3 focus:ring-brand-soft;
+    @apply read-only:bg-subtle disabled:bg-subtle disabled:text-muted;
   }
   .label {
-    @apply mb-1 block text-sm font-medium text-zinc-700;
+    @apply mb-1.5 block text-[0.82rem] font-semibold text-ink;
+  }
+  .hint {
+    @apply mt-1 text-xs text-muted;
   }
   .btn {
-    @apply inline-flex items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold whitespace-nowrap text-white;
+    @apply hover:bg-brand-hover disabled:opacity-50;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-ink;
+    @apply hover:bg-subtle disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-bad;
+    @apply hover:bg-bad-soft disabled:opacity-50;
   }
   .card {
-    @apply rounded-lg border border-zinc-200 bg-white p-6;
+    @apply rounded-xl border border-line bg-surface p-5;
+  }
+  .card-foot {
+    @apply -mx-5 -mb-5 mt-5 flex justify-end gap-2 rounded-b-xl border-t border-line bg-subtle px-5 py-3;
   }
   .error {
-    @apply rounded-md bg-red-50 px-3 py-2 text-sm text-red-700;
+    @apply rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad;
+  }
+  .success {
+    @apply rounded-lg bg-ok-soft px-3 py-2 text-sm text-ok;
+  }
+  .pill {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap;
+  }
+  .pill-brand {
+    @apply bg-brand text-white;
+  }
+  .pill-soft {
+    @apply bg-brand-soft text-brand;
+  }
+  .pill-neutral {
+    @apply border border-line bg-subtle text-muted;
+  }
+  .pill-warn {
+    @apply bg-warn-soft text-warn;
+  }
+  .avatar {
+    @apply grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-wider text-muted uppercase;
+  }
+  .page-title {
+    @apply text-2xl font-bold tracking-tight;
   }
 }

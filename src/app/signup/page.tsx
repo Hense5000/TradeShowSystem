@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthShell } from "@/components/auth-shell";
 import { findInvitation } from "@/lib/invitations";
 import { SignupForm } from "./signup-form";
 
@@ -8,18 +9,21 @@ export default async function SignupPage({ searchParams }: PageProps<"/signup">)
   const validInvite = found?.state === "pending" ? found.invitation : null;
 
   return (
-    <div className="card mx-auto max-w-sm">
-      <h1 className="text-xl font-semibold">{validInvite ? `Join ${validInvite.organization.name}` : "Create an account"}</h1>
-      <p className="mb-6 mt-1 text-sm text-zinc-600">
+    <AuthShell>
+      <h1 className="page-title">{validInvite ? `Join ${validInvite.organization.name}` : "Create your account"}</h1>
+      <p className="mt-1 mb-6 text-muted">
         {validInvite ? "Create your user to accept the invitation." : "One account per company. You can invite your colleagues afterwards."}
       </p>
       <SignupForm invite={validInvite ? (invite as string) : undefined} inviteEmail={validInvite?.email} />
-      <p className="mt-6 text-sm text-zinc-600">
+      <p className="mt-6 text-center text-sm text-muted">
         Already have a user?{" "}
-        <Link href={validInvite ? `/login?callbackUrl=${encodeURIComponent(`/invite/${invite}`)}` : "/login"} className="font-medium underline">
+        <Link
+          href={validInvite ? `/login?callbackUrl=${encodeURIComponent(`/invite/${invite}`)}` : "/login"}
+          className="font-semibold text-brand hover:underline"
+        >
           Log in
         </Link>
       </p>
-    </div>
+    </AuthShell>
   );
 }

@@ -18,17 +18,17 @@ export function InviteForm({
   return (
     <div className="space-y-3">
       <form action={formAction} className="flex flex-wrap gap-2">
-        <input className="input flex-1" name="email" type="email" placeholder="colleague@company.com" aria-label="Email" defaultValue={state?.error ? state.email : undefined} required />
+        <input className="input min-w-0 basis-full sm:basis-0 sm:flex-1" name="email" type="email" placeholder="colleague@company.com" aria-label="Email" defaultValue={state?.error ? state.email : undefined} required />
         <select className="input w-auto" name="role" defaultValue="MEMBER" aria-label="Role">
           {roles.map((r) => (
             <option key={r} value={r}>{ROLE_LABEL[r]}</option>
           ))}
         </select>
-        <button className="btn" disabled={pending}>Invite</button>
+        <button className="btn" disabled={pending}>Create invitation</button>
       </form>
       {state?.error && <p className="error">{state.error}</p>}
       {state?.link && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-900">
+        <div className="success">
           <p>Invitation created for {state.email}. Send them this link (valid for 7 days, shown only once):</p>
           <div className="mt-2 flex gap-2">
             <input className="input font-mono text-xs" readOnly value={state.link} onFocus={(e) => e.target.select()} />
