@@ -22,7 +22,7 @@ describe("parseCenterRows", () => {
     ]);
     expect(result.error).toBeUndefined();
     expect(result.problems).toEqual([]);
-    expect(result.centers).toEqual([
+    expect(result.items).toEqual([
       {
         name: "Messe Berlin",
         city: "Berlin",
@@ -42,7 +42,7 @@ describe("parseCenterRows", () => {
       ["fira", "barcelona", "ES", ""],
       ["Expo", "Oslo", "NO", "not a url"],
     ]);
-    expect(result.centers).toEqual([{ name: "Fira", city: "Barcelona", country: null, website: null, eventsUrl: null }]);
+    expect(result.items).toEqual([{ name: "Fira", city: "Barcelona", country: null, website: null, eventsUrl: null }]);
     expect(result.problems).toHaveLength(4);
     expect(result.problems[0]).toMatch(/^Row 2: /);
     expect(result.problems[1]).toMatch(/Row 3: unknown country "Catalonia"/);

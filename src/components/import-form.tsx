@@ -1,9 +1,17 @@
 "use client";
 
 import { useActionState } from "react";
-import type { ImportState } from "../actions";
 
-export function ImportForm({ action }: { action: (prev: ImportState, formData: FormData) => Promise<ImportState> }) {
+export type ImportState = { error?: string; imported?: number; alreadyThere?: number; problems?: string[] } | undefined;
+
+/** Upload a CSV file to one of the shared lists and show what happened. `noun` is singular and plural, e.g. ["center", "centers"]. */
+export function ImportForm({
+  action,
+  noun: [one, many],
+}: {
+  action: (prev: ImportState, formData: FormData) => Promise<ImportState>;
+  noun: [string, string];
+}) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const problems = state?.problems ?? [];
 
@@ -16,7 +24,7 @@ export function ImportForm({ action }: { action: (prev: ImportState, formData: F
       {state?.error && <p className="error">{state.error}</p>}
       {state?.imported !== undefined && (
         <p role="status" className="success">
-          Imported {state.imported} {state.imported === 1 ? "center" : "centers"}.
+          Imported {state.imported} {state.imported === 1 ? one : many}.
           {state.alreadyThere ? ` ${state.alreadyThere} were already in the list and were left as they are.` : ""}
         </p>
       )}
@@ -34,7 +42,7 @@ export function ImportForm({ action }: { action: (prev: ImportState, formData: F
       )}
       <div className="card-foot mt-1">
         <button className="btn" disabled={pending}>
-          {pending ? "Importing…" : "Import centers"}
+          {pending ? "Importing…" : `Import ${many}`}
         </button>
       </div>
     </form>
