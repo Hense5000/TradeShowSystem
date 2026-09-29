@@ -26,13 +26,21 @@ async function findDuplicate(input: TradeShowInput, exceptId?: string) {
   return match?.id;
 }
 
+/** The fields to save, with the center checked against the list. */
+async function toData({ centerName: _unused, ...data }: TradeShowInput) {
+  if (data.centerId && !(await db.exhibitionCenter.findUnique({ where: { id: data.centerId }, select: { id: true } }))) {
+    data.centerId = null;
+  }
+  return data;
+}
+
 export async function createTradeShow(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
   await requirePlatformAdmin(slug);
   const parsed = tradeShowSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   if (await findDuplicate(parsed.data)) return { error: `${parsed.data.name} on that start date is already in the list.` };
 
-  await db.tradeShow.create({ data: parsed.data });
+  await db.tradeShow.create({ data: await toData(parsed.data) });
   revalidatePath(`/a/${slug}/trade-shows`);
   redirect(`/a/${slug}/trade-shows`);
 }
@@ -43,7 +51,7 @@ export async function updateTradeShow(slug: string, id: string, _prev: SaveState
   if (!parsed.success) return { error: firstError(parsed.error) };
   if (await findDuplicate(parsed.data, id)) return { error: `Another ${parsed.data.name} on that start date is already in the list.` };
 
-  const { count } = await db.tradeShow.updateMany({ where: { id }, data: parsed.data });
+  const { count } = await db.tradeShow.updateMany({ where: { id }, data: await toData(parsed.data) });
   if (count === 0) return { error: "This trade show no longer exists." };
   revalidatePath(`/a/${slug}/trade-shows`);
   return { saved: true };
@@ -71,7 +79,21 @@ export async function importTradeShows(slug: string, _prev: ImportState, formDat
   const known = new Set(existing.map(tradeShowKey));
   const fresh = items.filter((s) => !known.has(tradeShowKey(s)));
 
-  if (fresh.length > 0) await db.tradeShow.createMany({ data: fresh });
+  // Find each show's center by name in the centers list.
+  const centers = await db.exhibitionCenter.findMany({ select: { id: true, name: true } });
+  const centerIds = new Map<string, string>();
+  for (const c of centers) if (!centerIds.has(c.name.toLowerCase())) centerIds.set(c.name.toLowerCase(), c.id);
+  const unknownCenters = new Set<string>();
+  const data = fresh.map(({ centerName, ...show }) => {
+    const centerId = centerName ? centerIds.get(centerName.toLowerCase()) : undefined;
+    if (centerName && !centerId) unknownCenters.add(centerName);
+    return { ...show, centerId: centerId ?? null };
+  });
+  for (const name of unknownCenters) {
+    problems.push(`"${name}" is not in the exhibition centers list, so shows there were saved without a center.`);
+  }
+
+  if (data.length > 0) await db.tradeShow.createMany({ data });
   revalidatePath(`/a/${slug}/trade-shows`);
   return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
 }

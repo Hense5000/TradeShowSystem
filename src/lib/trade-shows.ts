@@ -29,6 +29,7 @@ export function parseTradeShowRows(rows: string[][]) {
       city: ["city", "location", "town"],
       country: ["country", "countrycode"],
       website: ["website", "officialwebsite", "web", "url", "homepage"],
+      centerName: ["exhibitioncenter", "exhibitioncentername", "center", "centername", "venue"],
       exhibitorDirectoryUrl: ["exhibitordirectoryurl", "exhibitordirectory", "exhibitorlist", "exhibitorlisturl", "exhibitorsurl", "exhibitorurl", "exhibitors"],
     },
     schema: tradeShowSchema,

@@ -3,13 +3,23 @@ import { CountrySelect, Field } from "@/components/field";
 import { isoDate } from "@/lib/dates";
 
 /** The inputs shared by the add and edit forms. */
-export function TradeShowFields({ show }: { show?: TradeShow }) {
+export function TradeShowFields({ show, centers }: { show?: TradeShow; centers: { id: string; name: string; city: string | null }[] }) {
   return (
     <>
       <Field id="name" label="Trade show name" defaultValue={show?.name} required maxLength={150} placeholder="InnoTrans" />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="startDate" label="Start date" type="date" defaultValue={show ? isoDate(show.startDate) : ""} required />
         <Field id="endDate" label="End date" type="date" defaultValue={show ? isoDate(show.endDate) : ""} required />
+      </div>
+      <div className="min-w-0">
+        <label className="label" htmlFor="centerId">Exhibition center</label>
+        <select className="input" id="centerId" name="centerId" defaultValue={show?.centerId ?? ""}>
+          <option value="">Not chosen</option>
+          {centers.map((c) => (
+            <option key={c.id} value={c.id}>{c.city ? `${c.name} (${c.city})` : c.name}</option>
+          ))}
+        </select>
+        <p className="hint">Missing a center? Add it under Exhibition centers first.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="city" label="City" defaultValue={show?.city ?? ""} maxLength={100} />
