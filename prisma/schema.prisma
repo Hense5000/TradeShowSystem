@@ -1,0 +1,194 @@
+// Data model for the multi-tenant Trade Show System.
+//
+// Naming: a customer "account" (a company that signs up) is called
+// `Organization` in code, so it never clashes with Auth.js' own `Account`
+// table if social login is added later. The UI calls it "account".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// People and tenancy
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships     Membership[]
+  invitationsSent Invitation[] @relation("InvitedBy")
+}
+
+model Organization {
+  id   String @id @default(cuid())
+  name String // company name
+  slug String @unique // used in URLs: /a/<slug>
+
+  // Profile
+  addressLine1 String?
+  addressLine2 String?
+  postalCode   String?
+  city         String?
+  region       String?
+  country      String? // ISO 3166-1 alpha-2, e.g. "DK"
+  website      String?
+  vatNumber    String? // e.g. Danish CVR number
+
+  // Stripe: we only store Stripe ids. Card data lives in Stripe, never here.
+  stripeCustomerId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  invitations   Invitation[]
+  contacts      Contact[]
+  features      OrganizationFeature[]
+  subscriptions Subscription[]
+  invoices      Invoice[]
+}
+
+enum Role {
+  OWNER // full control, including billing and deleting the account
+  ADMIN // manage users, profile and features
+  MEMBER // use the product
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role      @default(MEMBER)
+  // Only a SHA-256 hash of the token is stored; the raw token is in the link.
+  tokenHash      String    @unique
+  invitedById    String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// Contact people for an account. Exactly one can be primary (enforced by a
+// partial unique index in the migration).
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  email          String
+  phone          String?
+  isPrimary      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Features and billing (Stripe is the source of truth; these are mirrors kept
+// up to date by webhooks)
+// ---------------------------------------------------------------------------
+
+// Catalog of features a customer can switch on.
+model Feature {
+  id            String   @id @default(cuid())
+  key           String   @unique // stable code identifier, e.g. "lead-capture"
+  name          String
+  description   String?
+  stripePriceId String? // the Stripe Price charged for this feature, if any
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organizations OrganizationFeature[]
+}
+
+// Which features an account has selected.
+model OrganizationFeature {
+  organizationId           String
+  featureId                String
+  stripeSubscriptionItemId String?  @unique
+  enabledAt                DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  feature      Feature      @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, featureId])
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  organizationId       String
+  stripeSubscriptionId String    @unique
+  // Stripe status string: trialing, active, past_due, canceled, unpaid, ...
+  status               String
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Invoice {
+  id               String    @id @default(cuid())
+  organizationId   String
+  stripeInvoiceId  String    @unique
+  number           String?
+  // Stripe status string: draft, open, paid, uncollectible, void
+  status           String
+  currency         String
+  amountDue        Int // smallest currency unit (øre / cents)
+  amountPaid       Int
+  hostedInvoiceUrl String?
+  invoicePdfUrl    String?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// Stripe webhook events already handled, so a re-delivered event is ignored.
+model StripeEvent {
+  id          String   @id // Stripe event id, e.g. evt_...
+  type        String
+  processedAt DateTime @default(now())
+}
