@@ -65,6 +65,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
   const [shows, total, countries] = await Promise.all([
     db.tradeShow.findMany({
       where,
+      include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
       // Finished shows: most recent first. Everything else: soonest first.
       orderBy: view === "finished" ? [{ startDate: "desc" }, { name: "asc" }] : [{ startDate: "asc" }, { name: "asc" }],
     }),
@@ -168,15 +169,23 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
                         </div>
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</td>
-                      <td className="px-5 py-3">{place || <span className="text-faint">—</span>}</td>
+                      <td className="px-5 py-3">
+                        {s.center && <p className="font-medium">{s.center.name}</p>}
+                        <p className={s.center ? "text-xs text-muted" : ""}>{place || (!s.center && <span className="text-faint">—</span>)}</p>
+                      </td>
                       <td className="px-5 py-3">
                         <span className={`pill ${STATUS_PILL[status]}`}>{STATUS_LABEL[status]}</span>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
                           {s.website && <LinkOut href={s.website} icon="globe">Website</LinkOut>}
-                          {s.exhibitorDirectoryUrl && <LinkOut href={s.exhibitorDirectoryUrl} icon="store">Exhibitors</LinkOut>}
-                          {!s.website && !s.exhibitorDirectoryUrl && <span className="text-faint">—</span>}
+                          {s.exhibitorDirectoryUrl && <LinkOut href={s.exhibitorDirectoryUrl} icon="store">Exhibitor list</LinkOut>}
+                          {s._count.exhibitors > 0 && (
+                            <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="inline-flex items-center gap-1.5 font-medium whitespace-nowrap text-brand hover:underline">
+                              <Icon name="users" className="size-4" /> {s._count.exhibitors} {s._count.exhibitors === 1 ? "exhibitor" : "exhibitors"}
+                            </Link>
+                          )}
+                          {!s.website && !s.exhibitorDirectoryUrl && s._count.exhibitors === 0 && <span className="text-faint">—</span>}
                         </div>
                       </td>
                       {canEdit && (

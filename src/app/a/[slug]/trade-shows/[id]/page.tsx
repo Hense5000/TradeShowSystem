@@ -11,7 +11,10 @@ import { TradeShowFields } from "../trade-show-fields";
 export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]/trade-shows/[id]">) {
   const { slug, id } = await params;
   await requirePlatformAdmin(slug);
-  const show = await db.tradeShow.findUnique({ where: { id } });
+  const [show, centers] = await Promise.all([
+    db.tradeShow.findUnique({ where: { id } }),
+    db.exhibitionCenter.findMany({ select: { id: true, name: true, city: true }, orderBy: { name: "asc" } }),
+  ]);
   if (!show) notFound();
 
   return (
@@ -22,7 +25,7 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
         action={<Link href={`/a/${slug}/trade-shows`} className="btn-secondary">Back to list</Link>}
       />
       <SaveForm action={updateTradeShow.bind(null, slug, id)} title="Trade show details" description="Name and dates are required." submitLabel="Save changes" readOnly={false}>
-        <TradeShowFields show={show} />
+        <TradeShowFields show={show} centers={centers} />
       </SaveForm>
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>

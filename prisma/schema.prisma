@@ -209,6 +209,8 @@ model ExhibitionCenter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tradeShows TradeShow[]
+
   @@index([name])
 }
 
@@ -234,9 +236,39 @@ model TradeShow {
   country               String? // ISO 3166-1 alpha-2, e.g. "DE"
   website               String?
   exhibitorDirectoryUrl String? // the show's own list of exhibitors
+  centerId              String? // where it takes place, if known
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  center     ExhibitionCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  exhibitors Exhibitor[]
+
   @@index([startDate])
+  @@index([name])
+  @@index([centerId])
+}
+
+// A company exhibiting at one trade show. The same company at two shows is
+// two rows, since booth, contact and so on differ per show.
+model Exhibitor {
+  id               String   @id @default(cuid())
+  tradeShowId      String
+  name             String // company name
+  contactName      String?
+  contactTitle     String?
+  email            String
+  phone            String?
+  website          String?
+  country          String? // ISO 3166-1 alpha-2, e.g. "DK"
+  industry         String?
+  boothNumber      String?
+  standLocationUrl String? // link to the booth on the show's floor plan
+  companyProfile   String? // short description of the company
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tradeShow TradeShow @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+
+  @@index([tradeShowId])
   @@index([name])
 }

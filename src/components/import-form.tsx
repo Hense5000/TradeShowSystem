@@ -8,15 +8,19 @@ export type ImportState = { error?: string; imported?: number; alreadyThere?: nu
 export function ImportForm({
   action,
   noun: [one, many],
+  children,
 }: {
   action: (prev: ImportState, formData: FormData) => Promise<ImportState>;
   noun: [string, string];
+  /** Extra inputs shown above the file picker. */
+  children?: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const problems = state?.problems ?? [];
 
   return (
     <form action={formAction} className="card flex flex-col gap-4">
+      {children}
       <div>
         <label className="label" htmlFor="file">CSV file</label>
         <input className="input" id="file" name="file" type="file" accept=".csv,text/csv" required disabled={pending} />

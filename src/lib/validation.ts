@@ -76,15 +76,17 @@ export const profileSchema = z.object({
   website,
 });
 
+const phone = z
+  .string()
+  .trim()
+  .max(30, "Phone can be at most 30 characters.")
+  .refine((v) => v === "" || /^\+?[\d\s().-]{5,}$/.test(v), "Enter a valid phone number, for example +45 12 34 56 78.")
+  .transform((v) => v || null);
+
 export const contactSchema = z.object({
   name: z.string().trim().min(1, "Enter the contact's name.").max(100),
   email,
-  phone: z
-    .string()
-    .trim()
-    .max(30, "Phone can be at most 30 characters.")
-    .refine((v) => v === "" || /^\+?[\d\s().-]{5,}$/.test(v), "Enter a valid phone number, for example +45 12 34 56 78.")
-    .transform((v) => v || null),
+  phone,
 });
 
 export const centerSchema = z.object({
@@ -128,6 +130,16 @@ export const tradeShowSchema = z
     country,
     website,
     exhibitorDirectoryUrl: webAddress("Exhibitor directory URL"),
+    // The form picks a center from the list; an imported file names it.
+    centerId: z
+      .string()
+      .optional()
+      .transform((v) => v?.trim() || null),
+    centerName: z
+      .string()
+      .max(150)
+      .optional()
+      .transform((v) => v?.trim() || null),
   })
   .refine((s) => s.endDate >= s.startDate, { message: "The end date can't be before the start date.", path: ["endDate"] });
 
@@ -137,3 +149,29 @@ export type TradeShowInput = z.infer<typeof tradeShowSchema>;
 export function firstError(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid input.";
 }
+
+/** One exhibitor as it appears in a form or an imported row, before it is tied to a trade show. */
+export const exhibitorRowSchema = z.object({
+  name: z.string().trim().min(1, "Enter the company name.").max(150, "Company name can be at most 150 characters."),
+  contactName: optionalText(100, "Contact person"),
+  contactTitle: optionalText(100, "Contact position"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Enter the exhibitor's email.")
+    .pipe(z.email("Enter a valid email address.")),
+  phone,
+  website,
+  country,
+  industry: optionalText(100, "Industry"),
+  boothNumber: optionalText(50, "Booth no."),
+  standLocationUrl: webAddress("Stand location URL"),
+  companyProfile: optionalText(5000, "Company profile"),
+});
+
+export const exhibitorSchema = exhibitorRowSchema.extend({
+  tradeShowId: z.string().trim().min(1, "Choose the trade show."),
+});
+
+export type ExhibitorRow = z.infer<typeof exhibitorRowSchema>;
