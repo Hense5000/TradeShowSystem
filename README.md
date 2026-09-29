@@ -72,8 +72,16 @@ added through Stripe Checkout / Customer Portal, and webhooks keep the
 `Subscription` and `Invoice` tables in sync. `StripeEvent` records handled
 webhook events so repeats are ignored.
 
-## Deploy
+## Deploy (Vercel + Neon)
 
-Vercel plus a hosted Postgres (for example Neon or Supabase) works out of the
-box: set `DATABASE_URL`, `AUTH_SECRET` and `APP_URL` in Vercel, and run
-`npm run db:deploy` against the production database when migrations change.
+1. Import the GitHub repo in Vercel.
+2. Under **Storage**, add a **Neon** Postgres database and connect it to the
+   project. This sets `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED`
+   (direct, used for migrations) automatically.
+3. Under **Settings → Environment Variables**, add `AUTH_SECRET`
+   (generate one with `npx auth secret` or `openssl rand -base64 32`).
+4. Redeploy. Vercel runs `npm run vercel-build`, which applies database
+   migrations (`prisma migrate deploy`) before building.
+
+`APP_URL` is optional on Vercel; invitation links fall back to the project's
+production domain. Add it once you use your own domain.

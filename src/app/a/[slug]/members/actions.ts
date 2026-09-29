@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { canAssignRole, checkRemoval, checkRoleChange } from "@/lib/permissions";
 import { requireMembership } from "@/lib/tenant";
@@ -39,9 +40,8 @@ export async function inviteMember(slug: string, _prev: InviteState, formData: F
   ]);
 
   // Sending the link by email comes later; for now the admin copies it.
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   revalidatePath(`/a/${slug}/members`);
-  return { link: `${appUrl}/invite/${token}`, email };
+  return { link: `${appUrl()}/invite/${token}`, email };
 }
 
 export async function revokeInvitation(slug: string, invitationId: string): Promise<State> {
