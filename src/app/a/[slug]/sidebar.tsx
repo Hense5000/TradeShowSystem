@@ -10,7 +10,7 @@ import { logout } from "../../logout-action";
 type NavItem = { label: string; icon: IconName; path: string; soon?: boolean; badge?: React.ReactNode };
 type NavGroup = { title?: string; items: NavItem[] };
 
-/** Which navigation item a path belongs to ("" is the overview). */
+/** Which navigation item a path belongs to ("" is the dashboard). */
 function currentPath(pathname: string, base: string): string {
   return pathname.slice(base.length).split("/")[1] ?? "";
 }
@@ -132,7 +132,7 @@ export function AccountFrame({
           <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted">
             <span className="truncate">{accountName}</span>
             <span className="text-faint">/</span>
-            <span className="font-bold text-ink">{activeItem?.label ?? "Overview"}</span>
+            <span className="font-bold text-ink">{activeItem?.label ?? "Dashboard"}</span>
           </p>
           <div className="flex items-center gap-2.5 border-l border-line pl-4">
             <span className="avatar">{userInitials}</span>

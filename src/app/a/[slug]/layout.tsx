@@ -23,7 +23,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
       groups={[
         {
           items: [
-            { label: "Overview", icon: "home", path: "" },
+            { label: "Dashboard", icon: "dashboard", path: "" },
             { label: "Trade shows", icon: "calendar", path: "trade-shows" },
             { label: "Exhibitors", icon: "store", path: "exhibitors" },
             { label: "Exhibition centers", icon: "pin", path: "centers" },

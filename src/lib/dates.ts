@@ -51,3 +51,11 @@ export function formatDateRange(start: Date, end: Date): string {
   const endPart = sameMonth ? fmt(end, { day: "numeric" }) : fmt(end, { month: "short", day: "numeric" });
   return `${fmt(start, { month: "short", day: "numeric" })} – ${endPart}, ${end.getUTCFullYear()}`;
 }
+
+/** The same day a number of months later; Jan 31 + 1 month is Feb 28 (or 29). */
+export function addMonths(date: Date, months: number): Date {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + months;
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(date.getUTCDate(), lastDay)));
+}
