@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDateRange, isoDate, parseDate, today } from "./dates";
+import { addMonths, formatDateRange, isoDate, parseDate, today } from "./dates";
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 
@@ -27,5 +27,14 @@ describe("formatDateRange", () => {
     expect(formatDateRange(d("2026-09-29"), d("2026-10-02"))).toBe("Sep 29 – Oct 2, 2026");
     expect(formatDateRange(d("2026-12-30"), d("2027-01-02"))).toBe("Dec 30, 2026 – Jan 2, 2027");
     expect(formatDateRange(d("2026-09-22"), d("2026-09-22"))).toBe("Sep 22, 2026");
+  });
+});
+
+describe("addMonths", () => {
+  it("moves by whole months and stays inside short months", () => {
+    expect(isoDate(addMonths(d("2026-09-30"), 2))).toBe("2026-11-30");
+    expect(isoDate(addMonths(d("2026-11-15"), 3))).toBe("2027-02-15");
+    expect(isoDate(addMonths(d("2026-12-31"), 2))).toBe("2027-02-28");
+    expect(isoDate(addMonths(d("2027-12-31"), 2))).toBe("2028-02-29");
   });
 });

@@ -1,22 +1,32 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { countryName } from "@/lib/countries";
+import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canManageMembers, ROLE_LABEL } from "@/lib/permissions";
+import { canManageMembers } from "@/lib/permissions";
 import { isProfileComplete } from "@/lib/profile";
 import { requireMembership } from "@/lib/tenant";
+import { showStatus } from "@/lib/trade-shows";
 
-function Stat({ icon, label, value, href }: { icon: IconName; label: string; value: React.ReactNode; href?: string }) {
+// How far ahead the upcoming list looks, in months. The first is the default.
+const RANGES = [2, 3, 6] as const;
+type Range = (typeof RANGES)[number];
+
+function Stat({ icon, label, value, note, href }: { icon: IconName; label: string; value: number; note: string; href?: string }) {
   const body = (
     <>
-      <span className="mb-2 grid size-9 place-items-center rounded-lg bg-brand-soft text-brand">
-        <Icon name={icon} />
+      <span className="min-w-0">
+        <span className="eyebrow block">{label}</span>
+        <span className="mt-1 block text-3xl font-bold tabular-nums">{value.toLocaleString("en-US")}</span>
+        <span className="mt-0.5 block text-sm text-muted">{note}</span>
       </span>
-      <span className="eyebrow">{label}</span>
-      <span className="text-2xl font-bold tabular-nums">{value}</span>
+      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+        <Icon name={icon} className="size-5.5" />
+      </span>
     </>
   );
-  const cls = "card flex flex-col gap-1 p-4";
+  const cls = "card flex items-start justify-between gap-3";
   return href ? (
     <Link href={href} className={`${cls} hover:border-brand`}>{body}</Link>
   ) : (
@@ -24,32 +34,115 @@ function Stat({ icon, label, value, href }: { icon: IconName; label: string; val
   );
 }
 
-export default async function AccountOverview({ params }: PageProps<"/a/[slug]">) {
+export default async function Dashboard({ params, searchParams }: PageProps<"/a/[slug]">) {
   const { slug } = await params;
-  const { user, membership, organization } = await requireMembership(slug);
-  const [memberCount, pendingInvites, primaryContact] = await Promise.all([
+  const { membership, organization } = await requireMembership(slug);
+  const sp = await searchParams;
+  const range: Range = RANGES.find((r) => String(r) === sp.months) ?? RANGES[0];
+  const day = today();
+  const until = addMonths(day, range);
+
+  const [showCount, runningCount, exhibitorCount, centerCount, upcoming, memberCount, pendingInvites, primaryContact] = await Promise.all([
+    db.tradeShow.count(),
+    db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
+    db.exhibitor.count(),
+    db.exhibitionCenter.count(),
+    // Shows still to come or running now, starting within the chosen range.
+    db.tradeShow.findMany({
+      where: { endDate: { gte: day }, startDate: { lte: until } },
+      include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
+      orderBy: [{ startDate: "asc" }, { name: "asc" }],
+    }),
     db.membership.count({ where: { organizationId: organization.id } }),
     db.invitation.count({
       where: { organizationId: organization.id, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
     }),
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
   ]);
+
   const steps = [
     { label: "Create the account", done: true },
     { label: "Invite your team", done: memberCount > 1 || pendingInvites > 0, href: `/a/${slug}/members` },
     { label: "Add company details and a primary contact", done: isProfileComplete(organization, primaryContact), href: `/a/${slug}/profile` },
   ];
   const doneCount = steps.filter((s) => s.done).length;
-  const firstName = (user.name ?? "").split(" ")[0];
+  const tab = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
 
   return (
     <>
-      <PageHeader title={firstName ? `Welcome, ${firstName}` : "Welcome"} description={`Here is where ${organization.name} stands.`} />
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-3">
-        <Stat icon="shield" label="Your role" value={ROLE_LABEL[membership.role]} />
-        <Stat icon="users" label="Users" value={memberCount} href={`/a/${slug}/members`} />
-        <Stat icon="mail" label="Pending invitations" value={pendingInvites} href={`/a/${slug}/members`} />
+      <PageHeader title="Dashboard" description="Overview of your trade show operations." />
+
+      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat icon="calendar" label="Total trade shows" value={showCount} note={`${runningCount} currently running`} href={`/a/${slug}/trade-shows`} />
+        <Stat icon="store" label="Exhibitors" value={exhibitorCount} note="Total registered" href={`/a/${slug}/exhibitors`} />
+        <Stat icon="pin" label="Exhibition centers" value={centerCount} note="Total venues" href={`/a/${slug}/centers`} />
+        <Stat icon="users" label="Lead retrieval active" value={0} note="Coming soon" />
       </div>
+
+      <section className="card">
+        <h2 className="text-lg font-bold">Upcoming trade shows</h2>
+        <nav className="mt-3 flex flex-wrap gap-2" aria-label="Period">
+          {RANGES.map((r) => (
+            <Link
+              key={r}
+              href={r === RANGES[0] ? `/a/${slug}` : `/a/${slug}?months=${r}`}
+              aria-current={r === range ? "page" : undefined}
+              scroll={false}
+              className={`${tab} ${r === range ? "border-brand bg-brand text-white" : "border-line-strong bg-surface text-ink hover:bg-subtle"}`}
+            >
+              Next {r} months
+            </Link>
+          ))}
+          <Link href={`/a/${slug}/trade-shows`} className={`${tab} border-line-strong bg-surface text-ink hover:bg-subtle`}>
+            View all trade shows
+          </Link>
+        </nav>
+
+        <p className="mt-4 text-sm text-muted">
+          {upcoming.length === 0
+            ? `No trade shows in the next ${range} months.`
+            : `${upcoming.length} ${upcoming.length === 1 ? "trade show" : "trade shows"} in the next ${range} months`}
+        </p>
+
+        {upcoming.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {upcoming.map((s) => {
+              const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
+              const running = showStatus(s) === "running";
+              return (
+                <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
+                  <div className="min-w-48 flex-1">
+                    <p className="flex flex-wrap items-center gap-2 font-semibold">
+                      {s.name}
+                      {running && <span className="pill pill-ok">Running</span>}
+                    </p>
+                    {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted">Exhibitors</p>
+                    {s._count.exhibitors > 0 ? (
+                      <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
+                        {s._count.exhibitors}
+                      </Link>
+                    ) : (
+                      <p className="font-bold tabular-nums">0</p>
+                    )}
+                  </div>
+                  <div className="w-20">
+                    {s.website && (
+                      <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
+                        <Icon name="globe" className="size-3.5" /> Website
+                      </a>
+                    )}
+                  </div>
+                  <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {canManageMembers(membership.role) && doneCount < steps.length && (
         <section className="card max-w-2xl">
           <h2 className="font-bold">Finish setting up</h2>
