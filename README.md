@@ -10,6 +10,7 @@ keep the company profile up to date; billing and features follow in the next ste
 - Roller: **Owner** (alt, inkl. betaling), **Admin** (brugere, profil, funktioner), **Member** (bruger systemet).
 - Brugere inviteres med et link, som en admin kopierer og sender. Automatisk e-mail kommer senere.
 - **Exhibition centers** (og senere messer, arrangører og udstillere) er én fælles liste for alle konti. Alle kan se den; kun e-mails i `PLATFORM_ADMIN_EMAILS` kan rette i den.
+- **Feature control** (menuen "Super admin") ses kun af e-mails i `PLATFORM_ADMIN_EMAILS`. Her oprettes kommende funktioner. De starter slukket (skjult for kunder) og kan tændes for udvalgte konti eller for alle.
 - Kortoplysninger gemmes aldrig hos os. De ligger i Stripe, og vi gemmer kun Stripes id'er.
 
 ## Status
@@ -21,7 +22,8 @@ keep the company profile up to date; billing and features follow in the next ste
 | – | Shared directory: exhibition centers (list, search, add, edit, CSV import) | ✅ done |
 | – | Shared directory: exhibition organizers (same features) | ✅ done |
 | – | Shared directory: trade shows (status follows the dates) | ✅ done |
-| – | Shared directory: exhibitors per trade show; trade shows linked to their exhibition center | ✅ this version |
+| – | Shared directory: exhibitors per trade show; trade shows linked to their exhibition center | ✅ done |
+| – | Super admin feature control: add upcoming features, switch them on for selected accounts or everyone | ✅ this version |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
 
