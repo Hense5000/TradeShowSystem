@@ -56,6 +56,7 @@ model Organization {
   invitations   Invitation[]
   contacts      Contact[]
   features      OrganizationFeature[]
+  featureAccess FeatureAccess[]
   subscriptions Subscription[]
   invoices      Invoice[]
 }
@@ -122,18 +123,41 @@ model Contact {
 // up to date by webhooks)
 // ---------------------------------------------------------------------------
 
+// Who can see a feature. Only platform admins change this, on the super
+// admin page. New features start OFF, so they stay hidden until switched on.
+enum FeatureRollout {
+  OFF // hidden from every customer account
+  SELECTED // only the accounts listed in FeatureAccess
+  EVERYONE // every account
+}
+
 // Catalog of features a customer can switch on.
 model Feature {
-  id            String   @id @default(cuid())
-  key           String   @unique // stable code identifier, e.g. "lead-capture"
+  id            String         @id @default(cuid())
+  key           String         @unique // stable code identifier, e.g. "lead-capture"
   name          String
   description   String?
   stripePriceId String? // the Stripe Price charged for this feature, if any
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  rollout       FeatureRollout @default(OFF)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   organizations OrganizationFeature[]
+  access        FeatureAccess[]
+}
+
+// Accounts a platform admin has given a feature to while its rollout is
+// SELECTED (for example to try it out before everyone gets it).
+model FeatureAccess {
+  featureId      String
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  feature      Feature      @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([featureId, organizationId])
+  @@index([organizationId])
 }
 
 // Which features an account has selected.

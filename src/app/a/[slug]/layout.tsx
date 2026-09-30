@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
+import { visibleFeaturesWhere } from "@/lib/features";
 import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
 import { requireMembership } from "@/lib/tenant";
 import { AccountFrame } from "./sidebar";
@@ -9,7 +11,10 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const { slug } = await params;
   const { user, membership, organization } = await requireMembership(slug);
   const userName = user.name ?? user.email;
-  const primaryContact = await db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } });
+  const [primaryContact, featureCount] = await Promise.all([
+    db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
+    db.feature.count({ where: visibleFeaturesWhere(organization.id) }),
+  ]);
   const profileMissing = !isProfileComplete(organization, primaryContact);
 
   return (
@@ -28,7 +33,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
             { label: "Exhibitors", icon: "store", path: "exhibitors" },
             { label: "Exhibition centers", icon: "pin", path: "centers" },
             { label: "Exhibition organizers", icon: "briefcase", path: "organizers" },
-            { label: "Features", icon: "grid", path: "features", soon: true },
+            { label: "Features", icon: "grid", path: "features", soon: featureCount === 0 },
           ],
         },
         {
@@ -44,6 +49,10 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
             { label: "Billing", icon: "card", path: "billing", soon: true },
           ],
         },
+        // Only the platform admins in PLATFORM_ADMIN_EMAILS see this group.
+        ...(isPlatformAdmin(user.email)
+          ? [{ title: "Super admin", items: [{ label: "Feature control", icon: "shield" as const, path: "admin" }] }]
+          : []),
       ]}
     >
       {children}
