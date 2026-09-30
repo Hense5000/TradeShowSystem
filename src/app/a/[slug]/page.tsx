@@ -4,8 +4,6 @@ import { PageHeader } from "@/components/page-header";
 import { countryName } from "@/lib/countries";
 import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canManageMembers } from "@/lib/permissions";
-import { isProfileComplete } from "@/lib/profile";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
 
@@ -36,13 +34,13 @@ function Stat({ icon, label, value, note, href }: { icon: IconName; label: strin
 
 export default async function Dashboard({ params, searchParams }: PageProps<"/a/[slug]">) {
   const { slug } = await params;
-  const { membership, organization } = await requireMembership(slug);
+  await requireMembership(slug);
   const sp = await searchParams;
   const range: Range = RANGES.find((r) => String(r) === sp.months) ?? RANGES[0];
   const day = today();
   const until = addMonths(day, range);
 
-  const [showCount, runningCount, exhibitorCount, centerCount, upcoming, memberCount, pendingInvites, primaryContact] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, upcoming] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
@@ -53,19 +51,8 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
       orderBy: [{ startDate: "asc" }, { name: "asc" }],
     }),
-    db.membership.count({ where: { organizationId: organization.id } }),
-    db.invitation.count({
-      where: { organizationId: organization.id, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
-    }),
-    db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
   ]);
 
-  const steps = [
-    { label: "Create the account", done: true },
-    { label: "Invite your team", done: memberCount > 1 || pendingInvites > 0, href: `/a/${slug}/members` },
-    { label: "Add company details and a primary contact", done: isProfileComplete(organization, primaryContact), href: `/a/${slug}/profile` },
-  ];
-  const doneCount = steps.filter((s) => s.done).length;
   const tab = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
 
   return (
@@ -142,35 +129,6 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           </ul>
         )}
       </section>
-
-      {canManageMembers(membership.role) && doneCount < steps.length && (
-        <section className="card max-w-2xl">
-          <h2 className="font-bold">Finish setting up</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            {doneCount} of {steps.length} done
-          </p>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle">
-            <div className="h-full rounded-full bg-brand" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
-          </div>
-          <ul className="mt-2 divide-y divide-line">
-            {steps.map((step) => (
-              <li key={step.label} className="flex items-center gap-3 py-3">
-                <span
-                  className={`grid size-5.5 shrink-0 place-items-center rounded-full border-2 ${
-                    step.done ? "border-brand bg-brand text-white" : "border-line-strong"
-                  }`}
-                >
-                  {step.done && <Icon name="check" className="size-3.5" />}
-                </span>
-                <span className={`flex-1 text-sm ${step.done ? "text-muted line-through" : ""}`}>{step.label}</span>
-                {!step.done && step.href && (
-                  <Link href={step.href} className="btn-secondary">Start</Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </>
   );
 }
