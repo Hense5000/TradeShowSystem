@@ -171,7 +171,7 @@ export default async function ShowFinderPage({ params }: PageProps<"/a/[slug]/ad
                     <span className="mt-0.5 block text-xs text-bad">Last check: {c.showsCheckError}</span>
                   ) : c.showsCheckedAt ? (
                     <span className="mt-0.5 block text-xs text-muted">
-                      Last check {when(c.showsCheckedAt)}: {c.showsFoundLast ?? 0} new
+                      Last check {when(c.showsCheckedAt)}: {c.showsCheckNote ?? `${c.showsFoundLast ?? 0} new`}
                     </span>
                   ) : null}
                 </span>

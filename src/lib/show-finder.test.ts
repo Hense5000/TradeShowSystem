@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFoundShows, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
+import { checkFoundShows, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const now = new Date("2026-10-02T08:00:00Z");
@@ -86,6 +86,15 @@ describe("runSummary", () => {
     expect(runSummary({ checked: 1, found: 0, failed: 0, left: 0 })).toBe("Checked 1 center. Found 0 new shows.");
     expect(runSummary({ checked: 3, found: 1, failed: 2, left: 4 })).toBe(
       "Checked 3 centers. Found 1 new show. 2 pages could not be read. 4 centers were not reached this time and will be checked next.",
+    );
+  });
+});
+
+describe("foundNote", () => {
+  it("explains what happened to each show", () => {
+    expect(foundNote({ listed: 1, usable: 1, fresh: 1 })).toBe("Found 1 trade show on the page: 1 new.");
+    expect(foundNote({ listed: 12, usable: 11, fresh: 2 })).toBe(
+      "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past or without exact dates.",
     );
   });
 });
