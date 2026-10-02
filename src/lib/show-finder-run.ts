@@ -182,20 +182,21 @@ async function checkCenter(client: Anthropic, center: Center): Promise<CheckResu
 }
 
 /**
- * Checks the chosen centers, oldest check first. The monthly run only checks
- * centers that are due; "Check now" checks all of them. Centers not reached
- * within the time budget are first in line next time.
+ * Checks the chosen centers, oldest check first. The daily run only checks
+ * centers that are due (see isDue); "Check now" checks all of them, or just
+ * the centers it is given. Centers not reached within the time budget are
+ * first in line next time.
  */
-export async function runShowFinder({ onlyDue }: { onlyDue: boolean }): Promise<string> {
+export async function runShowFinder({ onlyDue, centerIds }: { onlyDue: boolean; centerIds?: string[] }): Promise<string> {
   if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
 
   const started = Date.now();
   const chosen = await db.exhibitionCenter.findMany({
-    where: { findShows: true, eventsUrl: { not: null } },
+    where: centerIds ? { id: { in: centerIds }, eventsUrl: { not: null } } : { findShows: true, eventsUrl: { not: null } },
     orderBy: [{ showsCheckedAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
-    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true },
+    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true, showsCheckDay: true },
   });
-  const queue = onlyDue ? chosen.filter((c) => isDue(c.showsCheckedAt)) : chosen;
+  const queue = onlyDue ? chosen.filter((c) => isDue({ checkedAt: c.showsCheckedAt, checkDay: c.showsCheckDay })) : chosen;
   // The daily run usually has nothing to do; keep the last real summary then.
   if (onlyDue && queue.length === 0) return "No centers were due for a check.";
 

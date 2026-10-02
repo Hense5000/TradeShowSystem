@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/components/action-form";
-import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
 import { runShowFinder } from "@/lib/show-finder-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
@@ -20,16 +19,19 @@ export async function setFinderEnabled(slug: string, enabled: boolean): Promise<
   return undefined;
 }
 
-/** Saves which centers the finder checks. */
-export async function saveFinderCenters(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+/** Turns the finder on or off for one center. */
+export async function setCenterChosen(slug: string, id: string, chosen: boolean): Promise<void> {
   await requirePlatformAdmin(slug);
-  const ids = formData.getAll("centers").filter((v): v is string => typeof v === "string");
-  await db.$transaction([
-    db.exhibitionCenter.updateMany({ where: { id: { notIn: ids } }, data: { findShows: false } }),
-    db.exhibitionCenter.updateMany({ where: { id: { in: ids }, eventsUrl: { not: null } }, data: { findShows: true } }),
-  ]);
+  await db.exhibitionCenter.updateMany({ where: { id, ...(chosen && { eventsUrl: { not: null } }) }, data: { findShows: chosen } });
   refresh(slug);
-  return { saved: true };
+}
+
+/** Sets the day of the month a center is checked on (null: about every four weeks). */
+export async function setCenterCheckDay(slug: string, id: string, day: number | null): Promise<void> {
+  await requirePlatformAdmin(slug);
+  const valid = day !== null && Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
+  await db.exhibitionCenter.updateMany({ where: { id }, data: { showsCheckDay: valid } });
+  refresh(slug);
 }
 
 export type RunState = { error?: string; summary?: string } | undefined;
@@ -38,6 +40,18 @@ export async function runFinderNow(slug: string): Promise<RunState> {
   await requirePlatformAdmin(slug);
   try {
     const summary = await runShowFinder({ onlyDue: false });
+    refresh(slug);
+    return { summary };
+  } catch {
+    return { error: "The check stopped unexpectedly. Try again in a moment." };
+  }
+}
+
+/** Checks one center right away, whether or not it is chosen. */
+export async function checkCenterNow(slug: string, id: string): Promise<RunState> {
+  await requirePlatformAdmin(slug);
+  try {
+    const summary = await runShowFinder({ onlyDue: false, centerIds: [id] });
     refresh(slug);
     return { summary };
   } catch {

@@ -132,8 +132,28 @@ export function newShows<T extends { name: string; startDate: Date }>(found: T[]
   return result;
 }
 
-/** Whether a center is due for a new check by the monthly run. */
-export function isDue(checkedAt: Date | null, now = new Date()): boolean {
+/**
+ * The date in this month when a center with a fixed check day is checked
+ * (midnight UTC). A day the month doesn't have, like the 31st in
+ * November, becomes the month's last day.
+ */
+export function checkDate(checkDay: number, now = new Date()): Date {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(checkDay, lastDay)));
+}
+
+/**
+ * Whether the daily run should check a center now. With a check day it is
+ * checked on that day of the month, or the first run after it if that day's
+ * run didn't reach it. Without one it is checked about every four weeks.
+ */
+export function isDue({ checkedAt, checkDay }: { checkedAt: Date | null; checkDay: number | null }, now = new Date()): boolean {
+  if (checkDay) {
+    const target = checkDate(checkDay, now);
+    return now >= target && (!checkedAt || checkedAt < target);
+  }
   return !checkedAt || now.getTime() - checkedAt.getTime() >= RECHECK_AFTER_DAYS * DAY;
 }
 

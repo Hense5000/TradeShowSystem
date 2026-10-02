@@ -236,6 +236,7 @@ model ExhibitionCenter {
   // AI trade show finder: whether to check this center's events page, and
   // how the last check went.
   findShows       Boolean   @default(false)
+  showsCheckDay   Int? // day of the month (1-31) for the automatic check; none = about every four weeks
   showsCheckedAt  DateTime?
   showsCheckError String?
   showsCheckNote  String? // what the last check found, e.g. "Found 12 trade shows on the page: 2 new, ..."

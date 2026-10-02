@@ -78,7 +78,10 @@ signed-in user is a member, and every query is filtered by that account's id.
 
 **AI trade show finder.** A Vercel cron job (`vercel.json`) calls
 `/api/cron/show-finder` daily with `CRON_SECRET`. When the finder is switched
-on, it checks each chosen center whose last check is four weeks old: it
+on, it checks each chosen center that is due: on its own day of the month
+(`showsCheckDay`, caught up the next day if that run didn't reach it), or,
+without a day, when its last check is four weeks old. Admins can also check a
+single center right away from the list. For each center it it
 downloads the events page, turns it into plain text (`src/lib/show-finder.ts`)
 and asks Claude for the trade shows on it (`src/lib/show-finder-run.ts`).
 Shows that match a known show or an earlier suggestion (same name ignoring
