@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isoDate, today } from "@/lib/dates";
-import { checkFoundShows, type FoundShow, isDue, newShows, pageToText, runSummary } from "@/lib/show-finder";
+import { checkFoundShows, type FoundShow, foundNote, isDue, newShows, pageToText, runSummary } from "@/lib/show-finder";
 
 // The AI trade show finder. For each chosen exhibition center it downloads the
 // center's events page, asks Claude which trade shows are listed there, and
@@ -15,9 +15,11 @@ import { checkFoundShows, type FoundShow, isDue, newShows, pageToText, runSummar
 const MODEL = process.env.SHOW_FINDER_MODEL || "claude-opus-5-5";
 
 /** Stop starting new centers after this long, so the run ends within Vercel's time limit. */
-const TIME_BUDGET_MS = 200_000;
+const TIME_BUDGET_MS = 150_000;
 const PARALLEL = 4;
 const FETCH_TIMEOUT_MS = 20_000;
+/** Each AI call is cut off after this long, so one slow page can't stall the run. */
+const AI_TIMEOUT_MS = 120_000;
 
 export function isShowFinderConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
@@ -45,33 +47,70 @@ Give the name as the organizer writes it, without the year or edition number.
 For website, use the link that belongs to that event (its own website, or its page on the center's site). Use null if there is none.
 If the page lists no trade shows, return an empty list.`;
 
+// Many sites turn away requests that don't look like a browser, so ask like one.
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9,da;q=0.8,de;q=0.7",
+};
+
 async function fetchPage(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; TradeShowSystem/1.0; +https://trade-show-system.vercel.app)",
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "en,da;q=0.8,de;q=0.6",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  const res = await fetch(url, { headers: BROWSER_HEADERS, redirect: "follow", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`The events page answered with error ${res.status}.`);
   return res.text();
 }
 
+const READER_SYSTEM = `You collect the event listings of an exhibition center from its website, for another step that picks out the trade shows.
+
+Fetch the events page you are given. If the events are not on it (for example because they load with JavaScript, sit on a separate list page, or are split over several pages or months), follow links on the same site that lead to the event listings, such as the full list, the next page or the next months. Do not leave the center's website.
+
+Then write out every upcoming event you found as plain text, one per line: name, dates exactly as written (with the year), and the link to the event if there is one. Write nothing else. If you found no events, write: NO EVENTS FOUND`;
+
+/**
+ * Lets Claude read the page with Anthropic's own web fetcher and follow links
+ * on the site. Used when our own download is turned away or shows no events.
+ */
+async function readWithClaude(client: Anthropic, url: string): Promise<string> {
+  const host = new URL(url).hostname.replace(/^www\./, "");
+  const tools: Anthropic.ToolUnion[] = [{ type: "web_fetch_20260209", name: "web_fetch", allowed_domains: [host], max_uses: 6 }];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Events page: ${url}\nToday's date: ${isoDate(today())}` }];
+  for (let round = 0; round < 3; round++) {
+    const response = await client.messages.create(
+      { model: MODEL, max_tokens: 16000, system: READER_SYSTEM, output_config: { effort: "low" }, tools, messages },
+      { timeout: AI_TIMEOUT_MS },
+    );
+    if (response.stop_reason === "refusal") throw new Error("The AI declined to read this page.");
+    if (response.stop_reason === "pause_turn") {
+      // The fetching loop paused; send the turn back so it carries on.
+      messages.push({ role: "assistant", content: response.content });
+      continue;
+    }
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    return text.includes("NO EVENTS FOUND") && text.length < 40 ? "" : text;
+  }
+  return "";
+}
+
 async function askClaude(client: Anthropic, centerName: string, url: string, pageText: string): Promise<FoundShow[]> {
-  const response = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    system: SYSTEM,
-    output_config: { effort: "low", format: zodOutputFormat(foundSchema) },
-    messages: [
-      {
-        role: "user",
-        content: `Today's date: ${isoDate(today())}\nExhibition center: ${centerName}\nEvents page: ${url}\n\n<page>\n${pageText}\n</page>`,
-      },
-    ],
-  });
+  const response = await client.messages.parse(
+    {
+      model: MODEL,
+      max_tokens: 16000,
+      system: SYSTEM,
+      output_config: { effort: "low", format: zodOutputFormat(foundSchema) },
+      messages: [
+        {
+          role: "user",
+          content: `Today's date: ${isoDate(today())}\nExhibition center: ${centerName}\nEvents page: ${url}\n\n<page>\n${pageText}\n</page>`,
+        },
+      ],
+    },
+    { timeout: AI_TIMEOUT_MS },
+  );
   if (response.stop_reason === "refusal") throw new Error("The AI declined to read this page.");
   if (response.stop_reason === "max_tokens") throw new Error("The page lists too many events to read in one go.");
   if (!response.parsed_output) throw new Error("The AI's answer could not be read.");
@@ -89,14 +128,42 @@ function describeError(error: unknown): string {
 
 type Center = { id: string; name: string; eventsUrl: string | null };
 
-/** Checks one center and saves what is new. Returns how many new shows were found. */
-async function checkCenter(client: Anthropic, center: Center): Promise<number> {
-  if (!center.eventsUrl) throw new Error("The center has no Local events URL.");
-  const { text } = pageToText(await fetchPage(center.eventsUrl), center.eventsUrl);
-  if (text.length < 40) throw new Error("The events page has no readable text. It may only show its events with JavaScript.");
+type CheckResult = { fresh: number; note: string };
 
-  const found = checkFoundShows(await askClaude(client, center.name, center.eventsUrl, text));
-  if (found.length === 0) return 0;
+/** Downloads the page ourselves, then lets Claude read the site if that fails or shows no shows. */
+async function findOnPage(client: Anthropic, center: Center & { eventsUrl: string }): Promise<{ found: FoundShow[]; via: string }> {
+  let ownError: unknown = null;
+  try {
+    const { text } = pageToText(await fetchPage(center.eventsUrl), center.eventsUrl);
+    if (text.length >= 40) {
+      const found = await askClaude(client, center.name, center.eventsUrl, text);
+      if (found.length > 0) return { found, via: "page" };
+    }
+  } catch (error) {
+    if (error instanceof Anthropic.APIError) throw error;
+    ownError = error;
+  }
+
+  const listing = await readWithClaude(client, center.eventsUrl);
+  if (!listing) {
+    if (ownError) throw ownError;
+    return { found: [], via: "site" };
+  }
+  return { found: await askClaude(client, center.name, center.eventsUrl, listing), via: "site" };
+}
+
+/** Checks one center and saves what is new, with a note on what was found. */
+async function checkCenter(client: Anthropic, center: Center): Promise<CheckResult> {
+  if (!center.eventsUrl) throw new Error("The center has no Local events URL.");
+  const { found: listed } = await findOnPage(client, { ...center, eventsUrl: center.eventsUrl });
+  if (listed.length === 0) {
+    return {
+      fresh: 0,
+      note: "No trade shows with exact dates were found on the events page. Check that the Local events URL is the page that lists the events.",
+    };
+  }
+  const found = checkFoundShows(listed);
+  if (found.length === 0) return { fresh: 0, note: foundNote({ listed: listed.length, usable: 0, fresh: 0 }) };
 
   // Compare with every show and suggestion around those dates, rejected ones
   // included, so nothing is suggested twice.
@@ -111,7 +178,7 @@ async function checkCenter(client: Anthropic, center: Center): Promise<number> {
       data: fresh.map((f) => ({ ...f, centerId: center.id, sourceUrl: center.eventsUrl! })),
     });
   }
-  return fresh.length;
+  return { fresh: fresh.length, note: foundNote({ listed: listed.length, usable: found.length, fresh: fresh.length }) };
 }
 
 /**
@@ -139,17 +206,17 @@ export async function runShowFinder({ onlyDue }: { onlyDue: boolean }): Promise<
     while (next < queue.length && Date.now() - started < TIME_BUDGET_MS) {
       const center = queue[next++];
       try {
-        const count = await checkCenter(client, center);
-        totals.found += count;
+        const { fresh, note } = await checkCenter(client, center);
+        totals.found += fresh;
         await db.exhibitionCenter.update({
           where: { id: center.id },
-          data: { showsCheckedAt: new Date(), showsCheckError: null, showsFoundLast: count },
+          data: { showsCheckedAt: new Date(), showsCheckError: null, showsCheckNote: note, showsFoundLast: fresh },
         });
       } catch (error) {
         totals.failed++;
         await db.exhibitionCenter.update({
           where: { id: center.id },
-          data: { showsCheckedAt: new Date(), showsCheckError: describeError(error), showsFoundLast: null },
+          data: { showsCheckedAt: new Date(), showsCheckError: describeError(error), showsCheckNote: null, showsFoundLast: null },
         });
       }
       totals.checked++;

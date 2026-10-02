@@ -238,6 +238,7 @@ model ExhibitionCenter {
   findShows       Boolean   @default(false)
   showsCheckedAt  DateTime?
   showsCheckError String?
+  showsCheckNote  String? // what the last check found, e.g. "Found 12 trade shows on the page: 2 new, ..."
   showsFoundLast  Int?
 
   tradeShows     TradeShow[]

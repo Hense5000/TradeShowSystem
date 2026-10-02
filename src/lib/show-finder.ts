@@ -147,3 +147,13 @@ export function runSummary(r: { checked: number; found: number; failed: number; 
   if (r.left > 0) parts.push(`${r.left} ${r.left === 1 ? "center was" : "centers were"} not reached this time and will be checked next.`);
   return parts.join(" ");
 }
+
+/** What a check found, e.g. "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past or without exact dates." */
+export function foundNote({ listed, usable, fresh }: { listed: number; usable: number; fresh: number }): string {
+  const known = usable - fresh;
+  const dropped = listed - usable;
+  const parts = [`${fresh} new`];
+  if (known > 0) parts.push(`${known} already known`);
+  if (dropped > 0) parts.push(`${dropped} in the past or without exact dates`);
+  return `Found ${listed} trade ${listed === 1 ? "show" : "shows"} on the page: ${parts.join(", ")}.`;
+}
