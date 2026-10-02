@@ -15,7 +15,11 @@ const ROLLOUT_PILL: Record<FeatureRollout, string> = {
 export default async function FeatureControlPage({ params }: PageProps<"/a/[slug]/admin">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const features = await db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } });
+  const [features, finder, waiting] = await Promise.all([
+    db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } }),
+    db.showFinderSettings.findUnique({ where: { id: 1 } }),
+    db.suggestedShow.count({ where: { status: "PENDING" } }),
+  ]);
 
   return (
     <>
@@ -28,6 +32,25 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
           </Link>
         }
       />
+
+      <section className="card flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-56 flex-1 items-start gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+            <Icon name="search" className="size-4" />
+          </span>
+          <span>
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              AI trade show finder
+              <span className={`pill ${finder?.enabled ? "pill-ok" : "pill-neutral"}`}>{finder?.enabled ? "On" : "Off"}</span>
+              {waiting > 0 && <span className="pill pill-warn">{waiting} waiting for approval</span>}
+            </span>
+            <span className="block text-sm text-muted">
+              Checks chosen exhibition centers' events pages each month and suggests new trade shows for you to approve.
+            </span>
+          </span>
+        </div>
+        <Link href={`/a/${slug}/admin/show-finder`} className="btn-secondary">Open</Link>
+      </section>
 
       {features.length === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
