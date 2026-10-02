@@ -2,13 +2,21 @@ import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { SaveForm } from "@/components/save-form";
 import { formatDateRange, isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { isShowFinderConfigured } from "@/lib/show-finder-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { approveSuggestion, rejectSuggestion, runFinderNow, saveFinderCenters, setFinderEnabled } from "./actions";
+import {
+  approveSuggestion,
+  checkCenterNow,
+  rejectSuggestion,
+  runFinderNow,
+  setCenterCheckDay,
+  setCenterChosen,
+  setFinderEnabled,
+} from "./actions";
 import { ApproveForm } from "./approve-form";
+import { CenterRow } from "./center-row";
 import { RunButton } from "./run-button";
 
 // "Check now" reads several pages with the AI, which takes a while.
@@ -17,19 +25,33 @@ export const maxDuration = 300;
 const when = (date: Date) =>
   new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Copenhagen" }).format(date);
 
-export default async function ShowFinderPage({ params }: PageProps<"/a/[slug]/admin/show-finder">) {
+/** How many centers the list shows at once; search to find the rest. */
+const LIST_LIMIT = 100;
+
+export default async function ShowFinderPage({ params, searchParams }: PageProps<"/a/[slug]/admin/show-finder">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const [settings, centers, pending, decided] = await Promise.all([
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" ? sp.q.trim() : "";
+  const [settings, chosen, pending, decided] = await Promise.all([
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
-    db.exhibitionCenter.findMany({ orderBy: { name: "asc" } }),
+    db.exhibitionCenter.count({ where: { findShows: true } }),
     db.suggestedShow.findMany({ where: { status: "PENDING" }, orderBy: { startDate: "asc" }, include: { center: true } }),
     db.suggestedShow.groupBy({ by: ["status"], where: { status: { not: "PENDING" } }, _count: true }),
   ]);
   const enabled = settings?.enabled ?? false;
   const keyMissing = !isShowFinderConfigured();
   const cronMissing = !process.env.CRON_SECRET;
-  const chosen = centers.filter((c) => c.findShows).length;
+  // Without a search the list shows the chosen centers; a search looks through all of them.
+  const showAll = sp.show === "all" || Boolean(q) || chosen === 0;
+  const where = {
+    ...(!showAll && { findShows: true }),
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { city: { contains: q, mode: "insensitive" as const } }] }),
+  };
+  const [centers, matching] = await Promise.all([
+    db.exhibitionCenter.findMany({ where, orderBy: [{ findShows: "desc" }, { name: "asc" }], take: LIST_LIMIT }),
+    db.exhibitionCenter.count({ where }),
+  ]);
   const count = (status: string) => decided.find((d) => d.status === status)?._count ?? 0;
 
   return (
@@ -48,8 +70,8 @@ export default async function ShowFinderPage({ params }: PageProps<"/a/[slug]/ad
             </h2>
             <p className="mt-0.5 text-sm text-muted">
               {enabled
-                ? "Each chosen center is checked about once a month. New finds wait below for your approval."
-                : "Switch it on to check the chosen centers about once a month. You can still check by hand while it is off."}
+                ? "Each chosen center is checked once a month, on its own day if you set one. New finds wait below for your approval."
+                : "Switch it on to check the chosen centers once a month. You can still check by hand while it is off."}
             </p>
           </div>
           <ActionForm action={setFinderEnabled.bind(null, slug, !enabled)}>
@@ -77,7 +99,10 @@ export default async function ShowFinderPage({ params }: PageProps<"/a/[slug]/ad
               "No check has run yet."
             )}
           </p>
-          {!keyMissing && chosen > 0 && <RunButton action={runFinderNow.bind(null, slug)} />}
+          {!keyMissing && chosen > 0 && chosen <= 20 && <RunButton action={runFinderNow.bind(null, slug)} />}
+          {chosen > 20 && (
+            <p className="text-sm text-muted">With {chosen} centers chosen, check them one at a time with &quot;Check now&quot; in the list below.</p>
+          )}
           {chosen === 0 && <p className="text-sm text-muted">Choose at least one center below to start.</p>}
         </div>
       </section>
@@ -138,48 +163,68 @@ export default async function ShowFinderPage({ params }: PageProps<"/a/[slug]/ad
         )}
       </section>
 
-      <SaveForm
-        action={saveFinderCenters.bind(null, slug)}
-        title={`Centers to check (${chosen} chosen)`}
-        description="Tick the centers whose events page should be read. The page is the center's Local events URL."
-        submitLabel="Save centers"
-        readOnly={false}
-      >
+      <section className="card overflow-hidden p-0">
+        <div className="flex flex-col gap-3 p-5">
+          <div>
+            <h2 className="font-bold">Centers to check ({chosen} chosen)</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Tick a center to check it automatically, and pick the day of the month it is checked on. Spread the centers over the
+              month, about 10 per day at most. &quot;Check now&quot; checks one center right away, ticked or not.
+            </p>
+          </div>
+          <form className="flex flex-wrap items-center gap-2" role="search">
+            <div className="relative min-w-56 flex-1">
+              <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
+              <input className="input pl-9" name="q" defaultValue={q} placeholder="Find a center by name or city" aria-label="Search centers" />
+            </div>
+            <button className="btn-secondary py-2">Search</button>
+            {(q || showAll) && chosen > 0 && (
+              <Link href={`/a/${slug}/admin/show-finder`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
+                Show chosen only
+              </Link>
+            )}
+            {!showAll && (
+              <Link href={`/a/${slug}/admin/show-finder?show=all`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
+                Show all centers
+              </Link>
+            )}
+          </form>
+        </div>
+        <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
+          {matching > centers.length
+            ? `Showing ${centers.length} of ${matching} centers. Search to find the others.`
+            : `${matching} ${matching === 1 ? "center" : "centers"}${showAll ? "" : " chosen"}`}
+        </p>
         {centers.length === 0 ? (
-          <p className="text-sm text-muted">
-            There are no exhibition centers yet. <Link href={`/a/${slug}/centers/new`} className="font-semibold text-brand hover:underline">Add one</Link>.
+          <p className="border-t border-line px-5 py-8 text-center text-sm text-muted">
+            {q ? "No centers match your search." : "There are no exhibition centers yet."}
           </p>
         ) : (
-          <div className="max-h-[28rem] divide-y divide-line overflow-y-auto rounded-lg border border-line-strong">
+          <ul className="divide-y divide-line border-t border-line">
             {centers.map((c) => (
-              <label
+              <CenterRow
                 key={c.id}
-                className={`flex items-start gap-2.5 px-3 py-2.5 text-sm ${c.eventsUrl ? "cursor-pointer hover:bg-subtle" : "text-faint"}`}
-              >
-                <input
-                  type="checkbox"
-                  name="centers"
-                  value={c.id}
-                  defaultChecked={c.findShows}
-                  disabled={!c.eventsUrl}
-                  className="mt-0.5 accent-brand"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{c.name}</span>
-                  <span className="block truncate text-xs text-muted">{c.eventsUrl ?? "No Local events URL. Add one on the center to check it."}</span>
-                  {c.showsCheckError ? (
-                    <span className="mt-0.5 block text-xs text-bad">Last check: {c.showsCheckError}</span>
-                  ) : c.showsCheckedAt ? (
-                    <span className="mt-0.5 block text-xs text-muted">
-                      Last check {when(c.showsCheckedAt)}: {c.showsCheckNote ?? `${c.showsFoundLast ?? 0} new`}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
+                name={c.name}
+                eventsUrl={c.eventsUrl}
+                chosen={c.findShows}
+                checkDay={c.showsCheckDay}
+                status={
+                  c.showsCheckError
+                    ? `Last check: ${c.showsCheckError}`
+                    : c.showsCheckedAt
+                      ? `Last check ${when(c.showsCheckedAt)}: ${c.showsCheckNote ?? `${c.showsFoundLast ?? 0} new`}`
+                      : null
+                }
+                statusIsError={Boolean(c.showsCheckError)}
+                canCheck={!keyMissing}
+                setChosen={setCenterChosen.bind(null, slug, c.id)}
+                setCheckDay={setCenterCheckDay.bind(null, slug, c.id)}
+                checkNow={checkCenterNow.bind(null, slug, c.id)}
+              />
             ))}
-          </div>
+          </ul>
         )}
-      </SaveForm>
+      </section>
     </>
   );
 }

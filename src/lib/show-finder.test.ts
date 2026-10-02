@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFoundShows, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
+import { checkDate, checkFoundShows, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const now = new Date("2026-10-02T08:00:00Z");
@@ -74,10 +74,25 @@ describe("newShows", () => {
 });
 
 describe("isDue", () => {
-  it("is due when never checked or checked four weeks ago", () => {
-    expect(isDue(null, now)).toBe(true);
-    expect(isDue(new Date("2026-09-04T08:00:00Z"), now)).toBe(true);
-    expect(isDue(new Date("2026-09-20T08:00:00Z"), now)).toBe(false);
+  it("without a check day, is due when never checked or checked four weeks ago", () => {
+    expect(isDue({ checkedAt: null, checkDay: null }, now)).toBe(true);
+    expect(isDue({ checkedAt: new Date("2026-09-04T08:00:00Z"), checkDay: null }, now)).toBe(true);
+    expect(isDue({ checkedAt: new Date("2026-09-20T08:00:00Z"), checkDay: null }, now)).toBe(false);
+  });
+
+  it("with a check day, is due from that day until it has been checked", () => {
+    const tenth = { checkDay: 10 };
+    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-09T05:00:00Z"))).toBe(false);
+    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-10T05:00:00Z"))).toBe(true);
+    expect(isDue({ ...tenth, checkedAt: new Date("2026-10-10T05:01:00Z") }, new Date("2026-10-10T05:30:00Z"))).toBe(false);
+    // Missed on the 10th (too many centers that day): caught up the next day.
+    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-11T05:00:00Z"))).toBe(true);
+    expect(isDue({ ...tenth, checkedAt: null }, new Date("2026-10-11T05:00:00Z"))).toBe(true);
+  });
+
+  it("uses the last day of short months", () => {
+    expect(checkDate(31, new Date("2026-11-15T05:00:00Z"))).toEqual(new Date("2026-11-30T00:00:00Z"));
+    expect(isDue({ checkDay: 31, checkedAt: new Date("2026-10-31T05:00:00Z") }, new Date("2026-11-30T05:00:00Z"))).toBe(true);
   });
 });
 

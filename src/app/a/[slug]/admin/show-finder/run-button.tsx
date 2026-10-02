@@ -10,7 +10,7 @@ export function RunButton({ action }: { action: () => Promise<RunState> }) {
     <form action={formAction} className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn" disabled={pending}>
-          {pending ? "Checking…" : "Check now"}
+          {pending ? "Checking…" : "Check all chosen now"}
         </button>
         {pending && <span className="text-sm text-muted">Reading the events pages. This can take a few minutes.</span>}
       </div>
