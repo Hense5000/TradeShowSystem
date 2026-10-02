@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   url       = env("DATABASE_URL") // pooled connection, used by the app
   directUrl = env("DATABASE_URL_UNPOOLED") // direct connection, used for migrations
 }
@@ -233,7 +233,15 @@ model ExhibitionCenter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tradeShows TradeShow[]
+  // AI trade show finder: whether to check this center's events page, and
+  // how the last check went.
+  findShows       Boolean   @default(false)
+  showsCheckedAt  DateTime?
+  showsCheckError String?
+  showsFoundLast  Int?
+
+  tradeShows     TradeShow[]
+  suggestedShows SuggestedShow[]
 
   @@index([name])
 }
@@ -264,8 +272,9 @@ model TradeShow {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  center     ExhibitionCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
-  exhibitors Exhibitor[]
+  center      ExhibitionCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  exhibitors  Exhibitor[]
+  suggestions SuggestedShow[]
 
   @@index([startDate])
   @@index([name])
@@ -295,4 +304,45 @@ model Exhibitor {
 
   @@index([tradeShowId])
   @@index([name])
+}
+
+// ---------------------------------------------------------------------------
+// AI trade show finder: reads the events pages of chosen exhibition centers
+// and suggests new trade shows. A platform admin approves each one before it
+// joins the shared list.
+// ---------------------------------------------------------------------------
+
+// One row (id 1) with the switch and the result of the last run.
+model ShowFinderSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(false) // runs on its own when on
+  lastRunAt      DateTime?
+  lastRunSummary String?
+  updatedAt      DateTime  @updatedAt
+}
+
+enum SuggestionStatus {
+  PENDING // waiting for a platform admin
+  APPROVED // added to the trade show list
+  REJECTED // kept so it is not suggested again
+}
+
+model SuggestedShow {
+  id          String           @id @default(cuid())
+  centerId    String
+  name        String
+  startDate   DateTime         @db.Date
+  endDate     DateTime         @db.Date
+  website     String?
+  sourceUrl   String // the events page it was found on
+  status      SuggestionStatus @default(PENDING)
+  tradeShowId String? // the trade show it became, once approved
+  createdAt   DateTime         @default(now())
+  decidedAt   DateTime?
+
+  center    ExhibitionCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  tradeShow TradeShow?       @relation(fields: [tradeShowId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([centerId])
 }

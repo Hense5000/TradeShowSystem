@@ -11,6 +11,7 @@ keep the company profile up to date; billing and features follow in the next ste
 - Brugere inviteres med et link, som en admin kopierer og sender. Automatisk e-mail kommer senere.
 - **Exhibition centers** (og senere messer, arrangører og udstillere) er én fælles liste for alle konti. Alle kan se den; kun e-mails i `PLATFORM_ADMIN_EMAILS` kan rette i den.
 - **Feature control** (menuen "Super admin") ses kun af e-mails i `PLATFORM_ADMIN_EMAILS`. Her oprettes kommende funktioner. De starter slukket (skjult for kunder) og kan tændes for udvalgte konti eller for alle.
+- **AI trade show finder** (Feature control → AI trade show finder): læser events-siden (Local events URL) for de messecentre, der er sat flueben ved, ca. én gang om måneden, og foreslår nye messer. Forslagene kommer på en godkendelsesliste; intet kommer på messelisten, før en super admin godkender det. Kræver `ANTHROPIC_API_KEY` og `CRON_SECRET` i Vercel.
 - Kortoplysninger gemmes aldrig hos os. De ligger i Stripe, og vi gemmer kun Stripes id'er.
 
 ## Status
@@ -23,7 +24,8 @@ keep the company profile up to date; billing and features follow in the next ste
 | – | Shared directory: exhibition organizers (same features) | ✅ done |
 | – | Shared directory: trade shows (status follows the dates) | ✅ done |
 | – | Shared directory: exhibitors per trade show; trade shows linked to their exhibition center | ✅ done |
-| – | Super admin feature control: add upcoming features, switch them on for selected accounts or everyone | ✅ this version |
+| – | Super admin feature control: add upcoming features, switch them on for selected accounts or everyone | ✅ done |
+| – | AI trade show finder: reads chosen centers' events pages monthly and suggests new trade shows for approval | ✅ this version |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
 
@@ -73,6 +75,16 @@ src/app/invite/[token]      accept an invitation
 **Tenant isolation.** Account URLs look like `/a/<slug>`. Every page and
 action under it calls `requireMembership(slug)`, which returns 404 unless the
 signed-in user is a member, and every query is filtered by that account's id.
+
+**AI trade show finder.** A Vercel cron job (`vercel.json`) calls
+`/api/cron/show-finder` daily with `CRON_SECRET`. When the finder is switched
+on, it checks each chosen center whose last check is four weeks old: it
+downloads the events page, turns it into plain text (`src/lib/show-finder.ts`)
+and asks Claude for the trade shows on it (`src/lib/show-finder-run.ts`).
+Shows that match a known show or an earlier suggestion (same name ignoring
+years, start within two weeks) are skipped; the rest become `SuggestedShow`
+rows that a platform admin approves or rejects. Pages that only render their
+events with JavaScript can't be read this way and show an error on the page.
 
 **Invitations.** The link contains a random token; only its SHA-256 hash is
 stored. Links expire after 7 days, work once, and only for the invited email.
