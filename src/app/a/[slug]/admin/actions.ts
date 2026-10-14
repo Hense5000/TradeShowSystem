@@ -71,3 +71,11 @@ export async function deleteFeature(slug: string, id: string): Promise<ActionSta
   refresh(slug);
   redirect(`/a/${slug}/admin`);
 }
+
+/** Switches the daily cleanup of trade shows older than three years on or off. */
+export async function setCleanupEnabled(slug: string, enabled: boolean): Promise<ActionState> {
+  await requirePlatformAdmin(slug);
+  await db.tradeShowCleanupSettings.upsert({ where: { id: 1 }, create: { id: 1, enabled }, update: { enabled } });
+  revalidatePath(`/a/${slug}/admin`);
+  return undefined;
+}
