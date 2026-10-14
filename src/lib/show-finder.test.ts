@@ -26,23 +26,25 @@ describe("pageToText", () => {
 });
 
 describe("checkFoundShows", () => {
-  it("keeps future shows with real dates", () => {
+  it("keeps shows with real dates in the next six months", () => {
     const result = checkFoundShows(
       [
-        { name: "  Agromek ", startDate: "2027-11-30", endDate: "2027-12-03", website: "https://agromek.dk" },
+        { name: "  Agromek ", startDate: "2027-03-30", endDate: "2027-04-02", website: "https://agromek.dk" },
         { name: "Running now", startDate: "2026-09-30", endDate: "2026-10-03", website: null },
         { name: "One day", startDate: "2027-01-05", endDate: "", website: "not a url" },
+        { name: "Last day", startDate: "2027-04-02", endDate: "2027-04-04", website: null },
         { name: "Over", startDate: "2026-09-01", endDate: "2026-09-03", website: null },
-        { name: "Backwards", startDate: "2027-05-05", endDate: "2027-05-01", website: null },
+        { name: "Backwards", startDate: "2027-03-05", endDate: "2027-03-01", website: null },
         { name: "No date", startDate: "spring 2027", endDate: "", website: null },
-        { name: "Far away", startDate: "2032-01-01", endDate: "2032-01-02", website: null },
+        { name: "Too far", startDate: "2027-04-03", endDate: "2027-04-05", website: null },
       ],
       now,
     );
     expect(result).toEqual([
-      { name: "Agromek", startDate: d("2027-11-30"), endDate: d("2027-12-03"), website: "https://agromek.dk/" },
+      { name: "Agromek", startDate: d("2027-03-30"), endDate: d("2027-04-02"), website: "https://agromek.dk/" },
       { name: "Running now", startDate: d("2026-09-30"), endDate: d("2026-10-03"), website: null },
       { name: "One day", startDate: d("2027-01-05"), endDate: d("2027-01-05"), website: null },
+      { name: "Last day", startDate: d("2027-04-02"), endDate: d("2027-04-04"), website: null },
     ]);
   });
 });
@@ -55,6 +57,13 @@ describe("isSameShow", () => {
 
   it("treats next year's edition as a new show", () => {
     expect(isSameShow({ name: "Foodexpo", startDate: d("2028-03-12") }, { name: "Foodexpo", startDate: d("2027-03-14") })).toBe(false);
+  });
+
+  it("matches a name that holds the other", () => {
+    const start = d("2027-03-14");
+    expect(isSameShow({ name: "Agromek International Fair", startDate: start }, { name: "AGROMEK", startDate: start })).toBe(true);
+    // Short names must match exactly.
+    expect(isSameShow({ name: "IFA", startDate: start }, { name: "Gifa", startDate: start })).toBe(false);
   });
 
   it("does not match different names", () => {
@@ -117,7 +126,7 @@ describe("foundNote", () => {
   it("explains what happened to each show", () => {
     expect(foundNote({ listed: 1, usable: 1, fresh: 1 })).toBe("Found 1 trade show on the page: 1 new.");
     expect(foundNote({ listed: 12, usable: 11, fresh: 2 })).toBe(
-      "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past or without exact dates.",
+      "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past, more than 6 months ahead or without exact dates.",
     );
   });
 });

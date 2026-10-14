@@ -61,7 +61,7 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
               {waiting > 0 && <span className="pill pill-warn">{waiting} waiting for approval</span>}
             </span>
             <span className="block text-sm text-muted">
-              Checks chosen exhibition centers' events pages each month and suggests new trade shows for you to approve.
+              Checks chosen exhibition centers' events pages each month for new trade shows in the next 6 months and suggests them for you to approve.
             </span>
             {groups.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-1 text-sm">

@@ -7,8 +7,13 @@ import { addMonths, parseDate, today } from "@/lib/dates";
 /** A center is checked again when its last check is at least this old. */
 export const RECHECK_AFTER_DAYS = 28;
 
-/** Shows further ahead than this are left out; such dates are rarely final. */
-export const MAX_YEARS_AHEAD = 4;
+/** The finder looks this many months ahead; shows starting later are left out until a later check. */
+export const MONTHS_AHEAD = 6;
+
+/** The last start date the finder looks at: MONTHS_AHEAD months from today. */
+export function lookAheadUntil(now = new Date()): Date {
+  return addMonths(today(now), MONTHS_AHEAD);
+}
 
 /** Pages longer than this are cut. Event lists are far shorter in practice. */
 export const MAX_PAGE_CHARS = 200_000;
@@ -80,12 +85,12 @@ function cleanUrl(value: string | null): string | null {
 }
 
 /**
- * Keeps the shows with real dates that have not ended yet and are not
- * absurdly far ahead, and tidies their fields.
+ * Keeps the shows with real dates that have not ended yet and start within
+ * the next MONTHS_AHEAD months, and tidies their fields.
  */
 export function checkFoundShows(found: FoundShow[], now = new Date()): CheckedShow[] {
   const first = today(now);
-  const last = addMonths(first, MAX_YEARS_AHEAD * 12);
+  const last = lookAheadUntil(now);
   const result: CheckedShow[] = [];
   for (const f of found) {
     const name = f.name.replace(/\s+/g, " ").trim().slice(0, 150);
@@ -111,14 +116,17 @@ export function showNameKey(name: string): string {
 const DAY = 86_400_000;
 
 /**
- * Whether two entries are the same show: the names match once years, case
- * and punctuation are ignored, and they start within two weeks of each
- * other. Next year's edition of a show starts much later, so it counts as new.
+ * Whether two entries are the same show: they start within two weeks of each
+ * other, and the names match once years, case and punctuation are ignored, or
+ * one name holds the other (as "Agromek" and "Agromek International Fair" do).
+ * Next year's edition of a show starts much later, so it counts as new.
  */
 export function isSameShow(a: { name: string; startDate: Date }, b: { name: string; startDate: Date }): boolean {
-  const key = showNameKey(a.name);
-  if (!key || key !== showNameKey(b.name)) return false;
-  return Math.abs(a.startDate.getTime() - b.startDate.getTime()) <= 14 * DAY;
+  if (Math.abs(a.startDate.getTime() - b.startDate.getTime()) > 14 * DAY) return false;
+  const [x, y] = [showNameKey(a.name), showNameKey(b.name)].sort((m, n) => m.length - n.length);
+  if (!x) return false;
+  // Very short names ("IFA") must match exactly, so they don't match inside other names.
+  return x === y || (x.length >= 5 && y.includes(x));
 }
 
 /** The shows that are not already known, without repeats among themselves. */
@@ -176,12 +184,12 @@ export function runSummary(r: { checked: number; found: number; failed: number; 
   return parts.join(" ");
 }
 
-/** What a check found, e.g. "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past or without exact dates." */
+/** What a check found, e.g. "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past, more than 6 months ahead or without exact dates." */
 export function foundNote({ listed, usable, fresh }: { listed: number; usable: number; fresh: number }): string {
   const known = usable - fresh;
   const dropped = listed - usable;
   const parts = [`${fresh} new`];
   if (known > 0) parts.push(`${known} already known`);
-  if (dropped > 0) parts.push(`${dropped} in the past or without exact dates`);
+  if (dropped > 0) parts.push(`${dropped} in the past, more than ${MONTHS_AHEAD} months ahead or without exact dates`);
   return `Found ${listed} trade ${listed === 1 ? "show" : "shows"} on the page: ${parts.join(", ")}.`;
 }

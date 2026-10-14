@@ -71,7 +71,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
     <>
       <PageHeader
         title="AI trade show finder"
-        description="Reads the events pages of the centers you choose and suggests new trade shows. Nothing joins the list until you approve it."
+        description="Reads the events pages of the centers you choose and suggests new trade shows starting in the next 6 months. Shows already in the system are skipped, and nothing joins the list until you approve it."
         action={<Link href={`/a/${slug}/admin`} className="btn-secondary">Back to Feature control</Link>}
       />
 

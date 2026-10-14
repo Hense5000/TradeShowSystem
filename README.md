@@ -85,9 +85,10 @@ named check groups (`ShowFinderGroup`, e.g. "Europe"); the group's day then
 applies instead of the center's own. Admins can also check a single center or
 a whole group right away. For each center it
 downloads the events page, turns it into plain text (`src/lib/show-finder.ts`)
-and asks Claude for the trade shows on it (`src/lib/show-finder-run.ts`).
+and asks Claude for the trade shows on it that start within the next 6 months
+(`MONTHS_AHEAD`, `src/lib/show-finder-run.ts`).
 Shows that match a known show or an earlier suggestion (same name ignoring
-years, start within two weeks) are skipped; the rest become `SuggestedShow`
+years, or one name holding the other, and start within two weeks) are skipped; the rest become `SuggestedShow`
 rows that a platform admin approves or rejects. Pages that only render their
 events with JavaScript can't be read this way and show an error on the page.
 
