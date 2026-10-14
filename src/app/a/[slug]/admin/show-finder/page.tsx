@@ -9,15 +9,22 @@ import { requirePlatformAdmin } from "@/lib/tenant";
 import {
   approveSuggestion,
   checkCenterNow,
+  checkGroupNow,
+  createGroup,
+  deleteGroup,
   rejectSuggestion,
   removeCenterFromFinder,
+  renameGroup,
   runFinderNow,
   setCenterCheckDay,
   setCenterChosen,
+  setCenterGroup,
   setFinderEnabled,
+  setGroupCheckDay,
 } from "./actions";
 import { ApproveForm } from "./approve-form";
 import { CenterRow } from "./center-row";
+import { GroupRow } from "./group-row";
 import { RunButton } from "./run-button";
 
 // "Check now" reads several pages with the AI, which takes a while.
@@ -34,19 +41,23 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
   await requirePlatformAdmin(slug);
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
-  const [settings, chosen, pending, decided] = await Promise.all([
+  const [settings, chosen, pending, decided, groups, tickedByGroup] = await Promise.all([
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
     db.exhibitionCenter.count({ where: { findShows: true } }),
     db.suggestedShow.findMany({ where: { status: "PENDING" }, orderBy: { startDate: "asc" }, include: { center: true } }),
     db.suggestedShow.groupBy({ by: ["status"], where: { status: { not: "PENDING" } }, _count: true }),
+    db.showFinderGroup.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { centers: true } } } }),
+    db.exhibitionCenter.groupBy({ by: ["showsGroupId"], where: { findShows: true, showsGroupId: { not: null } }, _count: true }),
   ]);
+  const groupFilter = typeof sp.group === "string" ? groups.find((g) => g.id === sp.group) : undefined;
   const enabled = settings?.enabled ?? false;
   const keyMissing = !isShowFinderConfigured();
   const cronMissing = !process.env.CRON_SECRET;
   // Without a search the list shows the chosen centers; a search looks through all of them.
-  const showAll = sp.show === "all" || Boolean(q) || chosen === 0;
+  const showAll = sp.show === "all" || Boolean(q) || chosen === 0 || Boolean(groupFilter);
   const where = {
     ...(!showAll && { findShows: true }),
+    ...(groupFilter && { showsGroupId: groupFilter.id }),
     ...(q && { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { city: { contains: q, mode: "insensitive" as const } }] }),
   };
   const [centers, matching] = await Promise.all([
@@ -54,6 +65,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
     db.exhibitionCenter.count({ where }),
   ]);
   const count = (status: string) => decided.find((d) => d.status === status)?._count ?? 0;
+  const groupOptions = groups.map((g) => ({ id: g.id, name: g.name }));
 
   return (
     <>
@@ -71,7 +83,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
             </h2>
             <p className="mt-0.5 text-sm text-muted">
               {enabled
-                ? "Each chosen center is checked once a month, on its own day if you set one. New finds wait below for your approval."
+                ? "Each chosen center is checked once a month, on its own or its group's day if one is set. New finds wait below for your approval."
                 : "Switch it on to check the chosen centers once a month. You can still check by hand while it is off."}
             </p>
           </div>
@@ -167,10 +179,47 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
       <section className="card overflow-hidden p-0">
         <div className="flex flex-col gap-3 p-5">
           <div>
-            <h2 className="font-bold">Centers to check ({chosen} chosen)</h2>
+            <h2 className="font-bold">Check groups ({groups.length})</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Tick a center to check it automatically, and pick the day of the month it is checked on. Spread the centers over the
-              month, about 10 per day at most. &quot;Check now&quot; checks one center right away, ticked or not.
+              Put centers in named groups, such as Europe, USA or Asia. All centers in a group are checked on the group&apos;s day, and you can
+              check a whole group at once. Pick the group on each center in the list below.
+            </p>
+          </div>
+          <ActionForm action={createGroup.bind(null, slug)} className="flex flex-wrap items-center gap-2">
+            <input className="input max-w-xs" name="name" placeholder="New group, e.g. Europe" required maxLength={60} aria-label="Group name" />
+            <button className="btn-secondary py-2">Add group</button>
+          </ActionForm>
+        </div>
+        {groups.length > 0 && (
+          <ul className="divide-y divide-line border-t border-line">
+            {groups.map((g) => (
+              <GroupRow
+                key={g.id}
+                name={g.name}
+                centers={g._count.centers}
+                ticked={tickedByGroup.find((t) => t.showsGroupId === g.id)?._count ?? 0}
+                checkDay={g.checkDay}
+                href={`/a/${slug}/admin/show-finder?group=${g.id}`}
+                canCheck={!keyMissing}
+                setCheckDay={setGroupCheckDay.bind(null, slug, g.id)}
+                checkNow={checkGroupNow.bind(null, slug, g.id)}
+                rename={renameGroup.bind(null, slug, g.id)}
+                remove={deleteGroup.bind(null, slug, g.id)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card overflow-hidden p-0">
+        <div className="flex flex-col gap-3 p-5">
+          <div>
+            <h2 className="font-bold">
+              {groupFilter ? `Centers in ${groupFilter.name}` : `Centers to check (${chosen} chosen)`}
+            </h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Tick a center to check it automatically, and pick its group or the day of the month it is checked on. Spread the centers
+              over the month, about 10 per day at most. &quot;Check now&quot; checks one center right away, ticked or not.
             </p>
           </div>
           <form className="flex flex-wrap items-center gap-2" role="search">
@@ -179,12 +228,13 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
               <input className="input pl-9" name="q" defaultValue={q} placeholder="Find a center by name or city" aria-label="Search centers" />
             </div>
             <button className="btn-secondary py-2">Search</button>
+            {groupFilter && <input type="hidden" name="group" value={groupFilter.id} />}
             {(q || showAll) && chosen > 0 && (
               <Link href={`/a/${slug}/admin/show-finder`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
                 Show chosen only
               </Link>
             )}
-            {!showAll && (
+            {(!showAll || groupFilter) && (
               <Link href={`/a/${slug}/admin/show-finder?show=all`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
                 Show all centers
               </Link>
@@ -194,11 +244,15 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
         <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
           {matching > centers.length
             ? `Showing ${centers.length} of ${matching} centers. Search to find the others.`
-            : `${matching} ${matching === 1 ? "center" : "centers"}${showAll ? "" : " chosen"}`}
+            : `${matching} ${matching === 1 ? "center" : "centers"}${showAll ? "" : " chosen"}${groupFilter ? ` in ${groupFilter.name}` : ""}`}
         </p>
         {centers.length === 0 ? (
           <p className="border-t border-line px-5 py-8 text-center text-sm text-muted">
-            {q ? "No centers match your search." : "There are no exhibition centers yet."}
+            {q
+              ? "No centers match your search."
+              : groupFilter
+                ? "No centers in this group yet. Show all centers and pick the group on the ones you want."
+                : "There are no exhibition centers yet."}
           </p>
         ) : (
           <ul className="divide-y divide-line border-t border-line">
@@ -209,6 +263,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 eventsUrl={c.eventsUrl}
                 chosen={c.findShows}
                 checkDay={c.showsCheckDay}
+                groupId={c.showsGroupId}
+                groups={groupOptions}
                 status={
                   c.showsCheckError
                     ? `Last check: ${c.showsCheckError}`
@@ -220,6 +276,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 canCheck={!keyMissing}
                 setChosen={setCenterChosen.bind(null, slug, c.id)}
                 setCheckDay={setCenterCheckDay.bind(null, slug, c.id)}
+                setGroup={setCenterGroup.bind(null, slug, c.id)}
                 checkNow={checkCenterNow.bind(null, slug, c.id)}
                 remove={removeCenterFromFinder.bind(null, slug, c.id)}
               />

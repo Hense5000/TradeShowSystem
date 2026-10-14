@@ -34,7 +34,7 @@ export async function removeCenterFromFinder(slug: string, id: string): Promise<
   await requirePlatformAdmin(slug);
   await db.exhibitionCenter.updateMany({
     where: { id },
-    data: { findShows: false, showsCheckDay: null, showsCheckedAt: null, showsCheckError: null, showsCheckNote: null, showsFoundLast: null },
+    data: { findShows: false, showsCheckDay: null, showsGroupId: null, showsCheckedAt: null, showsCheckError: null, showsCheckNote: null, showsFoundLast: null },
   });
   refresh(slug);
 }
@@ -42,9 +42,74 @@ export async function removeCenterFromFinder(slug: string, id: string): Promise<
 /** Sets the day of the month a center is checked on (null: about every four weeks). */
 export async function setCenterCheckDay(slug: string, id: string, day: number | null): Promise<void> {
   await requirePlatformAdmin(slug);
-  const valid = day !== null && Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
-  await db.exhibitionCenter.updateMany({ where: { id }, data: { showsCheckDay: valid } });
+  await db.exhibitionCenter.updateMany({ where: { id }, data: { showsCheckDay: validDay(day) } });
   refresh(slug);
+}
+
+function validDay(day: number | null): number | null {
+  return day !== null && Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
+}
+
+/**
+ * Puts a center in a check group, or takes it out (null). Putting it in a
+ * group also ticks it, since a group is a set of centers to check.
+ */
+export async function setCenterGroup(slug: string, id: string, groupId: string | null): Promise<void> {
+  await requirePlatformAdmin(slug);
+  const group = groupId ? await db.showFinderGroup.findUnique({ where: { id: groupId }, select: { id: true } }) : null;
+  await db.exhibitionCenter.updateMany({
+    where: { id, ...(group && { eventsUrl: { not: null } }) },
+    data: { showsGroupId: group?.id ?? null, ...(group && { findShows: true }) },
+  });
+  refresh(slug);
+}
+
+function groupName(formData: FormData): string {
+  return String(formData.get("name") ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+async function nameTaken(name: string, exceptId?: string): Promise<boolean> {
+  const other = await db.showFinderGroup.findFirst({
+    where: { name: { equals: name, mode: "insensitive" }, ...(exceptId && { id: { not: exceptId } }) },
+    select: { id: true },
+  });
+  return Boolean(other);
+}
+
+/** Creates a named check group, e.g. "Europe". */
+export async function createGroup(slug: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin(slug);
+  const name = groupName(formData);
+  if (!name) return { error: "Give the group a name." };
+  if (await nameTaken(name)) return { error: `There is already a group called ${name}.` };
+  await db.showFinderGroup.create({ data: { name } });
+  refresh(slug);
+  return undefined;
+}
+
+export async function renameGroup(slug: string, id: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePlatformAdmin(slug);
+  const name = groupName(formData);
+  if (!name) return { error: "Give the group a name." };
+  if (await nameTaken(name, id)) return { error: `There is already a group called ${name}.` };
+  await db.showFinderGroup.updateMany({ where: { id }, data: { name } });
+  refresh(slug);
+  return undefined;
+}
+
+/** Sets the day of the month all the group's centers are checked on (null: about every four weeks). */
+export async function setGroupCheckDay(slug: string, id: string, day: number | null): Promise<void> {
+  await requirePlatformAdmin(slug);
+  await db.showFinderGroup.updateMany({ where: { id }, data: { checkDay: validDay(day) } });
+  refresh(slug);
+}
+
+/** Deletes a group. Its centers stay chosen, without a group, and go back to their own check day. */
+export async function deleteGroup(slug: string, id: string): Promise<ActionState> {
+  await requirePlatformAdmin(slug);
+  await db.showFinderGroup.deleteMany({ where: { id } });
+  refresh(slug);
+  return undefined;
 }
 
 export type RunState = { error?: string; summary?: string } | undefined;
@@ -65,6 +130,18 @@ export async function checkCenterNow(slug: string, id: string): Promise<RunState
   await requirePlatformAdmin(slug);
   try {
     const summary = await runShowFinder({ onlyDue: false, centerIds: [id] });
+    refresh(slug);
+    return { summary };
+  } catch {
+    return { error: "The check stopped unexpectedly. Try again in a moment." };
+  }
+}
+
+/** Checks the ticked centers of one group right away. */
+export async function checkGroupNow(slug: string, groupId: string): Promise<RunState> {
+  await requirePlatformAdmin(slug);
+  try {
+    const summary = await runShowFinder({ onlyDue: false, groupId });
     refresh(slug);
     return { summary };
   } catch {
