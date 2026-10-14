@@ -11,7 +11,7 @@ keep the company profile up to date; billing and features follow in the next ste
 - Brugere inviteres med et link, som en admin kopierer og sender. Automatisk e-mail kommer senere.
 - **Exhibition centers** (og senere messer, arrangører og udstillere) er én fælles liste for alle konti. Alle kan se den; kun e-mails i `PLATFORM_ADMIN_EMAILS` kan rette i den.
 - **Feature control** (menuen "Super admin") ses kun af e-mails i `PLATFORM_ADMIN_EMAILS`. Her oprettes kommende funktioner. De starter slukket (skjult for kunder) og kan tændes for udvalgte konti eller for alle.
-- **AI trade show finder** (Feature control → AI trade show finder): læser events-siden (Local events URL) for de messecentre, der er sat flueben ved, ca. én gang om måneden, og foreslår nye messer. Forslagene kommer på en godkendelsesliste; intet kommer på messelisten, før en super admin godkender det. Kræver `ANTHROPIC_API_KEY` og `CRON_SECRET` i Vercel.
+- **AI trade show finder** (Feature control → AI trade show finder): læser events-siden (Local events URL) for de messecentre, der er sat flueben ved, den 1. i hver måned og lægger nye messer de næste 6 måneder direkte på messelisten. En super admin kan fjerne en tilføjet messe; så tilføjes den ikke igen. Kræver `ANTHROPIC_API_KEY` og `CRON_SECRET` i Vercel.
 - Kortoplysninger gemmes aldrig hos os. De ligger i Stripe, og vi gemmer kun Stripes id'er.
 
 ## Status
@@ -25,7 +25,7 @@ keep the company profile up to date; billing and features follow in the next ste
 | – | Shared directory: trade shows (status follows the dates) | ✅ done |
 | – | Shared directory: exhibitors per trade show; trade shows linked to their exhibition center | ✅ done |
 | – | Super admin feature control: add upcoming features, switch them on for selected accounts or everyone | ✅ done |
-| – | AI trade show finder: reads chosen centers' events pages monthly and suggests new trade shows for approval | ✅ this version |
+| – | AI trade show finder: reads chosen centers' events pages on the 1st of each month and adds new trade shows | ✅ this version |
 | 3 | Stripe: payment methods, subscriptions, invoices, webhooks | data model ready |
 | 4 | Selectable features | data model ready |
 
@@ -78,18 +78,18 @@ signed-in user is a member, and every query is filtered by that account's id.
 
 **AI trade show finder.** A Vercel cron job (`vercel.json`) calls
 `/api/cron/show-finder` daily with `CRON_SECRET`. When the finder is switched
-on, it checks each chosen center that is due: on its own day of the month
-(`showsCheckDay`, caught up the next day if that run didn't reach it), or,
-without a day, when its last check is four weeks old. Centers can be put in
-named check groups (`ShowFinderGroup`, e.g. "Europe"); the group's day then
-applies instead of the center's own. Admins can also check a single center or
-a whole group right away. For each center it
+on, it checks each chosen center once a month: from the 1st, and on the
+following days for centers the run on the 1st didn't reach. Centers can be put
+in named check groups (`ShowFinderGroup`, e.g. "Europe"). Admins can also check
+a single center or a whole group right away. For each center it
 downloads the events page, turns it into plain text (`src/lib/show-finder.ts`)
 and asks Claude for the trade shows on it that start within the next 6 months
 (`MONTHS_AHEAD`, `src/lib/show-finder-run.ts`).
-Shows that match a known show or an earlier suggestion (same name ignoring
-years, or one name holding the other, and start within two weeks) are skipped; the rest become `SuggestedShow`
-rows that a platform admin approves or rejects. Pages that only render their
+Shows that match a known show or an earlier find (same name ignoring years, or
+one name holding the other, and start within two weeks) are skipped; the rest
+are added to the trade show list at once and recorded as `SuggestedShow` rows.
+A platform admin can remove an added show; it is then kept as rejected, so it
+is never added again. Pages that only render their
 events with JavaScript can't be read this way and show an error on the page.
 
 **Invitations.** The link contains a random token; only its SHA-256 hash is

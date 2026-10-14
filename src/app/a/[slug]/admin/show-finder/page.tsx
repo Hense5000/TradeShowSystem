@@ -2,27 +2,23 @@ import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { formatDateRange, isoDate } from "@/lib/dates";
+import { formatDateRange } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { isShowFinderConfigured } from "@/lib/show-finder-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import {
-  approveSuggestion,
   checkCenterNow,
   checkGroupNow,
   createGroup,
   deleteGroup,
-  rejectSuggestion,
+  removeAddedShow,
   removeCenterFromFinder,
   renameGroup,
   runFinderNow,
-  setCenterCheckDay,
   setCenterChosen,
   setCenterGroup,
   setFinderEnabled,
-  setGroupCheckDay,
 } from "./actions";
-import { ApproveForm } from "./approve-form";
 import { CenterRow } from "./center-row";
 import { GroupRow } from "./group-row";
 import { RunButton } from "./run-button";
@@ -33,6 +29,9 @@ export const maxDuration = 300;
 const when = (date: Date) =>
   new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Copenhagen" }).format(date);
 
+/** How many of the latest added shows are listed. */
+const ADDED_LIMIT = 30;
+
 /** How many centers the list shows at once; search to find the rest. */
 const LIST_LIMIT = 100;
 
@@ -41,11 +40,16 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
   await requirePlatformAdmin(slug);
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
-  const [settings, chosen, pending, decided, groups, tickedByGroup] = await Promise.all([
+  const [settings, chosen, added, addedCount, groups, tickedByGroup] = await Promise.all([
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
     db.exhibitionCenter.count({ where: { findShows: true } }),
-    db.suggestedShow.findMany({ where: { status: "PENDING" }, orderBy: { startDate: "asc" }, include: { center: true } }),
-    db.suggestedShow.groupBy({ by: ["status"], where: { status: { not: "PENDING" } }, _count: true }),
+    db.suggestedShow.findMany({
+      where: { status: "APPROVED", tradeShowId: { not: null } },
+      orderBy: { decidedAt: "desc" },
+      take: ADDED_LIMIT,
+      include: { center: { select: { name: true } } },
+    }),
+    db.suggestedShow.count({ where: { status: "APPROVED", tradeShowId: { not: null } } }),
     db.showFinderGroup.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { centers: true } } } }),
     db.exhibitionCenter.groupBy({ by: ["showsGroupId"], where: { findShows: true, showsGroupId: { not: null } }, _count: true }),
   ]);
@@ -64,14 +68,13 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
     db.exhibitionCenter.findMany({ where, orderBy: [{ findShows: "desc" }, { name: "asc" }], take: LIST_LIMIT }),
     db.exhibitionCenter.count({ where }),
   ]);
-  const count = (status: string) => decided.find((d) => d.status === status)?._count ?? 0;
   const groupOptions = groups.map((g) => ({ id: g.id, name: g.name }));
 
   return (
     <>
       <PageHeader
         title="AI trade show finder"
-        description="Reads the events pages of the centers you choose and suggests new trade shows starting in the next 6 months. Shows already in the system are skipped, and nothing joins the list until you approve it."
+        description="Reads the events pages of the centers you choose once a month and adds the new trade shows starting in the next 6 months to the trade show list. Shows already in the system are skipped."
         action={<Link href={`/a/${slug}/admin`} className="btn-secondary">Back to Feature control</Link>}
       />
 
@@ -83,8 +86,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
             </h2>
             <p className="mt-0.5 text-sm text-muted">
               {enabled
-                ? "Each chosen center is checked once a month, on its own or its group's day if one is set. New finds wait below for your approval."
-                : "Switch it on to check the chosen centers once a month. You can still check by hand while it is off."}
+                ? "Every chosen center is checked on the 1st of each month, and new shows are added to the trade show list at once. With many centers, the ones not reached on the 1st are checked on the following days."
+                : "Switch it on to check the chosen centers on the 1st of each month. You can still check by hand while it is off."}
             </p>
           </div>
           <ActionForm action={setFinderEnabled.bind(null, slug, !enabled)}>
@@ -97,7 +100,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
             <p className="font-semibold">Setup needed in Vercel (Settings → Environment Variables):</p>
             <ul className="mt-1 list-disc pl-5">
               {keyMissing && <li>ANTHROPIC_API_KEY: the key for the AI service. Without it nothing can be checked.</li>}
-              {cronMissing && <li>CRON_SECRET: any long random text. Without it the monthly check does not start by itself.</li>}
+              {cronMissing && <li>CRON_SECRET: any long random text. Without it the check on the 1st does not start by itself.</li>}
             </ul>
           </div>
         )}
@@ -122,20 +125,22 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
 
       <section className="card overflow-hidden p-0">
         <div className="p-5">
-          <h2 className="font-bold">Waiting for your approval ({pending.length})</h2>
+          <h2 className="font-bold">Added by the finder ({addedCount})</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Check the name and dates against the events page, correct them if needed, then approve. So far {count("APPROVED")} approved and{" "}
-            {count("REJECTED")} rejected; rejected shows are not suggested again.
+            The latest trade shows the finder added to the list. If one is wrong, remove it here; the finder will not add it again. To
+            correct a name or date, edit the show in Trade shows.
           </p>
         </div>
-        {pending.length === 0 ? (
-          <p className="border-t border-line px-5 py-8 text-center text-sm text-muted">Nothing to review right now.</p>
+        {added.length === 0 ? (
+          <p className="border-t border-line px-5 py-8 text-center text-sm text-muted">Nothing added yet.</p>
         ) : (
           <ul className="divide-y divide-line border-t border-line">
-            {pending.map((s) => (
-              <li key={s.id} className="flex flex-col gap-3 px-5 py-4">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span className="font-semibold">{s.name}</span>
+            {added.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3 text-sm">
+                <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-x-3 gap-y-1">
+                  <Link href={`/a/${slug}/trade-shows/${s.tradeShowId}`} className="font-semibold hover:text-brand hover:underline">
+                    {s.name}
+                  </Link>
                   <span className="text-muted">{formatDateRange(s.startDate, s.endDate)}</span>
                   <span className="inline-flex items-center gap-1 text-muted">
                     <Icon name="pin" className="size-4" /> {s.center.name}
@@ -143,33 +148,14 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                   <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand hover:underline">
                     Found on this page
                   </a>
+                  {s.decidedAt && <span className="text-xs text-faint">Added {when(s.decidedAt)}</span>}
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <ApproveForm action={approveSuggestion.bind(null, slug, s.id)}>
-                    <label className="min-w-48 flex-[2]">
-                      <span className="label">Name</span>
-                      <input className="input" name="name" defaultValue={s.name} required maxLength={150} />
-                    </label>
-                    <label className="min-w-36 flex-1">
-                      <span className="label">Start date</span>
-                      <input className="input" type="date" name="startDate" defaultValue={isoDate(s.startDate)} required />
-                    </label>
-                    <label className="min-w-36 flex-1">
-                      <span className="label">End date</span>
-                      <input className="input" type="date" name="endDate" defaultValue={isoDate(s.endDate)} required />
-                    </label>
-                    <label className="min-w-48 flex-[2]">
-                      <span className="label">Website</span>
-                      <input className="input" name="website" defaultValue={s.website ?? ""} maxLength={300} />
-                    </label>
-                    <button className="btn">
-                      <Icon name="check" className="size-4" /> Approve
-                    </button>
-                  </ApproveForm>
-                  <ActionForm action={rejectSuggestion.bind(null, slug, s.id)}>
-                    <button className="btn-danger py-2">Reject</button>
-                  </ActionForm>
-                </div>
+                <ActionForm
+                  action={removeAddedShow.bind(null, slug, s.id)}
+                  confirmMessage={`Remove ${s.name} from the trade show list? The finder will not add it again.`}
+                >
+                  <button className="btn-danger">Remove</button>
+                </ActionForm>
               </li>
             ))}
           </ul>
@@ -181,8 +167,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
           <div>
             <h2 className="font-bold">Check groups ({groups.length})</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Put centers in named groups, such as Europe, USA or Asia. All centers in a group are checked on the group&apos;s day, and you can
-              check a whole group at once. Pick the group on each center in the list below.
+              Put centers in named groups, such as Europe, USA or Asia, to keep them apart and check a whole group at once. Pick the group
+              on each center in the list below.
             </p>
           </div>
           <ActionForm action={createGroup.bind(null, slug)} className="flex flex-wrap items-center gap-2">
@@ -198,10 +184,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 name={g.name}
                 centers={g._count.centers}
                 ticked={tickedByGroup.find((t) => t.showsGroupId === g.id)?._count ?? 0}
-                checkDay={g.checkDay}
                 href={`/a/${slug}/admin/show-finder?group=${g.id}`}
                 canCheck={!keyMissing}
-                setCheckDay={setGroupCheckDay.bind(null, slug, g.id)}
                 checkNow={checkGroupNow.bind(null, slug, g.id)}
                 rename={renameGroup.bind(null, slug, g.id)}
                 remove={deleteGroup.bind(null, slug, g.id)}
@@ -218,8 +202,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
               {groupFilter ? `Centers in ${groupFilter.name}` : `Centers to check (${chosen} chosen)`}
             </h2>
             <p className="mt-0.5 text-sm text-muted">
-              Tick a center to check it automatically, and pick its group or the day of the month it is checked on. Spread the centers
-              over the month, about 10 per day at most. &quot;Check now&quot; checks one center right away, ticked or not.
+              Tick a center to check it automatically on the 1st of each month, and pick its group if you like. &quot;Check now&quot; checks one
+              center right away, ticked or not.
             </p>
           </div>
           <form className="flex flex-wrap items-center gap-2" role="search">
@@ -262,7 +246,6 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 name={c.name}
                 eventsUrl={c.eventsUrl}
                 chosen={c.findShows}
-                checkDay={c.showsCheckDay}
                 groupId={c.showsGroupId}
                 groups={groupOptions}
                 status={
@@ -275,7 +258,6 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 statusIsError={Boolean(c.showsCheckError)}
                 canCheck={!keyMissing}
                 setChosen={setCenterChosen.bind(null, slug, c.id)}
-                setCheckDay={setCenterCheckDay.bind(null, slug, c.id)}
                 setGroup={setCenterGroup.bind(null, slug, c.id)}
                 checkNow={checkCenterNow.bind(null, slug, c.id)}
                 remove={removeCenterFromFinder.bind(null, slug, c.id)}

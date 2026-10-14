@@ -1,21 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic, useState, useTransition } from "react";
+import { useState } from "react";
 import { ActionForm, type ActionState } from "@/components/action-form";
 import type { RunState } from "./actions";
-import { DaySelect } from "./day-select";
 import { RunButton } from "./run-button";
 
-/** One check group: its name, check day, a button to check it now, and rename and delete. */
+/** One check group: its name, a button to check it now, and rename and delete. */
 export function GroupRow({
   name,
   centers,
   ticked,
-  checkDay,
   href,
   canCheck,
-  setCheckDay,
   checkNow,
   rename,
   remove,
@@ -23,16 +20,12 @@ export function GroupRow({
   name: string;
   centers: number;
   ticked: number;
-  checkDay: number | null;
   href: string;
   canCheck: boolean;
-  setCheckDay: (day: number | null) => Promise<void>;
   checkNow: () => Promise<RunState>;
   rename: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   remove: () => Promise<ActionState>;
 }) {
-  const [saving, startSaving] = useTransition();
-  const [shownDay, showDay] = useOptimistic(checkDay);
   const [renaming, setRenaming] = useState(false);
 
   return (
@@ -54,18 +47,6 @@ export function GroupRow({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DaySelect
-            value={shownDay}
-            disabled={saving}
-            label={`Day of the month to check ${name}`}
-            title="Day of the month the automatic check runs for every center in the group"
-            onChange={(day) =>
-              startSaving(async () => {
-                showDay(day);
-                await setCheckDay(day);
-              })
-            }
-          />
           <button type="button" className="btn-secondary" onClick={() => setRenaming((r) => !r)}>
             Rename
           </button>

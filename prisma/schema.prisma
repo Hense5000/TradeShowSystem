@@ -236,12 +236,11 @@ model ExhibitionCenter {
   // AI trade show finder: whether to check this center's events page, and
   // how the last check went.
   findShows       Boolean          @default(false)
-  showsCheckDay   Int? // day of the month (1-31) for the automatic check; none = about every four weeks
   showsCheckedAt  DateTime?
   showsCheckError String?
   showsCheckNote  String? // what the last check found, e.g. "Found 12 trade shows on the page: 2 new, ..."
   showsFoundLast  Int?
-  showsGroupId    String? // the finder's check group, e.g. "Europe"; its check day then applies
+  showsGroupId    String? // the finder's check group, e.g. "Europe"
   showsGroup      ShowFinderGroup? @relation(fields: [showsGroupId], references: [id], onDelete: SetNull)
 
   tradeShows     TradeShow[]
@@ -313,8 +312,7 @@ model Exhibitor {
 
 // ---------------------------------------------------------------------------
 // AI trade show finder: reads the events pages of chosen exhibition centers
-// and suggests new trade shows. A platform admin approves each one before it
-// joins the shared list.
+// once a month and adds the new trade shows it finds to the shared list.
 // ---------------------------------------------------------------------------
 
 // One row (id 1) with the switch and the result of the last run.
@@ -327,20 +325,18 @@ model ShowFinderSettings {
 }
 
 // A named group of centers for the AI trade show finder, e.g. "Europe". The
-// group's check day applies to all its centers, and the whole group can be
-// checked at once.
+// whole group can be checked at once.
 model ShowFinderGroup {
   id        String             @id @default(cuid())
   name      String             @unique
-  checkDay  Int? // day of the month (1-31); none = about every four weeks
   createdAt DateTime           @default(now())
   centers   ExhibitionCenter[]
 }
 
 enum SuggestionStatus {
-  PENDING // waiting for a platform admin
+  PENDING // found before shows were added automatically; added on the next run
   APPROVED // added to the trade show list
-  REJECTED // kept so it is not suggested again
+  REJECTED // removed by a platform admin; kept so it is not added again
 }
 
 model SuggestedShow {
@@ -352,7 +348,7 @@ model SuggestedShow {
   website     String?
   sourceUrl   String // the events page it was found on
   status      SuggestionStatus @default(PENDING)
-  tradeShowId String? // the trade show it became, once approved
+  tradeShowId String? // the trade show it was added as
   createdAt   DateTime         @default(now())
   decidedAt   DateTime?
 

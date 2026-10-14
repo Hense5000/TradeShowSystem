@@ -22,10 +22,10 @@ const updated = (date: Date) =>
 export default async function FeatureControlPage({ params }: PageProps<"/a/[slug]/admin">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const [features, finder, waiting, groups, lastChecks, cleanup, oldShows, oldExhibitors] = await Promise.all([
+  const [features, finder, addedLately, groups, lastChecks, cleanup, oldShows, oldExhibitors] = await Promise.all([
     db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } }),
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
-    db.suggestedShow.count({ where: { status: "PENDING" } }),
+    db.suggestedShow.count({ where: { status: "APPROVED", decidedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } }),
     db.showFinderGroup.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { centers: true } } } }),
     // A group was last updated when the most recently checked of its centers was.
     db.exhibitionCenter.groupBy({ by: ["showsGroupId"], where: { showsGroupId: { not: null } }, _max: { showsCheckedAt: true } }),
@@ -58,10 +58,10 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
             <span className="flex flex-wrap items-center gap-2 font-semibold">
               AI trade show finder
               <span className={`pill ${finder?.enabled ? "pill-ok" : "pill-neutral"}`}>{finder?.enabled ? "On" : "Off"}</span>
-              {waiting > 0 && <span className="pill pill-warn">{waiting} waiting for approval</span>}
+              {addedLately > 0 && <span className="pill pill-neutral">{addedLately} added in the last 30 days</span>}
             </span>
             <span className="block text-sm text-muted">
-              Checks chosen exhibition centers' events pages each month for new trade shows in the next 6 months and suggests them for you to approve.
+              Checks chosen exhibition centers' events pages on the 1st of each month and adds new trade shows in the next 6 months to the list.
             </span>
             {groups.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-1 text-sm">
