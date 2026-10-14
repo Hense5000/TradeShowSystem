@@ -5,7 +5,10 @@ import type { RunState } from "./actions";
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
-/** One center in the finder's list: chosen or not, its check day, and a button to check it now. */
+/**
+ * One center in the finder's list: chosen or not, its check day, a button to
+ * check it now, and one to take it off the finder again.
+ */
 export function CenterRow({
   name,
   eventsUrl,
@@ -17,6 +20,7 @@ export function CenterRow({
   setChosen,
   setCheckDay,
   checkNow,
+  remove,
 }: {
   name: string;
   eventsUrl: string | null;
@@ -28,6 +32,7 @@ export function CenterRow({
   setChosen: (chosen: boolean) => Promise<void>;
   setCheckDay: (day: number | null) => Promise<void>;
   checkNow: () => Promise<RunState>;
+  remove: () => Promise<void>;
 }) {
   const [saving, startSaving] = useTransition();
   // Show a change at once; the saved value takes over when the page refreshes.
@@ -36,6 +41,8 @@ export function CenterRow({
   const [checking, startChecking] = useTransition();
   const [result, setResult] = useState<RunState>();
   const disabled = !eventsUrl;
+  // Anything to remove: the center is chosen, or has a check day or result.
+  const canRemove = shownChosen || shownDay !== null || Boolean(status);
 
   return (
     <li className={`flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3 text-sm ${disabled ? "text-faint" : ""}`}>
@@ -67,7 +74,7 @@ export function CenterRow({
         </span>
       </label>
       {!disabled && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             className="input w-auto py-1.5"
             value={shownDay ?? ""}
@@ -101,6 +108,24 @@ export function CenterRow({
               }
             >
               {checking ? "Checking…" : "Check now"}
+            </button>
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={saving || checking}
+              onClick={() => {
+                if (!window.confirm(`Remove ${name} from the AI trade show finder? It will no longer be checked, and its check day and last result are cleared. Suggestions already made are kept.`)) return;
+                startSaving(async () => {
+                  showChosen(false);
+                  showDay(null);
+                  setResult(undefined);
+                  await remove();
+                });
+              }}
+            >
+              Remove
             </button>
           )}
         </div>
