@@ -10,6 +10,7 @@ import {
   approveSuggestion,
   checkCenterNow,
   rejectSuggestion,
+  removeCenterFromFinder,
   runFinderNow,
   setCenterCheckDay,
   setCenterChosen,
@@ -220,6 +221,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 setChosen={setCenterChosen.bind(null, slug, c.id)}
                 setCheckDay={setCenterCheckDay.bind(null, slug, c.id)}
                 checkNow={checkCenterNow.bind(null, slug, c.id)}
+                remove={removeCenterFromFinder.bind(null, slug, c.id)}
               />
             ))}
           </ul>

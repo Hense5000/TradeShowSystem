@@ -26,6 +26,19 @@ export async function setCenterChosen(slug: string, id: string, chosen: boolean)
   refresh(slug);
 }
 
+/**
+ * Takes a center off the finder: it is no longer checked, and its check day
+ * and last check result are cleared. Suggestions already made are kept.
+ */
+export async function removeCenterFromFinder(slug: string, id: string): Promise<void> {
+  await requirePlatformAdmin(slug);
+  await db.exhibitionCenter.updateMany({
+    where: { id },
+    data: { findShows: false, showsCheckDay: null, showsCheckedAt: null, showsCheckError: null, showsCheckNote: null, showsFoundLast: null },
+  });
+  refresh(slug);
+}
+
 /** Sets the day of the month a center is checked on (null: about every four weeks). */
 export async function setCenterCheckDay(slug: string, id: string, day: number | null): Promise<void> {
   await requirePlatformAdmin(slug);
