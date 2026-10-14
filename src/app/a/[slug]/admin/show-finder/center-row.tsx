@@ -2,24 +2,21 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import type { RunState } from "./actions";
-import { DaySelect } from "./day-select";
 
 /**
- * One center in the finder's list: chosen or not, its check group or day, a
- * button to check it now, and one to take it off the finder again.
+ * One center in the finder's list: chosen or not, its check group, a button
+ * to check it now, and one to take it off the finder again.
  */
 export function CenterRow({
   name,
   eventsUrl,
   chosen,
-  checkDay,
   groupId,
   groups,
   status,
   statusIsError,
   canCheck,
   setChosen,
-  setCheckDay,
   setGroup,
   checkNow,
   remove,
@@ -27,14 +24,12 @@ export function CenterRow({
   name: string;
   eventsUrl: string | null;
   chosen: boolean;
-  checkDay: number | null;
   groupId: string | null;
   groups: { id: string; name: string }[];
   status: string | null;
   statusIsError: boolean;
   canCheck: boolean;
   setChosen: (chosen: boolean) => Promise<void>;
-  setCheckDay: (day: number | null) => Promise<void>;
   setGroup: (groupId: string | null) => Promise<void>;
   checkNow: () => Promise<RunState>;
   remove: () => Promise<void>;
@@ -42,13 +37,12 @@ export function CenterRow({
   const [saving, startSaving] = useTransition();
   // Show a change at once; the saved value takes over when the page refreshes.
   const [shownChosen, showChosen] = useOptimistic(chosen);
-  const [shownDay, showDay] = useOptimistic(checkDay);
   const [shownGroup, showGroup] = useOptimistic(groupId);
   const [checking, startChecking] = useTransition();
   const [result, setResult] = useState<RunState>();
   const disabled = !eventsUrl;
-  // Anything to remove: the center is chosen, or has a check day or result.
-  const canRemove = shownChosen || shownDay !== null || shownGroup !== null || Boolean(status);
+  // Anything to remove: the center is chosen, or has a group or a check result.
+  const canRemove = shownChosen || shownGroup !== null || Boolean(status);
 
   return (
     <li className={`flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3 text-sm ${disabled ? "text-faint" : ""}`}>
@@ -95,7 +89,7 @@ export function CenterRow({
                 });
               }}
               aria-label={`Check group for ${name}`}
-              title="The group's check day applies to the center"
+              title="Check group"
             >
               <option value="">No group</option>
               {groups.map((g) => (
@@ -104,20 +98,6 @@ export function CenterRow({
                 </option>
               ))}
             </select>
-          )}
-          {!shownGroup && (
-            <DaySelect
-              value={shownDay}
-              disabled={saving || !shownChosen}
-              label={`Day of the month to check ${name}`}
-              title={shownChosen ? "Day of the month the automatic check runs" : "Tick the center to check it automatically"}
-              onChange={(day) =>
-                startSaving(async () => {
-                  showDay(day);
-                  await setCheckDay(day);
-                })
-              }
-            />
           )}
           {canCheck && (
             <button
@@ -139,10 +119,9 @@ export function CenterRow({
               className="btn-danger"
               disabled={saving || checking}
               onClick={() => {
-                if (!window.confirm(`Remove ${name} from the AI trade show finder? It will no longer be checked, and its check day and last result are cleared. Suggestions already made are kept.`)) return;
+                if (!window.confirm(`Remove ${name} from the AI trade show finder? It will no longer be checked, and its group and last result are cleared. Suggestions already made are kept.`)) return;
                 startSaving(async () => {
                   showChosen(false);
-                  showDay(null);
                   showGroup(null);
                   setResult(undefined);
                   await remove();

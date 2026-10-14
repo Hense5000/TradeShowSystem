@@ -4,9 +4,6 @@ import { addMonths, parseDate, today } from "@/lib/dates";
 // the AI can read, checking what it found, and spotting shows we already have.
 // The part that fetches pages and calls the AI is in show-finder-run.ts.
 
-/** A center is checked again when its last check is at least this old. */
-export const RECHECK_AFTER_DAYS = 28;
-
 /** The finder looks this many months ahead; shows starting later are left out until a later check. */
 export const MONTHS_AHEAD = 6;
 
@@ -140,55 +137,37 @@ export function newShows<T extends { name: string; startDate: Date }>(found: T[]
   return result;
 }
 
-/**
- * The date in this month when a center with a fixed check day is checked
- * (midnight UTC). A day the month doesn't have, like the 31st in
- * November, becomes the month's last day.
- */
-export function checkDate(checkDay: number, now = new Date()): Date {
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
-  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(y, m, Math.min(checkDay, lastDay)));
+/** The first day of this month (midnight UTC), when the monthly check starts. */
+export function monthStart(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
 /**
- * The check day that applies to a center: its group's day when it is in a
- * group (none there means about every four weeks), otherwise its own.
+ * Whether the daily run should check a center now: every chosen center is
+ * checked once a month from the 1st. Centers the run on the 1st doesn't reach
+ * are checked on the following days. A check by hand earlier in the month
+ * doesn't count, so next month's check still runs.
  */
-export function effectiveCheckDay(center: { showsCheckDay: number | null; showsGroup: { checkDay: number | null } | null }): number | null {
-  return center.showsGroup ? center.showsGroup.checkDay : center.showsCheckDay;
+export function isDue(checkedAt: Date | null, now = new Date()): boolean {
+  return !checkedAt || checkedAt < monthStart(now);
 }
 
-/**
- * Whether the daily run should check a center now. With a check day it is
- * checked on that day of the month, or the first run after it if that day's
- * run didn't reach it. Without one it is checked about every four weeks.
- */
-export function isDue({ checkedAt, checkDay }: { checkedAt: Date | null; checkDay: number | null }, now = new Date()): boolean {
-  if (checkDay) {
-    const target = checkDate(checkDay, now);
-    return now >= target && (!checkedAt || checkedAt < target);
-  }
-  return !checkedAt || now.getTime() - checkedAt.getTime() >= RECHECK_AFTER_DAYS * DAY;
-}
-
-/** The text shown after a run, e.g. "Checked 3 centers. Found 2 new shows. 1 page could not be read." */
+/** The text shown after a run, e.g. "Checked 3 centers. Added 2 new trade shows. 1 page could not be read." */
 export function runSummary(r: { checked: number; found: number; failed: number; left: number }): string {
   const parts = [
     `Checked ${r.checked} ${r.checked === 1 ? "center" : "centers"}.`,
-    `Found ${r.found} new ${r.found === 1 ? "show" : "shows"}.`,
+    `Added ${r.found} new trade ${r.found === 1 ? "show" : "shows"}.`,
   ];
   if (r.failed > 0) parts.push(`${r.failed} ${r.failed === 1 ? "page" : "pages"} could not be read.`);
   if (r.left > 0) parts.push(`${r.left} ${r.left === 1 ? "center was" : "centers were"} not reached this time and will be checked next.`);
   return parts.join(" ");
 }
 
-/** What a check found, e.g. "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past, more than 6 months ahead or without exact dates." */
+/** What a check found, e.g. "Found 12 trade shows on the page: 2 added, 9 already known, 1 in the past, more than 6 months ahead or without exact dates." */
 export function foundNote({ listed, usable, fresh }: { listed: number; usable: number; fresh: number }): string {
   const known = usable - fresh;
   const dropped = listed - usable;
-  const parts = [`${fresh} new`];
+  const parts = [`${fresh} added`];
   if (known > 0) parts.push(`${known} already known`);
   if (dropped > 0) parts.push(`${dropped} in the past, more than ${MONTHS_AHEAD} months ahead or without exact dates`);
   return `Found ${listed} trade ${listed === 1 ? "show" : "shows"} on the page: ${parts.join(", ")}.`;

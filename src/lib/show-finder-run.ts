@@ -4,12 +4,24 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isoDate, today } from "@/lib/dates";
-import { checkFoundShows, effectiveCheckDay, type FoundShow, foundNote, isDue, lookAheadUntil, MONTHS_AHEAD, newShows, pageToText, runSummary } from "@/lib/show-finder";
+import {
+  checkFoundShows,
+  type CheckedShow,
+  type FoundShow,
+  foundNote,
+  isDue,
+  lookAheadUntil,
+  MONTHS_AHEAD,
+  newShows,
+  pageToText,
+  runSummary,
+} from "@/lib/show-finder";
 
 // The AI trade show finder. For each chosen exhibition center it downloads the
 // center's events page, asks Claude which trade shows are listed there, and
-// saves the ones we don't have yet as suggestions for a platform admin to
-// approve. It never adds to the trade show list by itself.
+// adds the ones we don't have yet to the trade show list. Each addition is
+// also kept as a SuggestedShow, so a platform admin can see what was added
+// and remove it; a removed show is never added again.
 
 /** Which Claude model reads the pages. Can be changed with SHOW_FINDER_MODEL. */
 const MODEL = process.env.SHOW_FINDER_MODEL || "claude-opus-5-5";
@@ -153,7 +165,48 @@ async function findOnPage(client: Anthropic, center: Center & { eventsUrl: strin
   return { found: await askClaude(client, center.name, center.eventsUrl, listing), via: "site" };
 }
 
-/** Checks one center and saves what is new, with a note on what was found. */
+/** Adds a found show to the trade show list, in the center's city and country, and records it as added. */
+async function addShow(centerId: string, sourceUrl: string, show: CheckedShow): Promise<void> {
+  const center = await db.exhibitionCenter.findUnique({ where: { id: centerId }, select: { city: true, country: true } });
+  const tradeShow = await db.tradeShow.create({
+    data: { ...show, centerId, city: center?.city ?? null, country: center?.country ?? null },
+  });
+  await db.suggestedShow.create({
+    data: { ...show, centerId, sourceUrl, status: "APPROVED", decidedAt: new Date(), tradeShowId: tradeShow.id },
+  });
+}
+
+/**
+ * Finds from before shows were added automatically that were never approved
+ * or rejected: adds those in the next 6 months now, unless the show was added
+ * by hand meanwhile. Later ones wait until they are that close.
+ */
+async function addWaitingFinds(): Promise<number> {
+  const waiting = await db.suggestedShow.findMany({
+    where: { status: "PENDING", startDate: { lte: lookAheadUntil() }, endDate: { gte: today() } },
+    include: { center: { select: { city: true, country: true } } },
+  });
+  let added = 0;
+  for (const s of waiting) {
+    const nearby = await db.tradeShow.findMany({
+      where: { startDate: { gte: new Date(s.startDate.getTime() - 15 * 86_400_000), lte: new Date(s.startDate.getTime() + 15 * 86_400_000) } },
+      select: { id: true, name: true, startDate: true },
+    });
+    const known = nearby.find((t) => newShows([s], [t]).length === 0);
+    const tradeShowId =
+      known?.id ??
+      (
+        await db.tradeShow.create({
+          data: { name: s.name, startDate: s.startDate, endDate: s.endDate, website: s.website, centerId: s.centerId, city: s.center.city, country: s.center.country },
+        })
+      ).id;
+    if (!known) added++;
+    await db.suggestedShow.update({ where: { id: s.id }, data: { status: "APPROVED", decidedAt: new Date(), tradeShowId } });
+  }
+  return added;
+}
+
+/** Checks one center and adds what is new, with a note on what was found. */
 async function checkCenter(client: Anthropic, center: Center): Promise<CheckResult> {
   if (!center.eventsUrl) throw new Error("The center has no Local events URL.");
   const { found: listed } = await findOnPage(client, { ...center, eventsUrl: center.eventsUrl });
@@ -166,27 +219,24 @@ async function checkCenter(client: Anthropic, center: Center): Promise<CheckResu
   const found = checkFoundShows(listed);
   if (found.length === 0) return { fresh: 0, note: foundNote({ listed: listed.length, usable: 0, fresh: 0 }) };
 
-  // Compare with every show and suggestion around those dates, rejected ones
-  // included, so nothing is suggested twice.
+  // Compare with every show and earlier find around those dates, removed ones
+  // included, so nothing is added twice.
   const from = new Date(Math.min(...found.map((f) => f.startDate.getTime())) - 30 * 86_400_000);
   const [shows, suggestions] = await Promise.all([
     db.tradeShow.findMany({ where: { startDate: { gte: from } }, select: { name: true, startDate: true } }),
     db.suggestedShow.findMany({ where: { startDate: { gte: from } }, select: { name: true, startDate: true } }),
   ]);
   const fresh = newShows(found, [...shows, ...suggestions]);
-  if (fresh.length > 0) {
-    await db.suggestedShow.createMany({
-      data: fresh.map((f) => ({ ...f, centerId: center.id, sourceUrl: center.eventsUrl! })),
-    });
-  }
+  for (const show of fresh) await addShow(center.id, center.eventsUrl, show);
   return { fresh: fresh.length, note: foundNote({ listed: listed.length, usable: found.length, fresh: fresh.length }) };
 }
 
 /**
  * Checks the chosen centers, oldest check first. The daily run only checks
- * centers that are due (see isDue); "Check now" checks all of them, the
- * chosen centers of one group, or just the centers it is given. Centers not
- * reached within the time budget are first in line next time.
+ * centers that are due (see isDue: once a month, from the 1st); "Check now"
+ * checks all of them, the chosen centers of one group, or just the centers
+ * it is given. Centers not reached within the time budget are first in line
+ * the next day.
  */
 export async function runShowFinder({
   onlyDue,
@@ -200,19 +250,20 @@ export async function runShowFinder({
   if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
 
   const started = Date.now();
+  const waitingAdded = await addWaitingFinds();
   const chosen = await db.exhibitionCenter.findMany({
     where: centerIds
       ? { id: { in: centerIds }, eventsUrl: { not: null } }
       : { findShows: true, eventsUrl: { not: null }, ...(groupId && { showsGroupId: groupId }) },
     orderBy: [{ showsCheckedAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
-    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true, showsCheckDay: true, showsGroup: { select: { checkDay: true } } },
+    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true },
   });
-  const queue = onlyDue ? chosen.filter((c) => isDue({ checkedAt: c.showsCheckedAt, checkDay: effectiveCheckDay(c) })) : chosen;
+  const queue = onlyDue ? chosen.filter((c) => isDue(c.showsCheckedAt)) : chosen;
   // The daily run usually has nothing to do; keep the last real summary then.
-  if (onlyDue && queue.length === 0) return "No centers were due for a check.";
+  if (onlyDue && queue.length === 0 && waitingAdded === 0) return "No centers were due for a check.";
 
   const client = new Anthropic();
-  const totals = { checked: 0, found: 0, failed: 0, left: 0 };
+  const totals = { checked: 0, found: waitingAdded, failed: 0, left: 0 };
   let next = 0;
   async function worker() {
     while (next < queue.length && Date.now() - started < TIME_BUDGET_MS) {

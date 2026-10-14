@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDate, checkFoundShows, effectiveCheckDay, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
+import { checkFoundShows, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const now = new Date("2026-10-02T08:00:00Z");
@@ -83,50 +83,29 @@ describe("newShows", () => {
 });
 
 describe("isDue", () => {
-  it("without a check day, is due when never checked or checked four weeks ago", () => {
-    expect(isDue({ checkedAt: null, checkDay: null }, now)).toBe(true);
-    expect(isDue({ checkedAt: new Date("2026-09-04T08:00:00Z"), checkDay: null }, now)).toBe(true);
-    expect(isDue({ checkedAt: new Date("2026-09-20T08:00:00Z"), checkDay: null }, now)).toBe(false);
-  });
-
-  it("with a check day, is due from that day until it has been checked", () => {
-    const tenth = { checkDay: 10 };
-    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-09T05:00:00Z"))).toBe(false);
-    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-10T05:00:00Z"))).toBe(true);
-    expect(isDue({ ...tenth, checkedAt: new Date("2026-10-10T05:01:00Z") }, new Date("2026-10-10T05:30:00Z"))).toBe(false);
-    // Missed on the 10th (too many centers that day): caught up the next day.
-    expect(isDue({ ...tenth, checkedAt: new Date("2026-09-10T05:00:00Z") }, new Date("2026-10-11T05:00:00Z"))).toBe(true);
-    expect(isDue({ ...tenth, checkedAt: null }, new Date("2026-10-11T05:00:00Z"))).toBe(true);
-  });
-
-  it("uses the last day of short months", () => {
-    expect(checkDate(31, new Date("2026-11-15T05:00:00Z"))).toEqual(new Date("2026-11-30T00:00:00Z"));
-    expect(isDue({ checkDay: 31, checkedAt: new Date("2026-10-31T05:00:00Z") }, new Date("2026-11-30T05:00:00Z"))).toBe(true);
-  });
-});
-
-describe("effectiveCheckDay", () => {
-  it("uses the group's day for centers in a group", () => {
-    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: null })).toBe(10);
-    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: { checkDay: 3 } })).toBe(3);
-    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: { checkDay: null } })).toBe(null);
+  it("is due from the 1st of each month until checked that month", () => {
+    expect(isDue(null, now)).toBe(true);
+    expect(isDue(new Date("2026-09-30T08:00:00Z"), now)).toBe(true);
+    expect(isDue(new Date("2026-10-01T05:01:00Z"), now)).toBe(false);
+    // A check by hand mid-month doesn't skip next month's check.
+    expect(isDue(new Date("2026-10-20T12:00:00Z"), new Date("2026-11-01T05:00:00Z"))).toBe(true);
   });
 });
 
 describe("runSummary", () => {
   it("reads naturally", () => {
-    expect(runSummary({ checked: 1, found: 0, failed: 0, left: 0 })).toBe("Checked 1 center. Found 0 new shows.");
+    expect(runSummary({ checked: 1, found: 0, failed: 0, left: 0 })).toBe("Checked 1 center. Added 0 new trade shows.");
     expect(runSummary({ checked: 3, found: 1, failed: 2, left: 4 })).toBe(
-      "Checked 3 centers. Found 1 new show. 2 pages could not be read. 4 centers were not reached this time and will be checked next.",
+      "Checked 3 centers. Added 1 new trade show. 2 pages could not be read. 4 centers were not reached this time and will be checked next.",
     );
   });
 });
 
 describe("foundNote", () => {
   it("explains what happened to each show", () => {
-    expect(foundNote({ listed: 1, usable: 1, fresh: 1 })).toBe("Found 1 trade show on the page: 1 new.");
+    expect(foundNote({ listed: 1, usable: 1, fresh: 1 })).toBe("Found 1 trade show on the page: 1 added.");
     expect(foundNote({ listed: 12, usable: 11, fresh: 2 })).toBe(
-      "Found 12 trade shows on the page: 2 new, 9 already known, 1 in the past, more than 6 months ahead or without exact dates.",
+      "Found 12 trade shows on the page: 2 added, 9 already known, 1 in the past, more than 6 months ahead or without exact dates.",
     );
   });
 });
