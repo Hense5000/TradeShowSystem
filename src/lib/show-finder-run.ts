@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isoDate, today } from "@/lib/dates";
-import { checkFoundShows, effectiveCheckDay, type FoundShow, foundNote, isDue, newShows, pageToText, runSummary } from "@/lib/show-finder";
+import { checkFoundShows, effectiveCheckDay, type FoundShow, foundNote, isDue, lookAheadUntil, MONTHS_AHEAD, newShows, pageToText, runSummary } from "@/lib/show-finder";
 
 // The AI trade show finder. For each chosen exhibition center it downloads the
 // center's events page, asks Claude which trade shows are listed there, and
@@ -41,6 +41,7 @@ const SYSTEM = `You read the events page of an exhibition center and list the tr
 Count as a trade show: trade fairs, B2B exhibitions and consumer fairs or expos where companies exhibit.
 Leave out concerts, sports, theatre, comedy, parties, markets for private sellers, job fairs for single employers, private or corporate events, and conferences or congresses that have no exhibition.
 
+Only list events that start between today and the "look until" date you are given; leave out later ones.
 Only list events whose exact start date is written on the page (or in its structured data). If only a month or season is given, leave the event out. Never guess a date.
 Write dates as YYYY-MM-DD. When the year is not written, use the next occurrence on or after today's date.
 Give the name as the organizer writes it, without the year or edition number.
@@ -62,7 +63,7 @@ async function fetchPage(url: string): Promise<string> {
 
 const READER_SYSTEM = `You collect the event listings of an exhibition center from its website, for another step that picks out the trade shows.
 
-Fetch the events page you are given. If the events are not on it (for example because they load with JavaScript, sit on a separate list page, or are split over several pages or months), follow links on the same site that lead to the event listings, such as the full list, the next page or the next months. Do not leave the center's website.
+Fetch the events page you are given. You need the events from today until the "look until" date you are given, about ${MONTHS_AHEAD} months ahead. If they are not all on the page (for example because they load with JavaScript, sit on a separate list page, or are split over several pages or months), follow links on the same site that lead to the event listings for that period, such as the full list, the next page or the next months. Do not leave the center's website.
 
 Then write out every upcoming event you found as plain text, one per line: name, dates exactly as written (with the year), and the link to the event if there is one. Write nothing else. If you found no events, write: NO EVENTS FOUND`;
 
@@ -73,7 +74,7 @@ Then write out every upcoming event you found as plain text, one per line: name,
 async function readWithClaude(client: Anthropic, url: string): Promise<string> {
   const host = new URL(url).hostname.replace(/^www\./, "");
   const tools: Anthropic.ToolUnion[] = [{ type: "web_fetch_20260209", name: "web_fetch", allowed_domains: [host], max_uses: 6 }];
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Events page: ${url}\nToday's date: ${isoDate(today())}` }];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Events page: ${url}\nToday's date: ${isoDate(today())}\nLook until: ${isoDate(lookAheadUntil())}` }];
   for (let round = 0; round < 3; round++) {
     const response = await client.messages.create(
       { model: MODEL, max_tokens: 16000, system: READER_SYSTEM, output_config: { effort: "low" }, tools, messages },
@@ -105,7 +106,7 @@ async function askClaude(client: Anthropic, centerName: string, url: string, pag
       messages: [
         {
           role: "user",
-          content: `Today's date: ${isoDate(today())}\nExhibition center: ${centerName}\nEvents page: ${url}\n\n<page>\n${pageText}\n</page>`,
+          content: `Today's date: ${isoDate(today())}\nLook until: ${isoDate(lookAheadUntil())}\nExhibition center: ${centerName}\nEvents page: ${url}\n\n<page>\n${pageText}\n</page>`,
         },
       ],
     },
@@ -159,7 +160,7 @@ async function checkCenter(client: Anthropic, center: Center): Promise<CheckResu
   if (listed.length === 0) {
     return {
       fresh: 0,
-      note: "No trade shows with exact dates were found on the events page. Check that the Local events URL is the page that lists the events.",
+      note: `No trade shows with exact dates in the next ${MONTHS_AHEAD} months were found on the events page. Check that the Local events URL is the page that lists the events.`,
     };
   }
   const found = checkFoundShows(listed);
