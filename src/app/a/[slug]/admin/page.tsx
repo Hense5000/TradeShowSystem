@@ -12,14 +12,22 @@ const ROLLOUT_PILL: Record<FeatureRollout, string> = {
   EVERYONE: "pill-ok",
 };
 
+/** A check date as day/month/year, e.g. 01/11/2026. */
+const updated = (date: Date) =>
+  new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Copenhagen" }).format(date);
+
 export default async function FeatureControlPage({ params }: PageProps<"/a/[slug]/admin">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const [features, finder, waiting] = await Promise.all([
+  const [features, finder, waiting, groups, lastChecks] = await Promise.all([
     db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } }),
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
     db.suggestedShow.count({ where: { status: "PENDING" } }),
+    db.showFinderGroup.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { centers: true } } } }),
+    // A group was last updated when the most recently checked of its centers was.
+    db.exhibitionCenter.groupBy({ by: ["showsGroupId"], where: { showsGroupId: { not: null } }, _max: { showsCheckedAt: true } }),
   ]);
+  const lastCheck = (groupId: string) => lastChecks.find((l) => l.showsGroupId === groupId)?._max.showsCheckedAt ?? null;
 
   return (
     <>
@@ -47,6 +55,21 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
             <span className="block text-sm text-muted">
               Checks chosen exhibition centers' events pages each month and suggests new trade shows for you to approve.
             </span>
+            {groups.length > 0 ? (
+              <ul className="mt-2 flex flex-col gap-1 text-sm">
+                {groups.map((g) => (
+                  <li key={g.id} className="flex flex-wrap items-center gap-x-2">
+                    <span className="font-semibold">{g.name}</span>
+                    <span className="text-muted">
+                      {g._count.centers} {g._count.centers === 1 ? "center" : "centers"} ·{" "}
+                      {lastCheck(g.id) ? `Updated: ${updated(lastCheck(g.id)!)}` : "Not checked yet"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              finder?.lastRunAt && <span className="mt-1 block text-sm text-muted">Updated: {updated(finder.lastRunAt)}</span>
+            )}
           </span>
         </div>
         <Link href={`/a/${slug}/admin/show-finder`} className="btn-secondary">Open</Link>
