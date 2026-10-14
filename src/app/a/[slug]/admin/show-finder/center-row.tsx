@@ -2,23 +2,25 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import type { RunState } from "./actions";
-
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+import { DaySelect } from "./day-select";
 
 /**
- * One center in the finder's list: chosen or not, its check day, a button to
- * check it now, and one to take it off the finder again.
+ * One center in the finder's list: chosen or not, its check group or day, a
+ * button to check it now, and one to take it off the finder again.
  */
 export function CenterRow({
   name,
   eventsUrl,
   chosen,
   checkDay,
+  groupId,
+  groups,
   status,
   statusIsError,
   canCheck,
   setChosen,
   setCheckDay,
+  setGroup,
   checkNow,
   remove,
 }: {
@@ -26,11 +28,14 @@ export function CenterRow({
   eventsUrl: string | null;
   chosen: boolean;
   checkDay: number | null;
+  groupId: string | null;
+  groups: { id: string; name: string }[];
   status: string | null;
   statusIsError: boolean;
   canCheck: boolean;
   setChosen: (chosen: boolean) => Promise<void>;
   setCheckDay: (day: number | null) => Promise<void>;
+  setGroup: (groupId: string | null) => Promise<void>;
   checkNow: () => Promise<RunState>;
   remove: () => Promise<void>;
 }) {
@@ -38,11 +43,12 @@ export function CenterRow({
   // Show a change at once; the saved value takes over when the page refreshes.
   const [shownChosen, showChosen] = useOptimistic(chosen);
   const [shownDay, showDay] = useOptimistic(checkDay);
+  const [shownGroup, showGroup] = useOptimistic(groupId);
   const [checking, startChecking] = useTransition();
   const [result, setResult] = useState<RunState>();
   const disabled = !eventsUrl;
   // Anything to remove: the center is chosen, or has a check day or result.
-  const canRemove = shownChosen || shownDay !== null || Boolean(status);
+  const canRemove = shownChosen || shownDay !== null || shownGroup !== null || Boolean(status);
 
   return (
     <li className={`flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3 text-sm ${disabled ? "text-faint" : ""}`}>
@@ -75,27 +81,44 @@ export function CenterRow({
       </label>
       {!disabled && (
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="input w-auto py-1.5"
-            value={shownDay ?? ""}
-            disabled={saving || !shownChosen}
-            onChange={(e) => {
-              const day = e.target.value ? Number(e.target.value) : null;
-              startSaving(async () => {
-                showDay(day);
-                await setCheckDay(day);
-              });
-            }}
-            aria-label={`Day of the month to check ${name}`}
-            title={shownChosen ? "Day of the month the automatic check runs" : "Tick the center to check it automatically"}
-          >
-            <option value="">About monthly</option>
-            {DAYS.map((d) => (
-              <option key={d} value={d}>
-                Every month on the {ordinal(d)}
-              </option>
-            ))}
-          </select>
+          {groups.length > 0 && (
+            <select
+              className="input w-auto py-1.5"
+              value={shownGroup ?? ""}
+              disabled={saving}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                startSaving(async () => {
+                  showGroup(id);
+                  if (id) showChosen(true);
+                  await setGroup(id);
+                });
+              }}
+              aria-label={`Check group for ${name}`}
+              title="The group's check day applies to the center"
+            >
+              <option value="">No group</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {!shownGroup && (
+            <DaySelect
+              value={shownDay}
+              disabled={saving || !shownChosen}
+              label={`Day of the month to check ${name}`}
+              title={shownChosen ? "Day of the month the automatic check runs" : "Tick the center to check it automatically"}
+              onChange={(day) =>
+                startSaving(async () => {
+                  showDay(day);
+                  await setCheckDay(day);
+                })
+              }
+            />
+          )}
           {canCheck && (
             <button
               type="button"
@@ -120,6 +143,7 @@ export function CenterRow({
                 startSaving(async () => {
                   showChosen(false);
                   showDay(null);
+                  showGroup(null);
                   setResult(undefined);
                   await remove();
                 });
@@ -132,9 +156,4 @@ export function CenterRow({
       )}
     </li>
   );
-}
-
-function ordinal(n: number): string {
-  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
-  return `${n}${s}`;
 }

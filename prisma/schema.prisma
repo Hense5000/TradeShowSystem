@@ -235,17 +235,20 @@ model ExhibitionCenter {
 
   // AI trade show finder: whether to check this center's events page, and
   // how the last check went.
-  findShows       Boolean   @default(false)
+  findShows       Boolean          @default(false)
   showsCheckDay   Int? // day of the month (1-31) for the automatic check; none = about every four weeks
   showsCheckedAt  DateTime?
   showsCheckError String?
   showsCheckNote  String? // what the last check found, e.g. "Found 12 trade shows on the page: 2 new, ..."
   showsFoundLast  Int?
+  showsGroupId    String? // the finder's check group, e.g. "Europe"; its check day then applies
+  showsGroup      ShowFinderGroup? @relation(fields: [showsGroupId], references: [id], onDelete: SetNull)
 
   tradeShows     TradeShow[]
   suggestedShows SuggestedShow[]
 
   @@index([name])
+  @@index([showsGroupId])
 }
 
 model ExhibitionOrganizer {
@@ -321,6 +324,17 @@ model ShowFinderSettings {
   lastRunAt      DateTime?
   lastRunSummary String?
   updatedAt      DateTime  @updatedAt
+}
+
+// A named group of centers for the AI trade show finder, e.g. "Europe". The
+// group's check day applies to all its centers, and the whole group can be
+// checked at once.
+model ShowFinderGroup {
+  id        String             @id @default(cuid())
+  name      String             @unique
+  checkDay  Int? // day of the month (1-31); none = about every four weeks
+  createdAt DateTime           @default(now())
+  centers   ExhibitionCenter[]
 }
 
 enum SuggestionStatus {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDate, checkFoundShows, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
+import { checkDate, checkFoundShows, effectiveCheckDay, foundNote, isDue, isSameShow, newShows, pageToText, runSummary, showNameKey } from "./show-finder";
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const now = new Date("2026-10-02T08:00:00Z");
@@ -93,6 +93,14 @@ describe("isDue", () => {
   it("uses the last day of short months", () => {
     expect(checkDate(31, new Date("2026-11-15T05:00:00Z"))).toEqual(new Date("2026-11-30T00:00:00Z"));
     expect(isDue({ checkDay: 31, checkedAt: new Date("2026-10-31T05:00:00Z") }, new Date("2026-11-30T05:00:00Z"))).toBe(true);
+  });
+});
+
+describe("effectiveCheckDay", () => {
+  it("uses the group's day for centers in a group", () => {
+    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: null })).toBe(10);
+    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: { checkDay: 3 } })).toBe(3);
+    expect(effectiveCheckDay({ showsCheckDay: 10, showsGroup: { checkDay: null } })).toBe(null);
   });
 });
 

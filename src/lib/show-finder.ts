@@ -145,6 +145,14 @@ export function checkDate(checkDay: number, now = new Date()): Date {
 }
 
 /**
+ * The check day that applies to a center: its group's day when it is in a
+ * group (none there means about every four weeks), otherwise its own.
+ */
+export function effectiveCheckDay(center: { showsCheckDay: number | null; showsGroup: { checkDay: number | null } | null }): number | null {
+  return center.showsGroup ? center.showsGroup.checkDay : center.showsCheckDay;
+}
+
+/**
  * Whether the daily run should check a center now. With a check day it is
  * checked on that day of the month, or the first run after it if that day's
  * run didn't reach it. Without one it is checked about every four weeks.

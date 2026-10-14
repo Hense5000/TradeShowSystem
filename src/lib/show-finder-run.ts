@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isoDate, today } from "@/lib/dates";
-import { checkFoundShows, type FoundShow, foundNote, isDue, newShows, pageToText, runSummary } from "@/lib/show-finder";
+import { checkFoundShows, effectiveCheckDay, type FoundShow, foundNote, isDue, newShows, pageToText, runSummary } from "@/lib/show-finder";
 
 // The AI trade show finder. For each chosen exhibition center it downloads the
 // center's events page, asks Claude which trade shows are listed there, and
@@ -183,20 +183,30 @@ async function checkCenter(client: Anthropic, center: Center): Promise<CheckResu
 
 /**
  * Checks the chosen centers, oldest check first. The daily run only checks
- * centers that are due (see isDue); "Check now" checks all of them, or just
- * the centers it is given. Centers not reached within the time budget are
- * first in line next time.
+ * centers that are due (see isDue); "Check now" checks all of them, the
+ * chosen centers of one group, or just the centers it is given. Centers not
+ * reached within the time budget are first in line next time.
  */
-export async function runShowFinder({ onlyDue, centerIds }: { onlyDue: boolean; centerIds?: string[] }): Promise<string> {
+export async function runShowFinder({
+  onlyDue,
+  centerIds,
+  groupId,
+}: {
+  onlyDue: boolean;
+  centerIds?: string[];
+  groupId?: string;
+}): Promise<string> {
   if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
 
   const started = Date.now();
   const chosen = await db.exhibitionCenter.findMany({
-    where: centerIds ? { id: { in: centerIds }, eventsUrl: { not: null } } : { findShows: true, eventsUrl: { not: null } },
+    where: centerIds
+      ? { id: { in: centerIds }, eventsUrl: { not: null } }
+      : { findShows: true, eventsUrl: { not: null }, ...(groupId && { showsGroupId: groupId }) },
     orderBy: [{ showsCheckedAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
-    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true, showsCheckDay: true },
+    select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true, showsCheckDay: true, showsGroup: { select: { checkDay: true } } },
   });
-  const queue = onlyDue ? chosen.filter((c) => isDue({ checkedAt: c.showsCheckedAt, checkDay: c.showsCheckDay })) : chosen;
+  const queue = onlyDue ? chosen.filter((c) => isDue({ checkedAt: c.showsCheckedAt, checkDay: effectiveCheckDay(c) })) : chosen;
   // The daily run usually has nothing to do; keep the last real summary then.
   if (onlyDue && queue.length === 0) return "No centers were due for a check.";
 
@@ -226,7 +236,7 @@ export async function runShowFinder({ onlyDue, centerIds }: { onlyDue: boolean; 
   await Promise.all(Array.from({ length: PARALLEL }, worker));
   totals.left = queue.length - totals.checked;
 
-  const summary = chosen.length === 0 ? "No centers are chosen yet." : runSummary(totals);
+  const summary = chosen.length > 0 ? runSummary(totals) : groupId ? "The group has no ticked centers yet." : "No centers are chosen yet.";
   await db.showFinderSettings.upsert({
     where: { id: 1 },
     create: { id: 1, lastRunAt: new Date(), lastRunSummary: summary },
