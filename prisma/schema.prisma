@@ -362,3 +362,16 @@ model SuggestedShow {
   @@index([status])
   @@index([centerId])
 }
+
+// ---------------------------------------------------------------------------
+// Old trade show cleanup: once a day, trade shows that ended more than three
+// years ago are deleted, with their exhibitors. One row (id 1).
+// ---------------------------------------------------------------------------
+
+model TradeShowCleanupSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(false) // runs on its own when on
+  lastRunAt      DateTime?
+  lastRunDeleted Int? // trade shows deleted by the last run
+  updatedAt      DateTime  @updatedAt
+}

@@ -1,10 +1,13 @@
 import type { FeatureRollout } from "@prisma/client";
 import Link from "next/link";
+import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
 import { ROLLOUT_LABEL } from "@/lib/features";
 import { requirePlatformAdmin } from "@/lib/tenant";
+import { cleanupCutoff, oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
+import { setCleanupEnabled } from "./actions";
 
 const ROLLOUT_PILL: Record<FeatureRollout, string> = {
   OFF: "pill-neutral",
@@ -19,14 +22,19 @@ const updated = (date: Date) =>
 export default async function FeatureControlPage({ params }: PageProps<"/a/[slug]/admin">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const [features, finder, waiting, groups, lastChecks] = await Promise.all([
+  const [features, finder, waiting, groups, lastChecks, cleanup, oldShows, oldExhibitors] = await Promise.all([
     db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } }),
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
     db.suggestedShow.count({ where: { status: "PENDING" } }),
     db.showFinderGroup.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { centers: true } } } }),
     // A group was last updated when the most recently checked of its centers was.
     db.exhibitionCenter.groupBy({ by: ["showsGroupId"], where: { showsGroupId: { not: null } }, _max: { showsCheckedAt: true } }),
+    db.tradeShowCleanupSettings.findUnique({ where: { id: 1 } }),
+    db.tradeShow.count({ where: oldTradeShowsWhere() }),
+    db.exhibitor.count({ where: { tradeShow: oldTradeShowsWhere() } }),
   ]);
+  const cleanupOn = Boolean(cleanup?.enabled);
+  const cutoff = updated(cleanupCutoff());
   const lastCheck = (groupId: string) => lastChecks.find((l) => l.showsGroupId === groupId)?._max.showsCheckedAt ?? null;
 
   return (
@@ -73,6 +81,43 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
           </span>
         </div>
         <Link href={`/a/${slug}/admin/show-finder`} className="btn-secondary">Open</Link>
+      </section>
+
+      <section className="card flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-56 flex-1 items-start gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+            <Icon name="calendar" className="size-4" />
+          </span>
+          <span>
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              Delete old trade shows
+              <span className={`pill ${cleanupOn ? "pill-ok" : "pill-neutral"}`}>{cleanupOn ? "On" : "Off"}</span>
+            </span>
+            <span className="block text-sm text-muted">
+              Once a day, deletes trade shows that ended more than 3 years ago, together with their exhibitors. This cannot be undone.
+            </span>
+            <span className="mt-1 block text-sm">
+              {oldShows === 0
+                ? `No trade shows ended before ${cutoff}, so nothing would be deleted now.`
+                : `${oldShows} ${oldShows === 1 ? "trade show" : "trade shows"} ended before ${cutoff} and would be deleted, with ${oldExhibitors} ${oldExhibitors === 1 ? "exhibitor" : "exhibitors"}.`}
+            </span>
+            {cleanup?.lastRunAt && (
+              <span className="mt-1 block text-sm text-muted">
+                Last run {updated(cleanup.lastRunAt)}: {cleanup.lastRunDeleted ?? 0} deleted
+              </span>
+            )}
+          </span>
+        </div>
+        <ActionForm
+          action={setCleanupEnabled.bind(null, slug, !cleanupOn)}
+          confirmMessage={
+            cleanupOn
+              ? undefined
+              : `Switch on? From the next daily run, trade shows that ended before ${cutoff} are deleted with their exhibitors (${oldShows} now). This cannot be undone.`
+          }
+        >
+          <button className={cleanupOn ? "btn-secondary" : "btn"}>{cleanupOn ? "Switch off" : "Switch on"}</button>
+        </ActionForm>
       </section>
 
       {features.length === 0 ? (
