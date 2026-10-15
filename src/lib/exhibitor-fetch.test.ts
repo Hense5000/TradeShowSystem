@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFoundExhibitors, cleanWebsite, fetchSummary, morePages, pageKey, splitText } from "./exhibitor-fetch";
+import { checkFoundExhibitors, cleanWebsite, compactJson, fetchSummary, morePages, pageKey, splitText, withLoadedData } from "./exhibitor-fetch";
 
 const blank = { website: null, email: null, phone: null, country: null, industry: null, boothNumber: null };
 
@@ -87,5 +87,32 @@ describe("fetchSummary", () => {
       "Read 4 pages of the exhibitor list. Found 212 exhibitors: 198 added, 14 already listed. 1 page could not be read.",
     );
     expect(fetchSummary({ pages: 1, found: 0, added: 0, failedPages: 0, morePagesLeft: 0 })).toBe("Read 1 page of the exhibitor list. No exhibitors were found.");
+  });
+});
+
+describe("compactJson", () => {
+  it("drops long texts, pictures and empty values", () => {
+    const body = JSON.stringify({
+      items: [{ name: "Acme Ltd", website: "acme.com", logoUrl: "x.png", description: "x".repeat(400), stand: "B12", tags: [] }],
+    });
+    expect(JSON.parse(compactJson(body))).toEqual({ items: [{ name: "Acme Ltd", website: "acme.com", stand: "B12" }] });
+  });
+
+  it("leaves text that is not JSON as it is", () => {
+    expect(compactJson("not json")).toBe("not json");
+  });
+});
+
+describe("withLoadedData", () => {
+  it("adds the largest data first, within the limit", () => {
+    const small = JSON.stringify({ a: "s".repeat(250) });
+    const big = JSON.stringify({ list: Array.from({ length: 40 }, (_, i) => ({ name: `Company ${i}` })) });
+    const text = withLoadedData("Exhibitors", [small, big], 10_000);
+    expect(text.startsWith("Exhibitors\n\nData the page loaded:\n")).toBe(true);
+    expect(text.indexOf("Company 0")).toBeLessThan(text.indexOf("sss"));
+  });
+
+  it("keeps the text as it is when nothing was loaded", () => {
+    expect(withLoadedData("Exhibitors", [])).toBe("Exhibitors");
   });
 });

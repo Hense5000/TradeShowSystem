@@ -12,6 +12,7 @@ keep the company profile up to date; billing and features follow in the next ste
 - **Exhibition centers** (og senere messer, arrangører og udstillere) er én fælles liste for alle konti. Alle kan se den; kun e-mails i `PLATFORM_ADMIN_EMAILS` kan rette i den.
 - **Feature control** (menuen "Super admin") ses kun af e-mails i `PLATFORM_ADMIN_EMAILS`. Her oprettes kommende funktioner. De starter slukket (skjult for kunder) og kan tændes for udvalgte konti eller for alle.
 - **AI trade show finder** (Feature control → AI trade show finder): læser events-siden (Local events URL) for de messecentre, der er sat flueben ved, den 1. i hver måned og lægger nye messer de næste 6 måneder direkte på messelisten. En super admin kan fjerne en tilføjet messe; så tilføjes den ikke igen. Kræver `ANTHROPIC_API_KEY` og `CRON_SECRET` i Vercel.
+- **Fetch exhibitors** (på en messes side): AI læser messens Exhibitor directory URL side for side og lægger udstillerne på messen. Lister, der bygges med JavaScript, åbnes i en headless Chrome (`@sparticuz/chromium` på Vercel; sæt `CHROMIUM_PATH` til en lokal Chrome ved udvikling). Kræver `ANTHROPIC_API_KEY`.
 - Kortoplysninger gemmes aldrig hos os. De ligger i Stripe, og vi gemmer kun Stripes id'er.
 
 ## Status

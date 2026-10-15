@@ -12,6 +12,61 @@ export const PART_CHARS = 40_000;
 /** At most this many pages of one directory are read in one go, so a huge site can't run forever. */
 export const MAX_PAGES = 60;
 
+/** A page's own text shorter than this has no real list in it; the list is probably built by the page's scripts. */
+export const MIN_LIST_CHARS = 2_000;
+
+/** Total size of the text read from one page, the data it loaded included. */
+export const MAX_READ_CHARS = 200_000;
+
+const SKIPPED_KEY = /image|logo|img|photo|thumb|banner|video|avatar|icon|color|colour|style|html|token|tracking/i;
+
+/**
+ * Shrinks loaded JSON to what can name an exhibitor: long texts (company
+ * descriptions), pictures and styling are dropped, so more companies fit.
+ * Text that is not JSON is returned as it is.
+ */
+export function compactJson(body: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  const shrink = (v: unknown): unknown => {
+    if (typeof v === "string") return v.length > 300 ? undefined : v;
+    if (Array.isArray(v)) return v.map(shrink).filter((x) => x !== undefined && x !== null && x !== "");
+    if (v && typeof v === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v)) {
+        if (SKIPPED_KEY.test(k)) continue;
+        const y = shrink(x);
+        if (y !== undefined && y !== null && y !== "" && !(Array.isArray(y) && y.length === 0)) out[k] = y;
+      }
+      return Object.keys(out).length > 0 ? out : undefined;
+    }
+    return v;
+  };
+  return JSON.stringify(shrink(value) ?? null);
+}
+
+/**
+ * Adds the JSON a page loaded in the background to its text, largest first
+ * (the full list is usually the biggest), as far as there is room.
+ */
+export function withLoadedData(text: string, data: string[], max = MAX_READ_CHARS): string {
+  let result = text;
+  const sorted = [...new Set(data.map(compactJson))].filter((d) => d.length > 200).sort((a, b) => b.length - a.length);
+  let first = true;
+  for (const blob of sorted) {
+    const room = max - result.length - 40;
+    if (room < 500) break;
+    if (first) result += "\n\nData the page loaded:";
+    first = false;
+    result += `\n${blob.length > room ? blob.slice(0, room) : blob}`;
+  }
+  return result;
+}
+
 /** Splits a page's text into parts of at most `size` characters, cutting between lines. */
 export function splitText(text: string, size = PART_CHARS): string[] {
   const parts: string[] = [];
