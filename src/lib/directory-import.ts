@@ -21,6 +21,8 @@ export function parseDirectoryRows<T extends { name: string }>(
     schema: z.ZodType<T>;
     key: (item: T) => string;
     nameColumnHint: string;
+    /** The file's row number of the first data row, when a large file is sent in parts. */
+    firstRowNo?: number;
   },
 ): ParsedRows<T> {
   const [header, ...data] = rows;
@@ -38,7 +40,7 @@ export function parseDirectoryRows<T extends { name: string }>(
   const seen = new Set<string>();
 
   data.forEach((cells, i) => {
-    const rowNo = i + 2; // row 1 is the header
+    const rowNo = i + (opts.firstRowNo ?? 2); // row 1 is the header
     const values: Record<string, string> = {};
     for (const field of fields) values[field] = index[field] >= 0 ? (cells[index[field]] ?? "").trim() : "";
 

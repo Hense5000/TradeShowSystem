@@ -3,17 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
-import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
-import { fillSummary } from "@/lib/company-profile";
-import { describeProfileError, fillMissingProfiles, isCompanyProfileConfigured, writeCompanyProfile } from "@/lib/company-profile-run";
-import { parseCsv } from "@/lib/csv";
+import { type FillResult, fillSummary } from "@/lib/company-profile";
+import {
+  describeProfileError,
+  fillMissingProfiles,
+  isCompanyProfileConfigured,
+  missingProfileWhere,
+  writeCompanyProfile,
+} from "@/lib/company-profile-run";
 import { db } from "@/lib/db";
-import { exhibitorKey, parseExhibitorRows } from "@/lib/exhibitors";
+import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
-
-const MAX_IMPORT_BYTES = 4_000_000;
 
 /** How long an import or a "Write missing profiles" press spends on AI profiles; the page may run for 300 seconds. */
 const PROFILE_BUDGET_MS = 150_000;
@@ -66,32 +68,56 @@ export async function deleteExhibitor(slug: string, id: string): Promise<ActionS
   redirect(`/a/${slug}/exhibitors`);
 }
 
-export async function importExhibitors(slug: string, _prev: ImportState, formData: FormData): Promise<ImportState> {
+export type RowsResult = { error?: string; imported: number; alreadyThere: number; problems: string[] };
+
+const isRow = (row: unknown): row is string[] => Array.isArray(row) && row.every((c) => typeof c === "string");
+
+/**
+ * Saves one part of an imported CSV file: the header row plus up to
+ * IMPORT_ROWS_PER_CALL data rows. Companies already listed at the show are
+ * skipped, so importing the same file twice does not create copies.
+ */
+export async function importExhibitorRows(
+  slug: string,
+  tradeShowId: string,
+  header: string[],
+  rows: string[][],
+  firstRowNo: number,
+): Promise<RowsResult> {
   await requirePlatformAdmin(slug);
-  const tradeShowId = String(formData.get("tradeShowId") ?? "");
-  if (!tradeShowId || !(await showExists(tradeShowId))) return { error: "Choose the trade show these exhibitors are at." };
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file to import." };
-  if (file.size > MAX_IMPORT_BYTES) return { error: "The file is too large. Split it into files under 4 MB." };
+  const none = { imported: 0, alreadyThere: 0, problems: [] };
+  if (!isRow(header) || !Array.isArray(rows) || !rows.every(isRow) || rows.length > IMPORT_ROWS_PER_CALL) {
+    return { ...none, error: "The file could not be read." };
+  }
+  if (!tradeShowId || !(await showExists(tradeShowId))) return { ...none, error: "Choose the trade show these exhibitors are at." };
 
-  const { items, problems, error } = parseExhibitorRows(parseCsv(await file.text()));
-  if (error) return { error };
+  const { items, problems, error } = parseExhibitorRows([header, ...rows], Number.isInteger(firstRowNo) ? firstRowNo : 2);
+  if (error) return { ...none, error };
 
-  // Leave out companies already listed at this show, so importing the same
-  // file twice does not create copies.
   const existing = await db.exhibitor.findMany({ where: { tradeShowId }, select: { name: true } });
   const known = new Set(existing.map(exhibitorKey));
   const fresh = items.filter((e) => !known.has(exhibitorKey(e)));
-
   if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...e, tradeShowId })) });
-
-  // Let the AI write the profiles the file left empty, from each company's website.
-  let note: string | undefined;
-  if (isCompanyProfileConfigured() && fresh.some((e) => e.website && !e.companyProfile)) {
-    note = fillSummary(await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS }));
-  }
   revalidatePath(`/a/${slug}/exhibitors`);
-  return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems, note };
+  return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
+}
+
+/** How many exhibitors at the show still wait for an AI company profile. */
+export async function countMissingProfiles(slug: string, tradeShowId: string): Promise<number> {
+  await requirePlatformAdmin(slug);
+  if (!isCompanyProfileConfigured()) return 0;
+  return db.exhibitor.count({ where: missingProfileWhere(tradeShowId) });
+}
+
+/** How many profiles one call of writeProfileBatch writes, side by side; a few at a time keeps the progress bar moving. */
+const PROFILES_PER_CALL = 5;
+
+/** Writes a few of the show's missing company profiles, for the import page's progress bar. */
+export async function writeProfileBatch(slug: string, tradeShowId: string): Promise<FillResult> {
+  await requirePlatformAdmin(slug);
+  const result = await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: PROFILES_PER_CALL });
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return result;
 }
 
 export type ProfileState = { profile?: string; error?: string };

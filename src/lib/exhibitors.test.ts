@@ -25,6 +25,12 @@ describe("parseExhibitorRows", () => {
     ]);
   });
 
+  it("numbers the rows of a later part of a file from firstRowNo", () => {
+    const result = parseExhibitorRows([["Company", "Email"], ["Acme", "not an email"]], 52);
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]).toMatch(/^Row 52:/);
+  });
+
   it("needs a company name and a valid email", () => {
     const result = parseExhibitorRows([
       ["Company", "Email"],
