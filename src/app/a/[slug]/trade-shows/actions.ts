@@ -7,6 +7,7 @@ import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
+import { withPhoneCountry } from "@/lib/phone-country";
 import { checkFoundExhibitors } from "@/lib/exhibitor-fetch";
 import { describeFetchError, isExhibitorFetchConfigured, isServiceDown, readDirectoryPage } from "@/lib/exhibitor-fetch-run";
 import { exhibitorKey } from "@/lib/exhibitors";
@@ -138,7 +139,7 @@ export async function fetchExhibitorPage(slug: string, tradeShowId: string, page
     const existing = await db.exhibitor.findMany({ where: { tradeShowId }, select: { name: true } });
     const known = new Set(existing.map(exhibitorKey));
     const fresh = found.filter((e) => !known.has(exhibitorKey(e)));
-    if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...e, tradeShowId })) });
+    if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...withPhoneCountry(e), tradeShowId })) });
     revalidatePath(`/a/${slug}/exhibitors`);
     return { found: found.length, added: fresh.length, otherPages: page.otherPages };
   } catch (error) {

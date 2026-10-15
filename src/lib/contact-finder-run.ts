@@ -14,6 +14,7 @@ import {
   MAX_CONTACT_PAGE_CHARS,
 } from "@/lib/contact-finder";
 import { db } from "@/lib/db";
+import { countryFromPhone } from "@/lib/phone-country";
 import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
 
@@ -204,10 +205,12 @@ export async function fillMissingContacts({
         continue;
       }
       // Read the fields just before saving, in case someone typed them in meanwhile.
-      const current = await db.exhibitor.findUnique({ where: { id: e.id }, select: { contactName: true, contactTitle: true, email: true, phone: true } });
+      const current = await db.exhibitor.findUnique({ where: { id: e.id }, select: { contactName: true, contactTitle: true, email: true, phone: true, country: true } });
       const data = current ? contactUpdate(current, found) : {};
       if (Object.keys(data).length > 0) {
-        await db.exhibitor.updateMany({ where: { id: e.id }, data });
+        // A newly found phone number also tells the country, when that is empty.
+        const country = !current?.country && data.phone ? countryFromPhone(data.phone) : null;
+        await db.exhibitor.updateMany({ where: { id: e.id }, data: { ...data, ...(country && { country }) } });
         totals.filled++;
       } else totals.noInfo++;
     }

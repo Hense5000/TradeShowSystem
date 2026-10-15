@@ -16,6 +16,8 @@ import { type ContactFillResult, contactSummary, type FoundContact } from "@/lib
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere } from "@/lib/contact-finder-run";
 import { db } from "@/lib/db";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
+import { fillCountriesFromPhones } from "@/lib/phone-country-run";
+import { withPhoneCountry } from "@/lib/phone-country";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
@@ -42,7 +44,7 @@ export async function createExhibitor(slug: string, _prev: SaveState, formData: 
     return { error: `${parsed.data.name} is already an exhibitor at that trade show.` };
   }
 
-  await db.exhibitor.create({ data: parsed.data });
+  await db.exhibitor.create({ data: withPhoneCountry(parsed.data) });
   revalidatePath(`/a/${slug}/exhibitors`);
   redirect(`/a/${slug}/exhibitors?show=${parsed.data.tradeShowId}`);
 }
@@ -61,7 +63,7 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
     ...(!parsed.data.companyProfile && { profileTriedAt: null }),
     ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null }),
   };
-  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...parsed.data, ...retry } });
+  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...withPhoneCountry(parsed.data), ...retry } });
   if (count === 0) return { error: "This exhibitor no longer exists." };
   revalidatePath(`/a/${slug}/exhibitors`);
   return { saved: true };
@@ -103,7 +105,7 @@ export async function importExhibitorRows(
   const existing = await db.exhibitor.findMany({ where: { tradeShowId }, select: { name: true } });
   const known = new Set(existing.map(exhibitorKey));
   const fresh = items.filter((e) => !known.has(exhibitorKey(e)));
-  if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...e, tradeShowId })) });
+  if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...withPhoneCountry(e), tradeShowId })) });
   revalidatePath(`/a/${slug}/exhibitors`);
   return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
 }
@@ -193,4 +195,12 @@ export async function fillContacts(slug: string, tradeShowId: string | undefined
   const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
   revalidatePath(`/a/${slug}/exhibitors`);
   return { message: contactSummary(result) };
+}
+
+/** Fills the empty countries of all exhibitors from their phone numbers' international prefix (+45, 0045). */
+export async function fillCountries(slug: string): Promise<FillState> {
+  await requirePlatformAdmin(slug);
+  const filled = await fillCountriesFromPhones();
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return { message: `Filled the country of ${filled} ${filled === 1 ? "exhibitor" : "exhibitors"} from the phone number.` };
 }
