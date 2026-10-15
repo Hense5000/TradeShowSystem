@@ -293,7 +293,7 @@ model Exhibitor {
   name             String // company name
   contactName      String?
   contactTitle     String?
-  email            String
+  email            String? // often missing when fetched from a show's exhibitor directory
   phone            String?
   website          String?
   country          String? // ISO 3166-1 alpha-2, e.g. "DK"

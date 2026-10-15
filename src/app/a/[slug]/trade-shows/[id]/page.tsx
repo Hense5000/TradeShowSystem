@@ -3,16 +3,22 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { db } from "@/lib/db";
+import { isExhibitorFetchConfigured } from "@/lib/exhibitor-fetch-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { deleteTradeShow, updateTradeShow } from "../actions";
+import { FetchExhibitors } from "../fetch-exhibitors";
 import { TradeShowFields } from "../trade-show-fields";
+
+// "Fetch exhibitors" reads one page of the exhibitor directory per call to this page.
+export const maxDuration = 300;
 
 export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]/trade-shows/[id]">) {
   const { slug, id } = await params;
   await requirePlatformAdmin(slug);
   const [show, centers] = await Promise.all([
-    db.tradeShow.findUnique({ where: { id } }),
+    db.tradeShow.findUnique({ where: { id }, include: { _count: { select: { exhibitors: true } } } }),
     db.exhibitionCenter.findMany({ select: { id: true, name: true, city: true }, orderBy: { name: "asc" } }),
   ]);
   if (!show) notFound();
@@ -27,6 +33,15 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
       <SaveForm action={updateTradeShow.bind(null, slug, id)} title="Trade show details" description="Name and dates are required." submitLabel="Save changes" readOnly={false}>
         <TradeShowFields show={show} centers={centers} />
       </SaveForm>
+      {show.exhibitorDirectoryUrl && isExhibitorFetchConfigured() && (
+        <FetchExhibitors
+          slug={slug}
+          tradeShowId={show.id}
+          directoryUrl={show.exhibitorDirectoryUrl}
+          exhibitorCount={show._count.exhibitors}
+          writeProfiles={isCompanyProfileConfigured()}
+        />
+      )}
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-bold">Delete trade show</h2>

@@ -39,7 +39,7 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
         <h2 className="font-bold">How the file should look</h2>
         <p className="mt-1 text-muted">
           One file per trade show; you choose the show below. The first row holds the column names.{" "}
-          <strong className="text-ink">Company name</strong> and <strong className="text-ink">Email</strong> are required;
+          <strong className="text-ink">Company name</strong> is required;
           the other columns can be left out or empty. Commas and semicolons both work as separators.
         </p>
         <p className="mt-3 flex flex-wrap gap-1.5">

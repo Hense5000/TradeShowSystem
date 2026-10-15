@@ -7,6 +7,9 @@ import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
+import { checkFoundExhibitors } from "@/lib/exhibitor-fetch";
+import { describeFetchError, isExhibitorFetchConfigured, isServiceDown, readDirectoryPage } from "@/lib/exhibitor-fetch-run";
+import { exhibitorKey } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { parseTradeShowRows, tradeShowKey } from "@/lib/trade-shows";
 import { firstError, type TradeShowInput, tradeShowSchema } from "@/lib/validation";
@@ -96,4 +99,49 @@ export async function importTradeShows(slug: string, _prev: ImportState, formDat
   if (data.length > 0) await db.tradeShow.createMany({ data });
   revalidatePath(`/a/${slug}/trade-shows`);
   return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
+}
+
+export type FetchPageResult = {
+  error?: string;
+  /** The AI service itself failed (bad key, no credit), so reading more pages would fail too. */
+  stop?: boolean;
+  found: number;
+  added: number;
+  /** Links to the directory's other pages, as the AI found them. */
+  otherPages: string[];
+};
+
+const sameSite = (a: string, b: string) => new URL(a).hostname.replace(/^www\./, "") === new URL(b).hostname.replace(/^www\./, "");
+
+/**
+ * Reads one page of the trade show's exhibitor directory with AI and adds the
+ * exhibitors it lists to the show. Companies already listed at the show are
+ * skipped, so fetching again only adds the new ones. The trade show page
+ * calls this once per page of the directory, so it can show progress.
+ */
+export async function fetchExhibitorPage(slug: string, tradeShowId: string, pageUrl: string): Promise<FetchPageResult> {
+  await requirePlatformAdmin(slug);
+  const none = { found: 0, added: 0, otherPages: [] };
+  if (!isExhibitorFetchConfigured()) return { ...none, stop: true, error: "Add ANTHROPIC_API_KEY in Vercel before exhibitors can be fetched." };
+  const show = await db.tradeShow.findUnique({ where: { id: tradeShowId }, select: { name: true, exhibitorDirectoryUrl: true } });
+  if (!show?.exhibitorDirectoryUrl) return { ...none, stop: true, error: "The trade show has no Exhibitor directory URL." };
+  // Only pages on the directory's own site are read.
+  try {
+    if (!/^https?:/i.test(pageUrl) || !sameSite(pageUrl, show.exhibitorDirectoryUrl)) throw new Error();
+  } catch {
+    return { ...none, error: "That page is not part of the exhibitor directory." };
+  }
+
+  try {
+    const page = await readDirectoryPage(show.name, pageUrl);
+    const found = checkFoundExhibitors(page.exhibitors, show.exhibitorDirectoryUrl);
+    const existing = await db.exhibitor.findMany({ where: { tradeShowId }, select: { name: true } });
+    const known = new Set(existing.map(exhibitorKey));
+    const fresh = found.filter((e) => !known.has(exhibitorKey(e)));
+    if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...e, tradeShowId })) });
+    revalidatePath(`/a/${slug}/exhibitors`);
+    return { found: found.length, added: fresh.length, otherPages: page.otherPages };
+  } catch (error) {
+    return { ...none, stop: isServiceDown(error), error: describeFetchError(error) };
+  }
 }

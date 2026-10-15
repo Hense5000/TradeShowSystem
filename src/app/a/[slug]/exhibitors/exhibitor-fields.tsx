@@ -29,7 +29,7 @@ export function ExhibitorFields({
         <Field id="contactTitle" label="Contact position" defaultValue={e?.contactTitle ?? ""} maxLength={100} placeholder="Sales Manager" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="email" label="Email" type="email" defaultValue={e?.email ?? ""} required placeholder="contact@company.com" />
+        <Field id="email" label="Email" type="email" defaultValue={e?.email ?? ""} placeholder="contact@company.com" />
         <Field id="phone" label="Phone" type="tel" defaultValue={e?.phone ?? ""} maxLength={30} placeholder="+45 12 34 56 78" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
