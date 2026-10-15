@@ -3,11 +3,11 @@ import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { createExhibitor, generateExhibitorProfile } from "../actions";
+import { createExhibitor, findExhibitorContact, generateExhibitorProfile } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
 import { tradeShowOptions } from "../show-select";
 
-// Writing a profile with AI can take up to a minute or two.
+// Writing a profile or finding a contact with AI can take up to a minute or two.
 export const maxDuration = 300;
 
 export default async function NewExhibitorPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/new">) {
@@ -29,7 +29,7 @@ export default async function NewExhibitorPage({ params, searchParams }: PagePro
         </p>
       ) : (
         <SaveForm action={createExhibitor.bind(null, slug)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Add exhibitor" readOnly={false}>
-          <ExhibitorFields generateProfile={isCompanyProfileConfigured() ? generateExhibitorProfile.bind(null, slug) : undefined} shows={shows} showId={typeof show === "string" ? show : undefined} />
+          <ExhibitorFields findContact={isCompanyProfileConfigured() ? findExhibitorContact.bind(null, slug) : undefined} generateProfile={isCompanyProfileConfigured() ? generateExhibitorProfile.bind(null, slug) : undefined} shows={shows} showId={typeof show === "string" ? show : undefined} />
         </SaveForm>
       )}
     </>
