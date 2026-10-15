@@ -31,7 +31,7 @@ describe("parseExhibitorRows", () => {
     expect(result.problems[0]).toMatch(/^Row 52:/);
   });
 
-  it("needs a company name and a valid email", () => {
+  it("needs a company name, and a valid email when one is given", () => {
     const result = parseExhibitorRows([
       ["Company", "Email"],
       ["", "a@b.com"],
@@ -40,10 +40,9 @@ describe("parseExhibitorRows", () => {
       ["Delta", "d@delta.com"],
       ["delta", "d2@delta.com"],
     ]);
-    expect(result.items.map((e) => e.name)).toEqual(["Delta"]);
+    expect(result.items.map((e) => [e.name, e.email])).toEqual([["Beta", null], ["Delta", "d@delta.com"]]);
     expect(result.problems).toEqual([
       "Row 2: Enter the company name.",
-      "Row 3: Enter the exhibitor's email.",
       "Row 4: Enter a valid email address.",
       'Row 6: "delta" appears twice in the file, skipped.',
     ]);

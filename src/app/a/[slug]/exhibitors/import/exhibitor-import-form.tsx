@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { ImportResult, type ImportState } from "@/components/import-form";
-import { type FillResult, fillSummary } from "@/lib/company-profile";
+import { ProgressBar } from "@/components/progress-bar";
 import { parseCsv } from "@/lib/csv";
 import { IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
-import { countMissingProfiles, importExhibitorRows, writeProfileBatch } from "../actions";
+import { importExhibitorRows } from "../actions";
+import { writeMissingProfiles } from "../write-profiles";
 
 const MAX_IMPORT_BYTES = 4_000_000;
 
@@ -70,25 +71,11 @@ export function ExhibitorImportForm({
       }
 
       let note: string | undefined;
-      const missing = writeProfiles && result.imported > 0 ? await countMissingProfiles(slug, tradeShowId) : 0;
-      if (missing > 0) {
-        p = { ...p, phase: "profiles", profiles: missing };
-        setProgress(p);
-        const totals: FillResult = { written: 0, noInfo: 0, failed: 0, left: missing };
-        while (totals.left > 0 && !totals.stoppedBy) {
-          const batch = await writeProfileBatch(slug, tradeShowId);
-          const done = batch.written + batch.noInfo + batch.failed;
-          totals.written += batch.written;
-          totals.noInfo += batch.noInfo;
-          totals.failed += batch.failed;
-          totals.left = batch.left;
-          totals.stoppedBy = batch.stoppedBy;
-          // Someone else (the nightly run, another import) may write some at the same time.
-          p = { ...p, profilesDone: p.profilesDone + done, profiles: Math.max(p.profiles, p.profilesDone + done + batch.left) };
+      if (writeProfiles && result.imported > 0) {
+        note = await writeMissingProfiles(slug, tradeShowId, (done, total) => {
+          p = { ...p, phase: "profiles", profilesDone: done, profiles: total };
           setProgress(p);
-          if (done === 0) break;
-        }
-        note = fillSummary(totals);
+        });
       }
       setState({ ...result, note });
     } catch (error) {
@@ -134,23 +121,5 @@ function ImportProgress({ progress: p }: { progress: Progress }) {
     p.phase === "rows"
       ? `Saving exhibitors: ${p.rowsDone} of ${p.rows} rows`
       : `AI is writing company profiles: ${p.profilesDone} of ${p.profiles}`;
-  return (
-    <div className="rounded-lg bg-subtle px-4 py-3">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-semibold">{label}</span>
-        <span className="font-bold text-brand tabular-nums">{percent}%</span>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="Import progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        className="mt-2 h-2.5 overflow-hidden rounded-full bg-line"
-      >
-        <div className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out" style={{ width: `${percent}%` }} />
-      </div>
-      <p className="mt-2 text-xs text-muted">Keep this page open until the import is done.</p>
-    </div>
-  );
+  return <ProgressBar label={label} percent={percent} ariaLabel="Import progress" />;
 }

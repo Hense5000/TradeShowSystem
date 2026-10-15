@@ -159,8 +159,8 @@ export const exhibitorRowSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .min(1, "Enter the exhibitor's email.")
-    .pipe(z.email("Enter a valid email address.")),
+    .refine((v) => v === "" || z.email().safeParse(v).success, "Enter a valid email address.")
+    .transform((v) => v || null),
   phone,
   website,
   country,

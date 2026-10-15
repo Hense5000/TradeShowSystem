@@ -170,7 +170,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                       <div className="min-w-44">
                         {e.contactName && <p className="font-medium">{e.contactName}</p>}
                         {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
-                        <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>
+                        {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
                         {e.phone && <p className="text-xs text-muted">{e.phone}</p>}
                       </div>
                     </td>

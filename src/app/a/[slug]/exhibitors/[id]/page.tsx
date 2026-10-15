@@ -26,7 +26,7 @@ export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]
         description="Changes are seen by every account in the system."
         action={<Link href={`/a/${slug}/exhibitors?show=${exhibitor.tradeShowId}`} className="btn-secondary">Back to list</Link>}
       />
-      <SaveForm action={updateExhibitor.bind(null, slug, id)} title="Exhibitor details" description="Company name, trade show and email are required." submitLabel="Save changes" readOnly={false}>
+      <SaveForm action={updateExhibitor.bind(null, slug, id)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Save changes" readOnly={false}>
         <ExhibitorFields generateProfile={isCompanyProfileConfigured() ? generateExhibitorProfile.bind(null, slug) : undefined} exhibitor={exhibitor} shows={shows} />
       </SaveForm>
       <section className="card flex flex-wrap items-center justify-between gap-3">

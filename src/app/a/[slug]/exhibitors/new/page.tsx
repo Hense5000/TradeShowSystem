@@ -28,7 +28,7 @@ export default async function NewExhibitorPage({ params, searchParams }: PagePro
           An exhibitor belongs to a trade show, so <Link href={`/a/${slug}/trade-shows/new`} className="font-semibold text-brand">add a trade show</Link> first.
         </p>
       ) : (
-        <SaveForm action={createExhibitor.bind(null, slug)} title="Exhibitor details" description="Company name, trade show and email are required." submitLabel="Add exhibitor" readOnly={false}>
+        <SaveForm action={createExhibitor.bind(null, slug)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Add exhibitor" readOnly={false}>
           <ExhibitorFields generateProfile={isCompanyProfileConfigured() ? generateExhibitorProfile.bind(null, slug) : undefined} shows={shows} showId={typeof show === "string" ? show : undefined} />
         </SaveForm>
       )}
