@@ -6,9 +6,10 @@ import { isCompanyProfileConfigured, missingProfileWhere } from "@/lib/company-p
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { fillContacts, fillProfiles } from "./actions";
+import { fillContacts, fillCountries, fillProfiles } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
 import { tradeShowOptions } from "./show-select";
 
@@ -59,6 +60,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         db.exhibitor.count({ where: missingContactWhere(show || undefined) }),
       ])
     : [0, 0];
+  const missingCountries = canEdit ? await countCountriesFromPhones() : 0;
   const countryOptions = countries
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
@@ -106,6 +108,16 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           button="Find missing contacts"
           pendingButton="Finding contacts…"
           action={fillContacts.bind(null, slug, show || undefined)}
+        />
+      )}
+
+      {missingCountries > 0 && (
+        <AiFillCard
+          title={`${missingCountries} ${missingCountries === 1 ? "exhibitor has" : "exhibitors have"} no country, but a phone number that shows it`}
+          text="The country is read from the phone number's international prefix, for example +45 or 0045 for Denmark. New exhibitors get it automatically."
+          button="Fill countries"
+          pendingButton="Filling countries…"
+          action={fillCountries.bind(null, slug)}
         />
       )}
 
