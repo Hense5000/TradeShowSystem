@@ -1,6 +1,7 @@
 import type { Exhibitor } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
-import type { ProfileState } from "./actions";
+import type { ContactState, ProfileState } from "./actions";
+import { ContactFields } from "./contact-fields";
 import { CompanyProfileField } from "./profile-field";
 import { type ShowOption, ShowSelect } from "./show-select";
 
@@ -10,12 +11,15 @@ export function ExhibitorFields({
   shows,
   showId,
   generateProfile,
+  findContact,
 }: {
   exhibitor?: Exhibitor;
   shows: ShowOption[];
   showId?: string;
   /** Writes the company profile with AI; left out when no AI key is set. */
   generateProfile?: (name: string, website: string) => Promise<ProfileState>;
+  /** Looks up the contact person with AI; left out when no AI key is set. */
+  findContact?: (name: string, website: string) => Promise<ContactState>;
 }) {
   const e = exhibitor;
   return (
@@ -24,14 +28,10 @@ export function ExhibitorFields({
         <Field id="name" label="Company name" defaultValue={e?.name} required maxLength={150} placeholder="Acme Corporation" />
         <ShowSelect shows={shows} defaultValue={e?.tradeShowId ?? showId} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="contactName" label="Contact person" defaultValue={e?.contactName ?? ""} maxLength={100} placeholder="John Smith" />
-        <Field id="contactTitle" label="Contact position" defaultValue={e?.contactTitle ?? ""} maxLength={100} placeholder="Sales Manager" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="email" label="Email" type="email" defaultValue={e?.email ?? ""} placeholder="contact@company.com" />
-        <Field id="phone" label="Phone" type="tel" defaultValue={e?.phone ?? ""} maxLength={30} placeholder="+45 12 34 56 78" />
-      </div>
+      <ContactFields
+        find={findContact}
+        values={{ contactName: e?.contactName ?? "", contactTitle: e?.contactTitle ?? "", email: e?.email ?? "", phone: e?.phone ?? "" }}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="website" label="Website" defaultValue={e?.website ?? ""} maxLength={300} placeholder="company.com" />
         <CountrySelect id="country" defaultValue={e?.country} />

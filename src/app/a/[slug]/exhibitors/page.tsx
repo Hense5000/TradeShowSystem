@@ -3,17 +3,18 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { isCompanyProfileConfigured, missingProfileWhere } from "@/lib/company-profile-run";
+import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { fillProfiles } from "./actions";
-import { FillProfiles } from "./fill-profiles";
+import { fillContacts, fillProfiles } from "./actions";
+import { AiFillCard } from "./ai-fill-card";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
 
-// "Write missing profiles" runs on this page and may take a few minutes.
+// "Write missing profiles" and "Find missing contacts" run on this page and may take a few minutes.
 export const maxDuration = 300;
 
 export default async function ExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors">) {
@@ -51,7 +52,13 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     tradeShowOptions(),
     db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
-  const missingProfiles = canEdit && isCompanyProfileConfigured() ? await db.exhibitor.count({ where: missingProfileWhere(show || undefined) }) : 0;
+  const useAi = canEdit && isCompanyProfileConfigured();
+  const [missingProfiles, missingContacts] = useAi
+    ? await Promise.all([
+        db.exhibitor.count({ where: missingProfileWhere(show || undefined) }),
+        db.exhibitor.count({ where: missingContactWhere(show || undefined) }),
+      ])
+    : [0, 0];
   const countryOptions = countries
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
@@ -83,7 +90,24 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         }
       />
 
-      {missingProfiles > 0 && <FillProfiles missing={missingProfiles} action={fillProfiles.bind(null, slug, show || undefined)} />}
+      {missingProfiles > 0 && (
+        <AiFillCard
+          title={`${missingProfiles} ${missingProfiles === 1 ? "exhibitor has" : "exhibitors have"} a website but no company profile`}
+          text="AI writes them from each website, up to 300 words. They are also written automatically during the night."
+          button="Write missing profiles"
+          pendingButton="Writing profiles…"
+          action={fillProfiles.bind(null, slug, show || undefined)}
+        />
+      )}
+      {missingContacts > 0 && (
+        <AiFillCard
+          title={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email`}
+          text="AI looks for a contact person, position, email and phone on each company's own website and fills in only the empty fields. This also happens automatically during the night."
+          button="Find missing contacts"
+          pendingButton="Finding contacts…"
+          action={fillContacts.bind(null, slug, show || undefined)}
+        />
+      )}
 
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">

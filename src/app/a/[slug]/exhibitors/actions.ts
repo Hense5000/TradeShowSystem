@@ -12,6 +12,8 @@ import {
   missingProfileWhere,
   writeCompanyProfile,
 } from "@/lib/company-profile-run";
+import { type ContactFillResult, contactSummary, type FoundContact } from "@/lib/contact-finder";
+import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere } from "@/lib/contact-finder-run";
 import { db } from "@/lib/db";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
@@ -54,8 +56,12 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
     return { error: `Another ${parsed.data.name} is already an exhibitor at that trade show.` };
   }
 
-  // An empty profile may be tried by AI again, e.g. after the website was corrected.
-  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...parsed.data, ...(!parsed.data.companyProfile && { profileTriedAt: null }) } });
+  // An empty profile or contact may be looked up by AI again, e.g. after the website was corrected.
+  const retry = {
+    ...(!parsed.data.companyProfile && { profileTriedAt: null }),
+    ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null }),
+  };
+  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...parsed.data, ...retry } });
   if (count === 0) return { error: "This exhibitor no longer exists." };
   revalidatePath(`/a/${slug}/exhibitors`);
   return { saved: true };
@@ -146,4 +152,45 @@ export async function fillProfiles(slug: string, tradeShowId: string | undefined
   const result = await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
   revalidatePath(`/a/${slug}/exhibitors`);
   return { message: fillSummary(result) };
+}
+
+/** How many exhibitors at the show still wait for AI to look up a contact person. */
+export async function countMissingContacts(slug: string, tradeShowId: string): Promise<number> {
+  await requirePlatformAdmin(slug);
+  if (!isContactFinderConfigured()) return 0;
+  return db.exhibitor.count({ where: missingContactWhere(tradeShowId) });
+}
+
+/** Looks up a few of the show's missing contacts, for the import page's progress bar. */
+export async function findContactBatch(slug: string, tradeShowId: string): Promise<ContactFillResult> {
+  await requirePlatformAdmin(slug);
+  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: PROFILES_PER_CALL });
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return result;
+}
+
+export type ContactState = { contact?: FoundContact; error?: string };
+
+/** Finds the contact person on the website typed in the form. Nothing is saved until the form is. */
+export async function findExhibitorContact(slug: string, name: string, site: string): Promise<ContactState> {
+  await requirePlatformAdmin(slug);
+  if (!isContactFinderConfigured()) return { error: "Add ANTHROPIC_API_KEY in Vercel before AI can look up contacts." };
+  const url = website.safeParse(site);
+  if (!url.success) return { error: firstError(url.error) };
+  if (!url.data) return { error: "Enter the company's website first." };
+  try {
+    const contact = await findContact({ name: name.trim() || url.data, website: url.data });
+    return contact ? { contact } : { error: "The website lists no contact person, email or phone number." };
+  } catch (error) {
+    return { error: describeContactError(error) };
+  }
+}
+
+/** Looks up the missing contacts of one trade show (or all), as many as fit in the time. */
+export async function fillContacts(slug: string, tradeShowId: string | undefined): Promise<FillState> {
+  await requirePlatformAdmin(slug);
+  if (!isContactFinderConfigured()) return { message: "Add ANTHROPIC_API_KEY in Vercel before AI can look up contacts." };
+  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return { message: contactSummary(result) };
 }

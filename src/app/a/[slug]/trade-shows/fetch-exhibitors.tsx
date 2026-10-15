@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProgressBar } from "@/components/progress-bar";
 import { fetchSummary, MAX_PAGES, morePages } from "@/lib/exhibitor-fetch";
-import { writeMissingProfiles } from "../exhibitors/write-profiles";
+import { findMissingContacts, writeMissingProfiles } from "../exhibitors/write-profiles";
 import { fetchExhibitorPage } from "./actions";
 
-type Progress = { phase: "pages"; read: number; known: number; added: number } | { phase: "profiles"; done: number; total: number };
+type Progress = { phase: "pages"; read: number; known: number; added: number } | { phase: "profiles" | "contacts"; done: number; total: number };
 
 type Result = { summary?: string; note?: string; error?: string };
 
 /**
  * "Fetch exhibitors": AI reads the show's exhibitor directory page by page
  * (following its page 2, 3 ... or A-Z links) and adds the exhibitors it finds
- * to the show; then it writes their company profiles from their websites.
+ * to the show; then it writes their company profiles from their websites and
+ * looks up a contact person on each website.
  */
 export function FetchExhibitors({
   slug,
@@ -73,11 +74,12 @@ export function FetchExhibitors({
         setResult({ error: firstError ?? "The exhibitor list could not be read." });
         return;
       }
-      let note: string | undefined;
+      const notes: (string | undefined)[] = [];
       if (writeProfiles && totals.added > 0) {
-        note = await writeMissingProfiles(slug, tradeShowId, (done, total) => setProgress({ phase: "profiles", done, total }));
+        notes.push(await writeMissingProfiles(slug, tradeShowId, (done, total) => setProgress({ phase: "profiles", done, total })));
+        notes.push(await findMissingContacts(slug, tradeShowId, (done, total) => setProgress({ phase: "contacts", done, total })));
       }
-      setResult({ summary: fetchSummary(totals), note, error: firstError && `First problem: ${firstError}` });
+      setResult({ summary: fetchSummary(totals), note: notes.filter(Boolean).join(" ") || undefined, error: firstError && `First problem: ${firstError}` });
     } catch {
       setResult({
         error: "The fetch stopped because the connection was lost. The exhibitors added so far are kept; press the button again to carry on, as companies already listed are skipped.",
@@ -98,7 +100,7 @@ export function FetchExhibitors({
               {directoryUrl.replace(/^https?:\/\/(www\.)?/, "")}
             </a>{" "}
             and its further pages, and adds the exhibitors it finds to this trade show. Companies already listed are skipped.
-            {writeProfiles && " Then AI writes a company profile for each new exhibitor that has a website."}
+            {writeProfiles && " Then AI writes a company profile for each new exhibitor that has a website, and finds a contact person on the website."}
           </p>
           <p className="mt-1 text-sm text-muted">
             This trade show has {exhibitorCount} {exhibitorCount === 1 ? "exhibitor" : "exhibitors"} now.{" "}
@@ -120,9 +122,10 @@ export function FetchExhibitors({
 }
 
 function FetchProgress({ progress: p }: { progress: Progress }) {
-  if (p.phase === "profiles") {
+  if (p.phase !== "pages") {
     const percent = p.total === 0 ? 0 : Math.min(100, Math.floor((p.done / p.total) * 100));
-    return <ProgressBar label={`AI is writing company profiles: ${p.done} of ${p.total}`} percent={percent} ariaLabel="Fetch progress" />;
+    const what = p.phase === "profiles" ? "writing company profiles" : "finding contact persons";
+    return <ProgressBar label={`AI is ${what}: ${p.done} of ${p.total}`} percent={percent} ariaLabel="Fetch progress" />;
   }
   // More pages can turn up while reading, so the bar is based on the pages known so far.
   const total = Math.min(p.known, MAX_PAGES);
