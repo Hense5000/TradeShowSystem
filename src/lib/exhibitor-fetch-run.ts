@@ -2,7 +2,8 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { type FoundExhibitor, splitText } from "@/lib/exhibitor-fetch";
+import { type FoundExhibitor, MIN_LIST_CHARS, splitText, withLoadedData } from "@/lib/exhibitor-fetch";
+import { renderPage } from "@/lib/render-page";
 import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
 
@@ -122,23 +123,39 @@ async function readText(client: Anthropic, showName: string, url: string, text: 
   return { exhibitors: answers.flatMap((a) => a.exhibitors), otherPages: answers.flatMap((a) => a.otherPages) };
 }
 
-/** The exhibitors on one page of the directory, and links to its other pages. */
+/**
+ * The exhibitors on one page of the directory, and links to its other pages.
+ * First the page as it is downloaded; if that holds no list (many
+ * directories fill the list in with JavaScript), the page opened in a real
+ * browser, together with the data it loads; and if the browser can't open
+ * it, Anthropic's web fetcher.
+ */
 export async function readDirectoryPage(showName: string, url: string, client = new Anthropic()): Promise<PageResult> {
-  let ownError: unknown = null;
+  let lastError: unknown = null;
   try {
     const { text } = pageToText(await fetchPage(url), url);
-    if (text.length >= 200) {
+    if (text.length >= MIN_LIST_CHARS) {
       const result = await readText(client, showName, url, text);
       if (result.exhibitors.length > 0) return result;
     }
   } catch (error) {
     if (error instanceof Anthropic.APIError) throw error;
-    ownError = error;
+    lastError = error;
+  }
+
+  try {
+    const rendered = await renderPage(url);
+    const text = withLoadedData(pageToText(rendered.html, url).text, rendered.data);
+    return text.length >= 200 ? await readText(client, showName, url, text) : { exhibitors: [], otherPages: [] };
+  } catch (error) {
+    if (error instanceof Anthropic.APIError) throw error;
+    console.error("Opening the exhibitor list in a browser failed", url, error);
+    lastError ??= error;
   }
 
   const listing = await readWithClaude(client, url);
   if (!listing) {
-    if (ownError) throw ownError;
+    if (lastError) throw lastError;
     return { exhibitors: [], otherPages: [] };
   }
   return readText(client, showName, url, listing);

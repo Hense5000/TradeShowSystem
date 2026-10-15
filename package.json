@@ -21,9 +21,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "@prisma/client": "^6.19.3",
+    "@sparticuz/chromium": "^153.0.0",
     "bcryptjs": "^3.0.3",
     "next": "^16.3.7",
     "next-auth": "^5.0.0-beta.32",
+    "puppeteer-core": "^25.14.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "server-only": "^0.0.1",
