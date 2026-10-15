@@ -142,7 +142,7 @@ export function AccountFrame({
             </span>
           </div>
         </header>
-        <main className="flex w-full max-w-[1120px] min-w-0 flex-col gap-5 px-4 py-5 md:px-8 md:py-7">{children}</main>
+        <main className="flex w-full max-w-[1514px] min-w-0 flex-col gap-5 px-4 py-5 md:px-8 md:py-7">{children}</main>
       </div>
     </div>
   );
