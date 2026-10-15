@@ -301,6 +301,7 @@ model Exhibitor {
   boothNumber      String?
   standLocationUrl String? // link to the booth on the show's floor plan
   companyProfile   String? // short description of the company
+  profileTriedAt   DateTime? // when the AI last tried to write companyProfile from the website
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

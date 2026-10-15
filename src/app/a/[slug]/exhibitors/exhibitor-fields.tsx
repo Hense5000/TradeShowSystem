@@ -1,9 +1,22 @@
 import type { Exhibitor } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
+import type { ProfileState } from "./actions";
+import { CompanyProfileField } from "./profile-field";
 import { type ShowOption, ShowSelect } from "./show-select";
 
 /** The inputs shared by the add and edit forms. */
-export function ExhibitorFields({ exhibitor, shows, showId }: { exhibitor?: Exhibitor; shows: ShowOption[]; showId?: string }) {
+export function ExhibitorFields({
+  exhibitor,
+  shows,
+  showId,
+  generateProfile,
+}: {
+  exhibitor?: Exhibitor;
+  shows: ShowOption[];
+  showId?: string;
+  /** Writes the company profile with AI; left out when no AI key is set. */
+  generateProfile?: (name: string, website: string) => Promise<ProfileState>;
+}) {
   const e = exhibitor;
   return (
     <>
@@ -28,10 +41,7 @@ export function ExhibitorFields({ exhibitor, shows, showId }: { exhibitor?: Exhi
         <Field id="boothNumber" label="Booth no." defaultValue={e?.boothNumber ?? ""} maxLength={50} placeholder="A-123" />
       </div>
       <Field id="standLocationUrl" label="Stand location URL" defaultValue={e?.standLocationUrl ?? ""} maxLength={300} placeholder="floorplan.com/booth/123" hint="Link to the booth on the show's floor plan." />
-      <div>
-        <label className="label" htmlFor="companyProfile">Company profile</label>
-        <textarea className="input min-h-28" id="companyProfile" name="companyProfile" defaultValue={e?.companyProfile ?? ""} maxLength={5000} placeholder="A short description of what the company does." />
-      </div>
+      <CompanyProfileField defaultValue={e?.companyProfile ?? ""} generate={generateProfile} />
     </>
   );
 }

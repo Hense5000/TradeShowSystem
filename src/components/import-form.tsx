@@ -2,16 +2,19 @@
 
 import { useActionState } from "react";
 
-export type ImportState = { error?: string; imported?: number; alreadyThere?: number; problems?: string[] } | undefined;
+export type ImportState = { error?: string; imported?: number; alreadyThere?: number; problems?: string[]; note?: string } | undefined;
 
 /** Upload a CSV file to one of the shared lists and show what happened. `noun` is singular and plural, e.g. ["center", "centers"]. */
 export function ImportForm({
   action,
   noun: [one, many],
+  pendingLabel,
   children,
 }: {
   action: (prev: ImportState, formData: FormData) => Promise<ImportState>;
   noun: [string, string];
+  /** Button text while importing, e.g. when the import takes a while. */
+  pendingLabel?: string;
   /** Extra inputs shown above the file picker. */
   children?: React.ReactNode;
 }) {
@@ -32,6 +35,7 @@ export function ImportForm({
           {state.alreadyThere ? ` ${state.alreadyThere} were already in the list and were left as they are.` : ""}
         </p>
       )}
+      {state?.note && <p role="status" className="rounded-lg bg-brand-soft px-3 py-2 text-sm text-brand">{state.note}</p>}
       {problems.length > 0 && (
         <div className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
           <p className="font-semibold">
@@ -46,7 +50,7 @@ export function ImportForm({
       )}
       <div className="card-foot mt-1">
         <button className="btn" disabled={pending}>
-          {pending ? "Importing…" : `Import ${many}`}
+          {pending ? (pendingLabel ?? "Importing…") : `Import ${many}`}
         </button>
       </div>
     </form>

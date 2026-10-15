@@ -5,13 +5,18 @@ import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
+import { fillSummary } from "@/lib/company-profile";
+import { describeProfileError, fillMissingProfiles, isCompanyProfileConfigured, writeCompanyProfile } from "@/lib/company-profile-run";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { exhibitorKey, parseExhibitorRows } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { exhibitorSchema, firstError } from "@/lib/validation";
+import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
 const MAX_IMPORT_BYTES = 4_000_000;
+
+/** How long an import or a "Write missing profiles" press spends on AI profiles; the page may run for 300 seconds. */
+const PROFILE_BUDGET_MS = 150_000;
 
 const showExists = async (id: string) => Boolean(await db.tradeShow.findUnique({ where: { id }, select: { id: true } }));
 
@@ -47,7 +52,8 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
     return { error: `Another ${parsed.data.name} is already an exhibitor at that trade show.` };
   }
 
-  const { count } = await db.exhibitor.updateMany({ where: { id }, data: parsed.data });
+  // An empty profile may be tried by AI again, e.g. after the website was corrected.
+  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...parsed.data, ...(!parsed.data.companyProfile && { profileTriedAt: null }) } });
   if (count === 0) return { error: "This exhibitor no longer exists." };
   revalidatePath(`/a/${slug}/exhibitors`);
   return { saved: true };
@@ -78,6 +84,40 @@ export async function importExhibitors(slug: string, _prev: ImportState, formDat
   const fresh = items.filter((e) => !known.has(exhibitorKey(e)));
 
   if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...e, tradeShowId })) });
+
+  // Let the AI write the profiles the file left empty, from each company's website.
+  let note: string | undefined;
+  if (isCompanyProfileConfigured() && fresh.some((e) => e.website && !e.companyProfile)) {
+    note = fillSummary(await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS }));
+  }
   revalidatePath(`/a/${slug}/exhibitors`);
-  return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
+  return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems, note };
+}
+
+export type ProfileState = { profile?: string; error?: string };
+
+/** Writes a company profile with AI from the website typed in the form. Nothing is saved until the form is. */
+export async function generateExhibitorProfile(slug: string, name: string, site: string): Promise<ProfileState> {
+  await requirePlatformAdmin(slug);
+  if (!isCompanyProfileConfigured()) return { error: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
+  const url = website.safeParse(site);
+  if (!url.success) return { error: firstError(url.error) };
+  if (!url.data) return { error: "Enter the company's website first." };
+  try {
+    const profile = await writeCompanyProfile({ name: name.trim() || url.data, website: url.data });
+    return profile ? { profile } : { error: "The website does not say what the company does, so no profile was written." };
+  } catch (error) {
+    return { error: describeProfileError(error) };
+  }
+}
+
+export type FillState = { message?: string } | undefined;
+
+/** Writes the missing company profiles of one trade show (or all), as many as fit in the time. */
+export async function fillProfiles(slug: string, tradeShowId: string | undefined): Promise<FillState> {
+  await requirePlatformAdmin(slug);
+  if (!isCompanyProfileConfigured()) return { message: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
+  const result = await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return { message: fillSummary(result) };
 }

@@ -2,13 +2,19 @@ import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { isCompanyProfileConfigured, missingProfileWhere } from "@/lib/company-profile-run";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
+import { fillProfiles } from "./actions";
+import { FillProfiles } from "./fill-profiles";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
+
+// "Write missing profiles" runs on this page and may take a few minutes.
+export const maxDuration = 300;
 
 export default async function ExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors">) {
   const { slug } = await params;
@@ -45,6 +51,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     tradeShowOptions(),
     db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
+  const missingProfiles = canEdit && isCompanyProfileConfigured() ? await db.exhibitor.count({ where: missingProfileWhere(show || undefined) }) : 0;
   const countryOptions = countries
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
@@ -75,6 +82,8 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           )
         }
       />
+
+      {missingProfiles > 0 && <FillProfiles missing={missingProfiles} action={fillProfiles.bind(null, slug, show || undefined)} />}
 
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
