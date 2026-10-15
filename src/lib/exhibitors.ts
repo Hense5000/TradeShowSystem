@@ -6,8 +6,11 @@ export function exhibitorKey(e: { name: string }): string {
   return e.name.trim().toLowerCase();
 }
 
+/** The most CSV rows one import call saves; the import page sends a large file in parts so it can show progress. */
+export const IMPORT_ROWS_PER_CALL = 50;
+
 /** Exhibitors from the rows of an imported CSV file (all for the same trade show). */
-export function parseExhibitorRows(rows: string[][]) {
+export function parseExhibitorRows(rows: string[][], firstRowNo?: number) {
   return parseDirectoryRows<ExhibitorRow>(rows, {
     headers: {
       name: ["name", "companyname", "company", "exhibitor", "exhibitorname"],
@@ -25,5 +28,6 @@ export function parseExhibitorRows(rows: string[][]) {
     schema: exhibitorRowSchema,
     key: exhibitorKey,
     nameColumnHint: '"Company name"',
+    firstRowNo,
   });
 }

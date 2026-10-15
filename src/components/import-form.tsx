@@ -8,18 +8,14 @@ export type ImportState = { error?: string; imported?: number; alreadyThere?: nu
 export function ImportForm({
   action,
   noun: [one, many],
-  pendingLabel,
   children,
 }: {
   action: (prev: ImportState, formData: FormData) => Promise<ImportState>;
   noun: [string, string];
-  /** Button text while importing, e.g. when the import takes a while. */
-  pendingLabel?: string;
   /** Extra inputs shown above the file picker. */
   children?: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
-  const problems = state?.problems ?? [];
 
   return (
     <form action={formAction} className="card flex flex-col gap-4">
@@ -28,6 +24,21 @@ export function ImportForm({
         <label className="label" htmlFor="file">CSV file</label>
         <input className="input" id="file" name="file" type="file" accept=".csv,text/csv" required disabled={pending} />
       </div>
+      <ImportResult state={state} noun={[one, many]} />
+      <div className="card-foot mt-1">
+        <button className="btn" disabled={pending}>
+          {pending ? "Importing…" : `Import ${many}`}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** What an import did: how many were added, a note, and the rows that need a look. */
+export function ImportResult({ state, noun: [one, many] }: { state: ImportState; noun: [string, string] }) {
+  const problems = state?.problems ?? [];
+  return (
+    <>
       {state?.error && <p className="error">{state.error}</p>}
       {state?.imported !== undefined && (
         <p role="status" className="success">
@@ -48,11 +59,6 @@ export function ImportForm({
           </ul>
         </div>
       )}
-      <div className="card-foot mt-1">
-        <button className="btn" disabled={pending}>
-          {pending ? (pendingLabel ?? "Importing…") : `Import ${many}`}
-        </button>
-      </div>
-    </form>
+    </>
   );
 }

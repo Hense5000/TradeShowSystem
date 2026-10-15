@@ -126,7 +126,16 @@ export function missingProfileWhere(tradeShowId?: string): Prisma.ExhibitorWhere
  * done or the time budget is used up. Each exhibitor is tried once, so a
  * website that says nothing is not tried again on the next run.
  */
-export async function fillMissingProfiles({ tradeShowId, budgetMs }: { tradeShowId?: string; budgetMs: number }): Promise<FillResult> {
+export async function fillMissingProfiles({
+  tradeShowId,
+  budgetMs,
+  limit = 500,
+}: {
+  tradeShowId?: string;
+  budgetMs: number;
+  /** At most this many exhibitors, e.g. a small batch so the import page can show progress. */
+  limit?: number;
+}): Promise<FillResult> {
   const started = Date.now();
   const totals: FillResult = { written: 0, noInfo: 0, failed: 0, left: 0 };
   if (!isCompanyProfileConfigured()) {
@@ -138,7 +147,7 @@ export async function fillMissingProfiles({ tradeShowId, budgetMs }: { tradeShow
     where: missingProfileWhere(tradeShowId),
     orderBy: [{ createdAt: "asc" }, { name: "asc" }],
     select: { id: true, name: true, website: true },
-    take: 500,
+    take: limit,
   });
   const client = new Anthropic();
   let next = 0;

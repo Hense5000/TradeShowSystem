@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { ImportForm } from "@/components/import-form";
 import { PageHeader } from "@/components/page-header";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { importExhibitors } from "../actions";
 import { ShowSelect, tradeShowOptions } from "../show-select";
+import { ExhibitorImportForm } from "./exhibitor-import-form";
 
 const COLUMNS = [
   "Company name",
@@ -20,7 +19,7 @@ const COLUMNS = [
   "Company profile",
 ];
 
-// The AI writes the missing company profiles while the import runs.
+// Each part of the import (a batch of rows or of AI profiles) is one call to this page.
 export const maxDuration = 300;
 
 export default async function ImportExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/import">) {
@@ -56,7 +55,7 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
           <p className="mt-3 text-muted">
             When <strong className="text-ink">Company profile</strong> is empty and the row has a{" "}
             <strong className="text-ink">Website</strong>, AI writes the profile (up to 300 words) from the website during the import.
-            A large file can take a few minutes; profiles that are not done in time are written during the night.
+            A bar shows how far the import has come; keep the page open until it is done.
           </p>
         )}
       </section>
@@ -65,13 +64,9 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
           Exhibitors belong to a trade show, so <Link href={`/a/${slug}/trade-shows/new`} className="font-semibold text-brand">add a trade show</Link> first.
         </p>
       ) : (
-        <ImportForm
-          action={importExhibitors.bind(null, slug)}
-          noun={["exhibitor", "exhibitors"]}
-          pendingLabel={isCompanyProfileConfigured() ? "Importing and writing profiles…" : undefined}
-        >
+        <ExhibitorImportForm slug={slug} writeProfiles={isCompanyProfileConfigured()}>
           <ShowSelect shows={shows} defaultValue={typeof show === "string" ? show : undefined} />
-        </ImportForm>
+        </ExhibitorImportForm>
       )}
     </>
   );
