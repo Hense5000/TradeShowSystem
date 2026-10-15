@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ImportForm } from "@/components/import-form";
 import { PageHeader } from "@/components/page-header";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { importExhibitors } from "../actions";
 import { ShowSelect, tradeShowOptions } from "../show-select";
@@ -18,6 +19,9 @@ const COLUMNS = [
   "Stand location URL",
   "Company profile",
 ];
+
+// The AI writes the missing company profiles while the import runs.
+export const maxDuration = 300;
 
 export default async function ImportExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/import">) {
   const { slug } = await params;
@@ -48,13 +52,24 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
           Country can be a name (Denmark) or a code (DK). Companies already listed at the chosen show are skipped, so it is
           safe to import the same file again.
         </p>
+        {isCompanyProfileConfigured() && (
+          <p className="mt-3 text-muted">
+            When <strong className="text-ink">Company profile</strong> is empty and the row has a{" "}
+            <strong className="text-ink">Website</strong>, AI writes the profile (up to 300 words) from the website during the import.
+            A large file can take a few minutes; profiles that are not done in time are written during the night.
+          </p>
+        )}
       </section>
       {shows.length === 0 ? (
         <p className="card text-sm">
           Exhibitors belong to a trade show, so <Link href={`/a/${slug}/trade-shows/new`} className="font-semibold text-brand">add a trade show</Link> first.
         </p>
       ) : (
-        <ImportForm action={importExhibitors.bind(null, slug)} noun={["exhibitor", "exhibitors"]}>
+        <ImportForm
+          action={importExhibitors.bind(null, slug)}
+          noun={["exhibitor", "exhibitors"]}
+          pendingLabel={isCompanyProfileConfigured() ? "Importing and writing profiles…" : undefined}
+        >
           <ShowSelect shows={shows} defaultValue={typeof show === "string" ? show : undefined} />
         </ImportForm>
       )}

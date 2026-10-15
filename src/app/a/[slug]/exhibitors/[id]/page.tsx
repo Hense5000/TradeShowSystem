@@ -4,10 +4,14 @@ import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { db } from "@/lib/db";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { deleteExhibitor, updateExhibitor } from "../actions";
+import { deleteExhibitor, generateExhibitorProfile, updateExhibitor } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
 import { tradeShowOptions } from "../show-select";
+
+// Writing a profile with AI can take up to a minute or two.
+export const maxDuration = 300;
 
 export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]/exhibitors/[id]">) {
   const { slug, id } = await params;
@@ -23,7 +27,7 @@ export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]
         action={<Link href={`/a/${slug}/exhibitors?show=${exhibitor.tradeShowId}`} className="btn-secondary">Back to list</Link>}
       />
       <SaveForm action={updateExhibitor.bind(null, slug, id)} title="Exhibitor details" description="Company name, trade show and email are required." submitLabel="Save changes" readOnly={false}>
-        <ExhibitorFields exhibitor={exhibitor} shows={shows} />
+        <ExhibitorFields generateProfile={isCompanyProfileConfigured() ? generateExhibitorProfile.bind(null, slug) : undefined} exhibitor={exhibitor} shows={shows} />
       </SaveForm>
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>
