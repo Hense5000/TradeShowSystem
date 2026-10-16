@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFoundExhibitors, cleanWebsite, compactJson, fetchSummary, morePages, pageKey, splitText, withLoadedData } from "./exhibitor-fetch";
+import { bulkFetchSummary, checkFoundExhibitors, cleanWebsite, compactJson, fetchSummary, morePages, pageKey, splitText, withLoadedData } from "./exhibitor-fetch";
 
 const blank = { website: null, email: null, phone: null, country: null, industry: null, boothNumber: null };
 
@@ -114,5 +114,21 @@ describe("withLoadedData", () => {
 
   it("keeps the text as it is when nothing was loaded", () => {
     expect(withLoadedData("Exhibitors", [])).toBe("Exhibitors");
+  });
+});
+
+describe("bulkFetchSummary", () => {
+  it("says what was added and what was missing", () => {
+    expect(
+      bulkFetchSummary({ filled: 3, added: 412, noDirectory: 2, empty: 1, failed: 1, urlsFound: 2, left: 0 }),
+    ).toBe(
+      "412 exhibitors added to 3 shows. AI found the exhibitor list of 2 shows and saved the address on the show. 2 shows had no exhibitor list AI could find. 1 show had no exhibitors on the list yet. The list of 1 show could not be read.",
+    );
+  });
+
+  it("says why it stopped and how many are left", () => {
+    expect(bulkFetchSummary({ filled: 1, added: 1, noDirectory: 0, empty: 0, failed: 0, urlsFound: 0, left: 4, stoppedBy: "The AI key is not valid." })).toBe(
+      "1 exhibitor added to 1 show. Stopped: The AI key is not valid. 4 shows still to go; press the button again to carry on.",
+    );
   });
 });

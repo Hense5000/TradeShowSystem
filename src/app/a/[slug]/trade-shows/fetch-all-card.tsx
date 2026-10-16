@@ -1,0 +1,133 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Icon } from "@/components/icons";
+import { ProgressBar } from "@/components/progress-bar";
+import { bulkFetchSummary, type BulkFetchTotals, MAX_PAGES } from "@/lib/exhibitor-fetch";
+import { findShowDirectoryUrl, listShowsWithoutExhibitors, markExhibitorsTried } from "./actions";
+import { readDirectory } from "./read-directory";
+
+type Progress = {
+  done: number;
+  total: number;
+  show: string;
+  step: { kind: "url" } | { kind: "pages"; read: number; known: number; added: number };
+  added: number;
+};
+
+/**
+ * A card above the trade show list that fetches exhibitors for every show
+ * that has none yet, one show at a time while the page stays open. A show
+ * without an Exhibitor directory URL gets one found by AI on the web first.
+ * Each show is tried once, so a show without a public list is not searched
+ * again on the next run. Company profiles and contact persons are left to the
+ * nightly run.
+ */
+export function FetchAllCard({ slug, missing }: { slug: string; missing: number }) {
+  const router = useRouter();
+  const [progress, setProgress] = useState<Progress>();
+  const [message, setMessage] = useState<string>();
+  const running = progress !== undefined;
+
+  // Leaving the page stops the fetch; ask first.
+  useEffect(() => {
+    if (!running) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [running]);
+
+  async function run() {
+    setMessage(undefined);
+    const totals: BulkFetchTotals = { filled: 0, added: 0, noDirectory: 0, empty: 0, failed: 0, urlsFound: 0, left: 0 };
+    let done = 0;
+    let total = 0;
+    try {
+      const shows = await listShowsWithoutExhibitors(slug);
+      total = shows.length;
+      totals.left = total;
+      for (const show of shows) {
+        const base = { done, total, show: show.name, added: totals.added };
+        let directoryUrl = show.directoryUrl;
+        if (!directoryUrl) {
+          setProgress({ ...base, step: { kind: "url" } });
+          const found = await findShowDirectoryUrl(slug, show.id);
+          if (found.stop) {
+            totals.stoppedBy = found.error;
+            break;
+          }
+          if (found.directoryUrl) {
+            directoryUrl = found.directoryUrl;
+            totals.urlsFound++;
+          }
+        }
+        if (!directoryUrl) {
+          totals.noDirectory++;
+        } else {
+          const r = await readDirectory(slug, show.id, directoryUrl, (read, known, added) =>
+            setProgress({ ...base, added: totals.added + added, step: { kind: "pages", read, known, added } }),
+          );
+          totals.added += r.totals.added;
+          if (r.totals.added > 0) totals.filled++;
+          if (r.stopped) {
+            // Nothing is wrong with the show itself; leave it for the next run.
+            totals.stoppedBy = r.firstError;
+            break;
+          }
+          if (r.totals.added === 0 && r.totals.pages === 0) totals.failed++;
+          else if (r.totals.added === 0) totals.empty++;
+        }
+        await markExhibitorsTried(slug, show.id);
+        done++;
+        totals.left = total - done;
+      }
+      setMessage(bulkFetchSummary(totals));
+    } catch {
+      totals.left = total - done;
+      setMessage(`${bulkFetchSummary(totals)} It stopped because the connection was lost; press the button again to carry on.`);
+    } finally {
+      setProgress(undefined);
+      router.refresh();
+    }
+  }
+
+  return (
+    <section className="card flex flex-col gap-3 py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+          <Icon name="sparkle" className="size-5" />
+        </span>
+        <div className="min-w-56 flex-1 text-sm">
+          <p className="font-semibold">
+            {missing} upcoming {missing === 1 ? "trade show has" : "trade shows have"} no exhibitors yet
+          </p>
+          <p className="text-muted">
+            {message ??
+              "AI reads each show's exhibitor list and adds the exhibitors to the Exhibitors section. A show without an Exhibitor directory URL gets one found on the web first. Company profiles and contact persons are written by the nightly run."}
+          </p>
+        </div>
+        {missing > 0 && (
+          <button type="button" className="btn" onClick={() => void run()} disabled={running}>
+            {running ? "Fetching exhibitors…" : "Fetch exhibitors for all"}
+          </button>
+        )}
+      </div>
+      {progress && <AllProgress progress={progress} />}
+    </section>
+  );
+}
+
+function AllProgress({ progress: p }: { progress: Progress }) {
+  // Each show is an equal part of the bar; the pages read move it within the show's part.
+  let within = 0;
+  let step = "finding the exhibitor list";
+  if (p.step.kind === "pages") {
+    const pages = Math.min(p.step.known, MAX_PAGES);
+    within = Math.min(0.99, p.step.read / pages);
+    step = `reading page ${Math.min(p.step.read + 1, pages)} of ${pages}`;
+  }
+  const percent = p.total === 0 ? 0 : Math.min(99, Math.floor(((p.done + within) / p.total) * 100));
+  const label = `Show ${Math.min(p.done + 1, p.total)} of ${p.total}: ${p.show}, ${step} · ${p.added} added`;
+  return <ProgressBar label={label} percent={percent} ariaLabel="Progress" />;
+}

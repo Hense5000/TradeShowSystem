@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/page-header";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { isExhibitorFetchConfigured, withoutExhibitorsWhere } from "@/lib/exhibitor-fetch-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
+import { FetchAllCard } from "./fetch-all-card";
+
+// "Fetch exhibitors for all" reads one page of an exhibitor directory per call to this page.
+export const maxDuration = 300;
 
 const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running: "pill-ok", finished: "pill-neutral" };
 
@@ -62,7 +67,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
       OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }],
     }),
   };
-  const [shows, total, countries] = await Promise.all([
+  const useAi = canEdit && isExhibitorFetchConfigured();
+  const [shows, total, countries, withoutExhibitors] = await Promise.all([
     db.tradeShow.findMany({
       where,
       include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
@@ -71,6 +77,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     }),
     db.tradeShow.count(),
     db.tradeShow.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
+    useAi ? db.tradeShow.count({ where: withoutExhibitorsWhere(day) }) : 0,
   ]);
   const countryOptions = countries
     .map((c) => c.country!)
@@ -96,6 +103,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
           )
         }
       />
+
+      {withoutExhibitors > 0 && <FetchAllCard slug={slug} missing={withoutExhibitors} />}
 
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">

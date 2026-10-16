@@ -214,3 +214,37 @@ export function fetchSummary(r: { pages: number; found: number; added: number; f
   if (r.morePagesLeft > 0) parts.push(`The list has more pages; only the first ${MAX_PAGES} were read.`);
   return parts.join(" ");
 }
+
+/** What "Fetch exhibitors for all" did across the shows it went through. */
+export type BulkFetchTotals = {
+  /** Shows that got exhibitors. */
+  filled: number;
+  /** Exhibitors added in all. */
+  added: number;
+  /** Shows where AI found no exhibitor list on the web. */
+  noDirectory: number;
+  /** Shows whose list was read but had no exhibitors in it. */
+  empty: number;
+  /** Shows whose list could not be read. */
+  failed: number;
+  /** Exhibitor directory URLs AI found and saved. */
+  urlsFound: number;
+  /** Why the run stopped early, e.g. an invalid AI key. */
+  stoppedBy?: string;
+  /** Shows still waiting. */
+  left: number;
+};
+
+const shows = (n: number) => `${n} ${n === 1 ? "show" : "shows"}`;
+
+/** A short text on what "Fetch exhibitors for all" did, for the page. */
+export function bulkFetchSummary(t: BulkFetchTotals): string {
+  const parts = [`${t.added} ${t.added === 1 ? "exhibitor" : "exhibitors"} added to ${shows(t.filled)}.`];
+  if (t.urlsFound) parts.push(`AI found the exhibitor list of ${shows(t.urlsFound)} and saved the address on the show.`);
+  if (t.noDirectory) parts.push(`${shows(t.noDirectory)} had no exhibitor list AI could find.`);
+  if (t.empty) parts.push(`${shows(t.empty)} had no exhibitors on the list yet.`);
+  if (t.failed) parts.push(`The list of ${shows(t.failed)} could not be read.`);
+  if (t.stoppedBy) parts.push(`Stopped: ${t.stoppedBy}`);
+  if (t.left) parts.push(`${shows(t.left)} still to go; press the button again to carry on.`);
+  return parts.join(" ");
+}

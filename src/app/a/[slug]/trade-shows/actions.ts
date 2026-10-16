@@ -7,9 +7,16 @@ import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
+import { findDirectoryUrl } from "@/lib/directory-url-run";
 import { withPhoneCountry } from "@/lib/phone-country";
 import { checkFoundExhibitors } from "@/lib/exhibitor-fetch";
-import { describeFetchError, isExhibitorFetchConfigured, isServiceDown, readDirectoryPage } from "@/lib/exhibitor-fetch-run";
+import {
+  describeFetchError,
+  isExhibitorFetchConfigured,
+  isServiceDown,
+  readDirectoryPage,
+  withoutExhibitorsWhere,
+} from "@/lib/exhibitor-fetch-run";
 import { exhibitorKey } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { parseTradeShowRows, tradeShowKey } from "@/lib/trade-shows";
@@ -145,4 +152,48 @@ export async function fetchExhibitorPage(slug: string, tradeShowId: string, page
   } catch (error) {
     return { ...none, stop: isServiceDown(error), error: describeFetchError(error) };
   }
+}
+
+export type ShowToFetch = { id: string; name: string; directoryUrl: string | null };
+
+/** The shows "Fetch exhibitors for all" goes through, soonest first. */
+export async function listShowsWithoutExhibitors(slug: string): Promise<ShowToFetch[]> {
+  await requirePlatformAdmin(slug);
+  const shows = await db.tradeShow.findMany({
+    where: withoutExhibitorsWhere(),
+    orderBy: [{ startDate: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, exhibitorDirectoryUrl: true },
+  });
+  return shows.map((s) => ({ id: s.id, name: s.name, directoryUrl: s.exhibitorDirectoryUrl }));
+}
+
+export type DirectoryUrlResult = { directoryUrl?: string; error?: string; stop?: boolean };
+
+/** Lets AI find a show's missing Exhibitor directory URL on the web and saves it on the show. */
+export async function findShowDirectoryUrl(slug: string, tradeShowId: string): Promise<DirectoryUrlResult> {
+  await requirePlatformAdmin(slug);
+  if (!isExhibitorFetchConfigured()) return { stop: true, error: "Add ANTHROPIC_API_KEY in Vercel before exhibitors can be fetched." };
+  const show = await db.tradeShow.findUnique({
+    where: { id: tradeShowId },
+    select: { name: true, startDate: true, city: true, country: true, website: true, exhibitorDirectoryUrl: true },
+  });
+  if (!show) return { error: "This trade show no longer exists." };
+  if (show.exhibitorDirectoryUrl) return { directoryUrl: show.exhibitorDirectoryUrl };
+  try {
+    const found = await findDirectoryUrl(show);
+    if (!found) return {};
+    // Only fill it if it is still empty, in case someone typed it in meanwhile.
+    await db.tradeShow.updateMany({ where: { id: tradeShowId, exhibitorDirectoryUrl: null }, data: { exhibitorDirectoryUrl: found } });
+    const saved = await db.tradeShow.findUnique({ where: { id: tradeShowId }, select: { exhibitorDirectoryUrl: true } });
+    return { directoryUrl: saved?.exhibitorDirectoryUrl ?? found };
+  } catch (error) {
+    return { stop: isServiceDown(error), error: describeFetchError(error) };
+  }
+}
+
+/** Notes that "Fetch exhibitors for all" has been through a show, so it is skipped next time. */
+export async function markExhibitorsTried(slug: string, tradeShowId: string): Promise<void> {
+  await requirePlatformAdmin(slug);
+  await db.tradeShow.updateMany({ where: { id: tradeShowId }, data: { exhibitorsTriedAt: new Date() } });
+  revalidatePath(`/a/${slug}/trade-shows`);
 }
