@@ -225,7 +225,7 @@ export type BulkFetchTotals = {
   noDirectory: number;
   /** Shows whose list was read but had no exhibitors in it. */
   empty: number;
-  /** Shows whose list could not be read. */
+  /** Shows where looking for or reading the list failed. */
   failed: number;
   /** Exhibitor directory URLs AI found and saved. */
   urlsFound: number;
@@ -243,8 +243,43 @@ export function bulkFetchSummary(t: BulkFetchTotals): string {
   if (t.urlsFound) parts.push(`AI found the exhibitor list of ${shows(t.urlsFound)} and saved the address on the show.`);
   if (t.noDirectory) parts.push(`${shows(t.noDirectory)} had no exhibitor list AI could find.`);
   if (t.empty) parts.push(`${shows(t.empty)} had no exhibitors on the list yet.`);
-  if (t.failed) parts.push(`The list of ${shows(t.failed)} could not be read.`);
+  if (t.failed) parts.push(`${shows(t.failed)} failed and will be tried again next time; the list below says why.`);
   if (t.stoppedBy) parts.push(`Stopped: ${t.stoppedBy}`);
   if (t.left) parts.push(`${shows(t.left)} still to go; press the button again to carry on.`);
   return parts.join(" ");
+}
+
+/** Words in a link's address or text that point to a show's list of exhibitors, in the languages shows use. */
+export const EXHIBITOR_WORDS =
+  /exhibitor|exhibiting companies|aussteller|exposant|expositor|espositor|standhouder|exposanten|wystawc|udstiller|utställare|utstiller|näytteill|участник|出展者|参展商|참가업체|company list|companies|brands|participants/i;
+
+/**
+ * Whether the AI's answer may be saved as the show's exhibitor directory:
+ * "seen" when the web search or fetch returned that exact address, "sameHost"
+ * when only another page on that website was seen (the address must then be
+ * checked to exist), or null when the address is on no website it looked at.
+ */
+export function directoryCandidate(url: string | null, seen: string[]): "seen" | "sameHost" | null {
+  if (!url) return null;
+  const key = (u: string) => {
+    try {
+      const x = new URL(u);
+      x.hash = "";
+      return `${x.hostname.toLowerCase().replace(/^www\./, "")}${x.pathname.replace(/\/+$/, "")}${x.search}`;
+    } catch {
+      return null;
+    }
+  };
+  const host = (u: string) => {
+    try {
+      return new URL(u).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+  };
+  const target = key(url);
+  if (!target) return null;
+  if (seen.some((s) => key(s) === target)) return "seen";
+  const h = host(url);
+  return seen.some((s) => host(s) === h) ? "sameHost" : null;
 }

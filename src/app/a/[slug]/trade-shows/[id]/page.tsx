@@ -9,6 +9,7 @@ import { isExhibitorFetchConfigured } from "@/lib/exhibitor-fetch-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { deleteTradeShow, updateTradeShow } from "../actions";
 import { FetchExhibitors } from "../fetch-exhibitors";
+import { FindDirectory } from "../find-directory";
 import { TradeShowFields } from "../trade-show-fields";
 
 // "Fetch exhibitors" reads one page of the exhibitor directory per call to this page.
@@ -42,6 +43,7 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
           writeProfiles={isCompanyProfileConfigured()}
         />
       )}
+      {!show.exhibitorDirectoryUrl && isExhibitorFetchConfigured() && <FindDirectory slug={slug} tradeShowId={show.id} />}
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-bold">Delete trade show</h2>

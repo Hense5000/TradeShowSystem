@@ -16,18 +16,23 @@ type Progress = {
   added: number;
 };
 
+/** What happened to one show, listed under the bar so it is clear why a show got no exhibitors. */
+type LogLine = { show: string; text: string; ok: boolean };
+
 /**
  * A card above the trade show list that fetches exhibitors for every show
  * that has none yet, one show at a time while the page stays open. A show
  * without an Exhibitor directory URL gets one found by AI on the web first.
  * Each show is tried once, so a show without a public list is not searched
- * again on the next run. Company profiles and contact persons are left to the
+ * again on the next run; a show whose lookup failed is tried again. Under
+ * the bar it lists what happened to each show. Company profiles and contact persons are left to the
  * nightly run.
  */
 export function FetchAllCard({ slug, missing }: { slug: string; missing: number }) {
   const router = useRouter();
   const [progress, setProgress] = useState<Progress>();
   const [message, setMessage] = useState<string>();
+  const [log, setLog] = useState<LogLine[]>([]);
   const running = progress !== undefined;
 
   // Leaving the page stops the fetch; ask first.
@@ -40,48 +45,78 @@ export function FetchAllCard({ slug, missing }: { slug: string; missing: number 
 
   async function run() {
     setMessage(undefined);
+    setLog([]);
     const totals: BulkFetchTotals = { filled: 0, added: 0, noDirectory: 0, empty: 0, failed: 0, urlsFound: 0, left: 0 };
+    const note = (show: string, text: string, ok = false) => setLog((l) => [...l, { show, text, ok }]);
     let done = 0;
     let total = 0;
+    let lostInARow = 0;
     try {
       const shows = await listShowsWithoutExhibitors(slug);
       total = shows.length;
-      totals.left = total;
       for (const show of shows) {
         const base = { done, total, show: show.name, added: totals.added };
-        let directoryUrl = show.directoryUrl;
-        if (!directoryUrl) {
-          setProgress({ ...base, step: { kind: "url" } });
-          const found = await findShowDirectoryUrl(slug, show.id);
-          if (found.stop) {
-            totals.stoppedBy = found.error;
+        let tried = true;
+        try {
+          let directoryUrl = show.directoryUrl;
+          if (!directoryUrl) {
+            setProgress({ ...base, step: { kind: "url" } });
+            const found = await findShowDirectoryUrl(slug, show.id);
+            if (found.stop) {
+              totals.stoppedBy = found.error;
+              break;
+            }
+            if (found.directoryUrl) {
+              directoryUrl = found.directoryUrl;
+              totals.urlsFound++;
+            } else if (found.error) {
+              // The lookup itself failed; try the show again next time.
+              tried = false;
+              totals.failed++;
+              note(show.name, `Could not look for the exhibitor list: ${found.error}`);
+            } else {
+              totals.noDirectory++;
+              note(show.name, "AI found no exhibitor list on the web.");
+            }
+          }
+          if (directoryUrl) {
+            const r = await readDirectory(slug, show.id, directoryUrl, (read, known, added) =>
+              setProgress({ ...base, added: totals.added + added, step: { kind: "pages", read, known, added } }),
+            );
+            totals.added += r.totals.added;
+            if (r.totals.added > 0) {
+              totals.filled++;
+              note(show.name, `${r.totals.added} ${r.totals.added === 1 ? "exhibitor" : "exhibitors"} added.`, true);
+            }
+            if (r.stopped) {
+              // Nothing is wrong with the show itself; leave it for the next run.
+              totals.stoppedBy = r.firstError;
+              break;
+            }
+            if (r.totals.added === 0 && r.totals.pages === 0) {
+              tried = false;
+              totals.failed++;
+              note(show.name, `The exhibitor list could not be read: ${r.firstError ?? "no answer"}`);
+            } else if (r.totals.added === 0) {
+              totals.empty++;
+              note(show.name, "The exhibitor list was read, but no exhibitors were on it.");
+            }
+          }
+          lostInARow = 0;
+        } catch {
+          // The page lost its connection to the server, or the server timed out on this show; go on with the next.
+          tried = false;
+          totals.failed++;
+          note(show.name, "The server took too long or the connection was lost.");
+          if (++lostInARow >= 3) {
+            totals.stoppedBy = "The connection was lost three times in a row.";
             break;
           }
-          if (found.directoryUrl) {
-            directoryUrl = found.directoryUrl;
-            totals.urlsFound++;
-          }
         }
-        if (!directoryUrl) {
-          totals.noDirectory++;
-        } else {
-          const r = await readDirectory(slug, show.id, directoryUrl, (read, known, added) =>
-            setProgress({ ...base, added: totals.added + added, step: { kind: "pages", read, known, added } }),
-          );
-          totals.added += r.totals.added;
-          if (r.totals.added > 0) totals.filled++;
-          if (r.stopped) {
-            // Nothing is wrong with the show itself; leave it for the next run.
-            totals.stoppedBy = r.firstError;
-            break;
-          }
-          if (r.totals.added === 0 && r.totals.pages === 0) totals.failed++;
-          else if (r.totals.added === 0) totals.empty++;
-        }
-        await markExhibitorsTried(slug, show.id);
+        if (tried) await markExhibitorsTried(slug, show.id).catch(() => undefined);
         done++;
-        totals.left = total - done;
       }
+      totals.left = total - done;
       setMessage(bulkFetchSummary(totals));
     } catch {
       totals.left = total - done;
@@ -114,6 +149,16 @@ export function FetchAllCard({ slug, missing }: { slug: string; missing: number 
         )}
       </div>
       {progress && <AllProgress progress={progress} />}
+      {log.length > 0 && (
+        <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-lg border border-line text-sm" aria-label="Results per trade show">
+          {log.map((l, i) => (
+            <li key={i} className="flex flex-wrap gap-x-2 px-3 py-1.5">
+              <span className="font-semibold">{l.show}</span>
+              <span className={l.ok ? "text-brand" : "text-muted"}>{l.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
