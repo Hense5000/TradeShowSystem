@@ -4,8 +4,13 @@ import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { isEventsPageFinderConfigured, missingEventsPageWhere } from "@/lib/events-page-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
+import { EventsPageCard } from "./events-page-card";
+
+// "Find missing events pages" runs on this page, a few centers per call.
+export const maxDuration = 300;
 
 function ExternalLink({ href, children }: { href: string | null; children: React.ReactNode }) {
   if (!href) return <span className="text-faint">—</span>;
@@ -31,10 +36,12 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
       OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }],
     }),
   };
-  const [centers, total, countries] = await Promise.all([
+  const useAi = canEdit && isEventsPageFinderConfigured();
+  const [centers, total, countries, missingEvents] = await Promise.all([
     db.exhibitionCenter.findMany({ where, orderBy: { name: "asc" } }),
     db.exhibitionCenter.count(),
     db.exhibitionCenter.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
+    useAi ? db.exhibitionCenter.count({ where: missingEventsPageWhere }) : 0,
   ]);
   const countryOptions = countries
     .map((c) => c.country!)
@@ -60,6 +67,8 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
           )
         }
       />
+
+      {missingEvents > 0 && <EventsPageCard slug={slug} missing={missingEvents} />}
 
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">

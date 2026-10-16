@@ -224,14 +224,15 @@ model StripeEvent {
 // ---------------------------------------------------------------------------
 
 model ExhibitionCenter {
-  id        String   @id @default(cuid())
-  name      String
-  city      String?
-  country   String? // ISO 3166-1 alpha-2, e.g. "DE"
-  website   String?
-  eventsUrl String? // the center's own page listing its upcoming events
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(cuid())
+  name             String
+  city             String?
+  country          String? // ISO 3166-1 alpha-2, e.g. "DE"
+  website          String?
+  eventsUrl        String? // the center's own page listing its upcoming events
+  eventsUrlTriedAt DateTime? // when AI last looked for the events page, so it isn't searched again
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // AI trade show finder: whether to check this center's events page, and
   // how the last check went.
@@ -288,7 +289,7 @@ model TradeShow {
 // A company exhibiting at one trade show. The same company at two shows is
 // two rows, since booth, contact and so on differ per show.
 model Exhibitor {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   tradeShowId      String
   name             String // company name
   contactName      String?
@@ -303,8 +304,8 @@ model Exhibitor {
   companyProfile   String? // short description of the company
   profileTriedAt   DateTime? // when the AI last tried to write companyProfile from the website
   contactTriedAt   DateTime? // when the AI last looked for a contact person on the website
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   tradeShow TradeShow @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
 
