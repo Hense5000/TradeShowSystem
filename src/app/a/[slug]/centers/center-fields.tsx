@@ -1,8 +1,17 @@
 import type { ExhibitionCenter } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
+import type { EventsPageState } from "./actions";
+import { EventsUrlFields } from "./events-url-fields";
 
 /** The inputs shared by the add and edit forms. */
-export function CenterFields({ center }: { center?: ExhibitionCenter }) {
+export function CenterFields({
+  center,
+  findEventsPage,
+}: {
+  center?: ExhibitionCenter;
+  /** Looks up the events page with AI; left out when no AI key is set. */
+  findEventsPage?: (center: { name: string; city: string; country: string; website: string }) => Promise<EventsPageState>;
+}) {
   return (
     <>
       <Field id="name" label="Exhibition center name" defaultValue={center?.name} required maxLength={150} placeholder="Messe Berlin" />
@@ -10,17 +19,7 @@ export function CenterFields({ center }: { center?: ExhibitionCenter }) {
         <Field id="city" label="City" defaultValue={center?.city ?? ""} maxLength={100} />
         <CountrySelect id="country" defaultValue={center?.country} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="website" label="Website" defaultValue={center?.website ?? ""} placeholder="messe-berlin.de" maxLength={300} />
-        <Field
-          id="eventsUrl"
-          label="Local events URL"
-          defaultValue={center?.eventsUrl ?? ""}
-          placeholder="messe-berlin.de/events"
-          hint="The center's own page listing upcoming events."
-          maxLength={300}
-        />
-      </div>
+      <EventsUrlFields website={center?.website ?? ""} eventsUrl={center?.eventsUrl ?? ""} find={findEventsPage} />
     </>
   );
 }

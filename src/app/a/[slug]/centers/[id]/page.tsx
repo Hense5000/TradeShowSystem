@@ -4,9 +4,13 @@ import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { db } from "@/lib/db";
+import { isEventsPageFinderConfigured } from "@/lib/events-page-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
-import { deleteCenter, updateCenter } from "../actions";
+import { deleteCenter, findCenterEventsPage, updateCenter } from "../actions";
 import { CenterFields } from "../center-fields";
+
+// "Find events page with AI" runs on this page and may take a minute or two.
+export const maxDuration = 300;
 
 export default async function EditCenterPage({ params }: PageProps<"/a/[slug]/centers/[id]">) {
   const { slug, id } = await params;
@@ -22,7 +26,7 @@ export default async function EditCenterPage({ params }: PageProps<"/a/[slug]/ce
         action={<Link href={`/a/${slug}/centers`} className="btn-secondary">Back to list</Link>}
       />
       <SaveForm action={updateCenter.bind(null, slug, id)} title="Center details" description="Only the name is required." submitLabel="Save changes" readOnly={false}>
-        <CenterFields center={center} />
+        <CenterFields center={center} findEventsPage={isEventsPageFinderConfigured() ? findCenterEventsPage.bind(null, slug) : undefined} />
       </SaveForm>
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>
