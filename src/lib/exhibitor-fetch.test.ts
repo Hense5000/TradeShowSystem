@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bulkFetchSummary, checkFoundExhibitors, cleanWebsite, compactJson, fetchSummary, morePages, pageKey, splitText, withLoadedData } from "./exhibitor-fetch";
+import { bulkFetchSummary, checkFoundExhibitors, directoryCandidate, cleanWebsite, compactJson, fetchSummary, morePages, pageKey, splitText, withLoadedData } from "./exhibitor-fetch";
 
 const blank = { website: null, email: null, phone: null, country: null, industry: null, boothNumber: null };
 
@@ -122,7 +122,7 @@ describe("bulkFetchSummary", () => {
     expect(
       bulkFetchSummary({ filled: 3, added: 412, noDirectory: 2, empty: 1, failed: 1, urlsFound: 2, left: 0 }),
     ).toBe(
-      "412 exhibitors added to 3 shows. AI found the exhibitor list of 2 shows and saved the address on the show. 2 shows had no exhibitor list AI could find. 1 show had no exhibitors on the list yet. The list of 1 show could not be read.",
+      "412 exhibitors added to 3 shows. AI found the exhibitor list of 2 shows and saved the address on the show. 2 shows had no exhibitor list AI could find. 1 show had no exhibitors on the list yet. 1 show failed and will be tried again next time; the list below says why.",
     );
   });
 
@@ -130,5 +130,20 @@ describe("bulkFetchSummary", () => {
     expect(bulkFetchSummary({ filled: 1, added: 1, noDirectory: 0, empty: 0, failed: 0, urlsFound: 0, left: 4, stoppedBy: "The AI key is not valid." })).toBe(
       "1 exhibitor added to 1 show. Stopped: The AI key is not valid. 4 shows still to go; press the button again to carry on.",
     );
+  });
+});
+
+describe("directoryCandidate", () => {
+  const seen = ["https://www.ism-cologne.com/", "https://ism.expoplatform.com/newfront/marketplace/exhibitors?x=1"];
+  it("knows addresses the search returned, written another way", () => {
+    expect(directoryCandidate("https://ism-cologne.com", seen)).toBe("seen");
+    expect(directoryCandidate("https://ism.expoplatform.com/newfront/marketplace/exhibitors?x=1#top", seen)).toBe("seen");
+  });
+  it("lets a page on a website it looked at through, to be checked", () => {
+    expect(directoryCandidate("https://www.ism-cologne.com/exhibitors/exhibitor-list", seen)).toBe("sameHost");
+  });
+  it("drops addresses on websites it never looked at", () => {
+    expect(directoryCandidate("https://made-up.example/exhibitors", seen)).toBeNull();
+    expect(directoryCandidate(null, seen)).toBeNull();
   });
 });

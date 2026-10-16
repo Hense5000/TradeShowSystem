@@ -48,11 +48,17 @@ export function withScheme(value: string): string {
 }
 
 /**
- * The links on a homepage that stay on the center's own website, with the
- * text they show. Links that look like an events list come first, so they
- * are kept when a page has more links than the AI is shown.
+ * The links on a homepage that stay on the center's own website (or, with
+ * anyHost, every web link), with the text they show. Links matching `words`
+ * (by default: an events list) come first, so they are kept when a page has
+ * more links than the AI is shown.
  */
-export function siteLinks(html: string, pageUrl: string, max = MAX_LINKS): SiteLink[] {
+export function siteLinks(
+  html: string,
+  pageUrl: string,
+  max = MAX_LINKS,
+  { anyHost = false, words = EVENT_WORDS }: { anyHost?: boolean; words?: RegExp } = {},
+): SiteLink[] {
   const found = new Map<string, SiteLink & { rank: number }>();
   for (const [, href, inner] of html.matchAll(/<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     let url: URL;
@@ -61,7 +67,7 @@ export function siteLinks(html: string, pageUrl: string, max = MAX_LINKS): SiteL
     } catch {
       continue;
     }
-    if (!/^https?:$/.test(url.protocol) || !sameSite(url.toString(), pageUrl)) continue;
+    if (!/^https?:$/.test(url.protocol) || (!anyHost && !sameSite(url.toString(), pageUrl))) continue;
     if (/\.(pdf|jpe?g|png|gif|svg|webp|zip|docx?|xlsx?|ics)$/i.test(url.pathname)) continue;
     const key = normalizeUrl(url.toString());
     if (!key || key === normalizeUrl(pageUrl)) continue;
@@ -72,7 +78,7 @@ export function siteLinks(html: string, pageUrl: string, max = MAX_LINKS): SiteL
     } catch {
       // Keep the path as written.
     }
-    const rank = EVENT_WORDS.test(`${path} ${label}`) ? 0 : 1;
+    const rank = words.test(`${path} ${label}`) ? 0 : 1;
     const known = found.get(key);
     if (!known) found.set(key, { url: key, label, rank });
     else if (rank < known.rank || (!known.label && label)) found.set(key, { url: key, label: label || known.label, rank: Math.min(rank, known.rank) });
