@@ -274,6 +274,7 @@ model TradeShow {
   website               String?
   exhibitorDirectoryUrl String? // the show's own list of exhibitors
   centerId              String? // where it takes place, if known
+  exhibitorsTriedAt     DateTime? // when "Fetch exhibitors for all shows" last tried this show, so it is not tried again on every run
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

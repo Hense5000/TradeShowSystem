@@ -101,7 +101,7 @@ async function pickLink(client: Anthropic, center: Center, website: string, link
 }
 
 /** Every address the web search and the web fetcher returned, so the answer can be checked against them. */
-function seenUrls(content: Anthropic.ContentBlock[]): string[] {
+export function seenUrls(content: Anthropic.ContentBlock[]): string[] {
   const urls: string[] = [];
   for (const block of content) {
     if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {

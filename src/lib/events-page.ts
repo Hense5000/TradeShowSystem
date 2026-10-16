@@ -90,13 +90,15 @@ export function pickFromLinks(picked: string | null, links: SiteLink[]): string 
   return links.find((l) => l.url === key)?.url ?? null;
 }
 
+/** The address on the AI's answer line "LABEL: <address>", or null for NONE or no such line. */
+export function answerLine(text: string, label: string): string | null {
+  const m = text.match(new RegExp(`^\\s*\\**${label}\\**\\s*:\\**\\s*<?(\\S+?)>?\\s*$`, "im"));
+  return m && !/^none$/i.test(m[1]) ? normalizeUrl(m[1]) : null;
+}
+
 /** What the AI's web search found, read from its last lines "WEBSITE: …" and "EVENTS: …". */
 export function parseSearchAnswer(text: string): { website: string | null; eventsUrl: string | null } {
-  const line = (label: string) => {
-    const m = text.match(new RegExp(`^\\s*\\**${label}\\**\\s*:\\s*<?(\\S+?)>?\\s*$`, "im"));
-    return m && !/^none$/i.test(m[1]) ? normalizeUrl(m[1]) : null;
-  };
-  return { website: line("WEBSITE"), eventsUrl: line("EVENTS") };
+  return { website: answerLine(text, "WEBSITE"), eventsUrl: answerLine(text, "EVENTS") };
 }
 
 /**

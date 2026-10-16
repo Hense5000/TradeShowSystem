@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkSearchedUrl, eventsPageSummary, normalizeUrl, parseSearchAnswer, pickFromLinks, sameSite, siteLinks } from "@/lib/events-page";
+import { answerLine, checkSearchedUrl, eventsPageSummary, normalizeUrl, parseSearchAnswer, pickFromLinks, sameSite, siteLinks } from "@/lib/events-page";
 
 const HOME = `
 <nav>
@@ -69,5 +69,13 @@ describe("eventsPageSummary", () => {
     expect(eventsPageSummary({ filled: 3, notFound: 1, failed: 0, left: 2 })).toBe(
       "AI found the events page of 3 centers. 1 center has no events page AI could find; add those by hand. 2 still to look up; press the button again to go on.",
     );
+  });
+});
+
+describe("answerLine", () => {
+  it("reads the DIRECTORY line of the answer", () => {
+    expect(answerLine("Found it.\n**DIRECTORY:** <https://www.ism-cologne.com/exhibitors/>", "DIRECTORY")).toBe("https://www.ism-cologne.com/exhibitors");
+    expect(answerLine("DIRECTORY: NONE", "DIRECTORY")).toBeNull();
+    expect(answerLine("No line here", "DIRECTORY")).toBeNull();
   });
 });

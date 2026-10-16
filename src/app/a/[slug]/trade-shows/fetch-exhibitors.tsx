@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProgressBar } from "@/components/progress-bar";
-import { fetchSummary, MAX_PAGES, morePages } from "@/lib/exhibitor-fetch";
+import { fetchSummary, MAX_PAGES } from "@/lib/exhibitor-fetch";
 import { findMissingContacts, writeMissingProfiles } from "../exhibitors/write-profiles";
-import { fetchExhibitorPage } from "./actions";
+import { readDirectory } from "./read-directory";
 
 type Progress = { phase: "pages"; read: number; known: number; added: number } | { phase: "profiles" | "contacts"; done: number; total: number };
 
@@ -43,32 +43,12 @@ export function FetchExhibitors({
   }, [running]);
 
   async function run() {
-    const queue = [directoryUrl];
-    const known = new Set(queue);
-    const totals = { pages: 0, found: 0, added: 0, failedPages: 0, morePagesLeft: 0 };
-    let firstError: string | undefined;
     setResult(undefined);
     setProgress({ phase: "pages", read: 0, known: 1, added: 0 });
     try {
-      while (queue.length > 0 && totals.pages + totals.failedPages < MAX_PAGES) {
-        const page = queue.shift()!;
-        const r = await fetchExhibitorPage(slug, tradeShowId, page);
-        if (r.error) {
-          totals.failedPages++;
-          firstError ??= r.error;
-          if (r.stop) break;
-        } else {
-          totals.pages++;
-          totals.found += r.found;
-          totals.added += r.added;
-          for (const next of morePages(r.otherPages, directoryUrl, known)) {
-            known.add(next);
-            queue.push(next);
-          }
-        }
-        setProgress({ phase: "pages", read: totals.pages + totals.failedPages, known: known.size, added: totals.added });
-      }
-      totals.morePagesLeft = queue.length;
+      const { totals, firstError } = await readDirectory(slug, tradeShowId, directoryUrl, (read, known, added) =>
+        setProgress({ phase: "pages", read, known, added }),
+      );
 
       if (totals.pages === 0) {
         setResult({ error: firstError ?? "The exhibitor list could not be read." });

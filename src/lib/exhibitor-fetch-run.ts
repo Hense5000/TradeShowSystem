@@ -1,7 +1,9 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { today } from "@/lib/dates";
 import { type FoundExhibitor, MIN_LIST_CHARS, splitText, withLoadedData } from "@/lib/exhibitor-fetch";
 import { renderPage } from "@/lib/render-page";
 import { pageToText } from "@/lib/show-finder";
@@ -23,6 +25,11 @@ const PARALLEL = 5;
 
 export function isExhibitorFetchConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+/** Shows "Fetch exhibitors for all" goes through: not over yet, no exhibitors, and not tried by it before. */
+export function withoutExhibitorsWhere(day = today()): Prisma.TradeShowWhereInput {
+  return { endDate: { gte: day }, exhibitorsTriedAt: null, exhibitors: { none: {} } };
 }
 
 const foundSchema = z.object({
