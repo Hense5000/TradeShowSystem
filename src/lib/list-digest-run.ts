@@ -6,15 +6,16 @@ import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { changedFields, type DigestEntry, digestEmail, exhibitorSnapshot, type Snapshot } from "@/lib/list-digest";
 
 /**
- * Sends each user the day's news on their accounts' saved lists: exhibitors
- * someone else added, and exhibitors whose details changed. Afterwards every
+ * Sends each user the day's news on their accounts' Favorites lists (the
+ * star; other saved lists are left out): exhibitors someone else starred,
+ * and starred exhibitors whose details changed. Afterwards every
  * reported exhibitor's details are remembered, so nothing is told twice.
  */
 export async function runListDigest() {
   if (!isEmailConfigured()) return { skipped: "No email service is set up (RESEND_API_KEY and EMAIL_FROM)." };
 
   const organizations = await db.organization.findMany({
-    where: { savedLists: { some: { items: { some: {} } } } },
+    where: { savedLists: { some: { favorites: true, items: { some: {} } } } },
     select: { id: true, name: true, slug: true },
   });
   let sent = 0;
@@ -22,7 +23,7 @@ export async function runListDigest() {
 
   for (const org of organizations) {
     const items = await db.savedListItem.findMany({
-      where: { list: { organizationId: org.id } },
+      where: { list: { organizationId: org.id, favorites: true } },
       include: {
         list: { select: { name: true } },
         addedBy: { select: { name: true, email: true } },
