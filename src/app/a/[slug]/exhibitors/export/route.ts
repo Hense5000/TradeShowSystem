@@ -11,18 +11,22 @@ export const maxDuration = 60;
  * Downloads the exhibitors the Exhibitors page shows with the same search and
  * filters, as Excel (?format=xlsx, the default) or CSV (?format=csv). Every
  * member of the account may export. The column names match the CSV import, so
- * a file can be imported again.
+ * a file can be imported again. With ?list=<id> it downloads one of the
+ * account's saved lists instead.
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
-  await requireMembership(slug);
+  const { organization } = await requireMembership(slug);
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
   const filters = exhibitorFilters(url.searchParams);
+  const listId = url.searchParams.get("list");
+  const list = listId ? await db.savedList.findFirst({ where: { id: listId, organizationId: organization.id } }) : null;
+  if (listId && !list) return new Response("Not found", { status: 404 });
 
   const exhibitors = await db.exhibitor.findMany({
-    where: exhibitorWhere(filters),
+    where: list ? { savedIn: { some: { listId: list.id } } } : exhibitorWhere(filters),
     include: { tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } } },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
@@ -65,12 +69,13 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
     ]),
   };
 
-  // Named after the trade show when the list is for one show, e.g. "exhibitors-london-biotech-show-2026-10-17.xlsx".
-  const showName = filters.show ? exhibitors[0]?.tradeShow.name : undefined;
+  // Named after the saved list, or the trade show when the list is for one show,
+  // e.g. "exhibitors-london-biotech-show-2026-10-17.xlsx".
+  const showName = list ? list.name : filters.show ? exhibitors[0]?.tradeShow.name : undefined;
   const slugged = showName?.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const filename = `exhibitors${slugged ? `-${slugged}` : ""}-${day(new Date())}.${format}`;
 
-  const body = format === "csv" ? toCsv(table) : new Uint8Array(toXlsx(table, "Exhibitors"));
+  const body = format === "csv" ? toCsv(table) : new Uint8Array(toXlsx(table, list ? list.name : "Exhibitors"));
   return new Response(body, {
     headers: {
       "Content-Type": format === "csv" ? "text/csv; charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -25,15 +25,17 @@ const PATHS = {
   globe: "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9",
   search: "M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14M20 20l-4-4",
   sparkle: "M12 3.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5M18.5 15.5c.25 1.6 1 2.35 2.5 2.5-1.5.15-2.25.9-2.5 2.5-.25-1.6-1-2.35-2.5-2.5 1.5-.15 2.25-.9 2.5-2.5",
+  star: "M12 3.8 14.5 9l5.7.8-4.1 4 1 5.6L12 16.7l-5.1 2.7 1-5.6-4.1-4 5.7-.8z",
+  bookmark: "M7 4h10a1 1 0 0 1 1 1v15.5l-6-4-6 4V5a1 1 0 0 1 1-1",
 } as const;
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, className = "size-[18px]" }: { name: IconName; className?: string }) {
+export function Icon({ name, className = "size-[18px]", filled }: { name: IconName; className?: string; filled?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={1.8}
       strokeLinecap="round"

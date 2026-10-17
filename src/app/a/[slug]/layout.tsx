@@ -31,6 +31,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
             { label: "Dashboard", icon: "dashboard", path: "" },
             { label: "Trade shows", icon: "calendar", path: "trade-shows" },
             { label: "Exhibitors", icon: "store", path: "exhibitors" },
+            { label: "Saved lists", icon: "bookmark", path: "lists" },
             { label: "Exhibition centers", icon: "pin", path: "centers" },
             { label: "Exhibition organizers", icon: "briefcase", path: "organizers" },
             { label: "Features", icon: "grid", path: "features", soon: featureCount === 0 },
