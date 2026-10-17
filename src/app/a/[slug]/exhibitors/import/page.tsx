@@ -54,7 +54,7 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
         {isCompanyProfileConfigured() && (
           <p className="mt-3 text-muted">
             When <strong className="text-ink">Company profile</strong> is empty and the row has a{" "}
-            <strong className="text-ink">Website</strong>, AI writes the profile (up to 300 words) from the website during the import.
+            <strong className="text-ink">Website</strong>, AI writes the profile (up to 300 characters) from the website during the import.
             When <strong className="text-ink">Contact person</strong> or <strong className="text-ink">Email</strong> is empty, AI also looks
             them up on the website, with position and phone; only empty fields are filled.
             A bar shows how far the import has come; keep the page open until it is done.
