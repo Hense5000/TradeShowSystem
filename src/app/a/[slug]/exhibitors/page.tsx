@@ -1,11 +1,11 @@
-import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { emptyProfileWhere, isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
-import { countryName, isCountryCode } from "@/lib/countries";
+import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { exhibitorFilters, exhibitorQuery, exhibitorWhere } from "@/lib/exhibitor-list";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
@@ -25,22 +25,11 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   const canEdit = isPlatformAdmin(user.email);
 
   const sp = await searchParams;
-  const q = typeof sp.q === "string" ? sp.q.trim() : "";
-  const show = typeof sp.show === "string" ? sp.show : "";
-  const country = typeof sp.country === "string" && isCountryCode(sp.country) ? sp.country : "";
+  const filters = exhibitorFilters(sp);
+  const { q, show, country } = filters;
   const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
 
-  const where: Prisma.ExhibitorWhereInput = {
-    ...(show && { tradeShowId: show }),
-    ...(country && { country }),
-    ...(q && {
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { contactName: { contains: q, mode: "insensitive" } },
-        { industry: { contains: q, mode: "insensitive" } },
-      ],
-    }),
-  };
+  const where = exhibitorWhere(filters);
   const [exhibitors, matching, total, shows, countries] = await Promise.all([
     db.exhibitor.findMany({
       where,
@@ -68,10 +57,8 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   const filtered = Boolean(q || show || country);
   const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
-  const pageHref = (p: number) => {
-    const qs = new URLSearchParams({ ...(q && { q }), ...(show && { show }), ...(country && { country }), ...(p > 1 && { page: String(p) }) });
-    return `/a/${slug}/exhibitors${qs.size ? `?${qs}` : ""}`;
-  };
+  const pageHref = (p: number) => `/a/${slug}/exhibitors${exhibitorQuery(filters, p > 1 ? { page: String(p) } : {})}`;
+  const exportHref = (format: "xlsx" | "csv") => `/a/${slug}/exhibitors/export${exhibitorQuery(filters, { format })}`;
   const showParam = show ? `?show=${show}` : "";
 
   return (
@@ -80,16 +67,28 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         title="Exhibitors"
         description="Companies exhibiting at trade shows, shared by every account."
         action={
-          canEdit && (
-            <div className="flex gap-2">
-              <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn-secondary py-2">
-                <Icon name="upload" className="size-4" /> Import
-              </Link>
-              <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn">
-                <Icon name="plus" className="size-4" /> Add exhibitor
-              </Link>
-            </div>
-          )
+          <div className="flex flex-wrap gap-2">
+            {matching > 0 && (
+              <>
+                <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${matching} exhibitors shown below as an Excel file`}>
+                  <Icon name="download" className="size-4" /> Excel
+                </a>
+                <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${matching} exhibitors shown below as a CSV file`}>
+                  <Icon name="download" className="size-4" /> CSV
+                </a>
+              </>
+            )}
+            {canEdit && (
+              <>
+                <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn-secondary py-2">
+                  <Icon name="upload" className="size-4" /> Import
+                </Link>
+                <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn">
+                  <Icon name="plus" className="size-4" /> Add exhibitor
+                </Link>
+              </>
+            )}
+          </div>
         }
       />
 
