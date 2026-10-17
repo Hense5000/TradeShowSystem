@@ -37,7 +37,7 @@ describe("list email", () => {
         { exhibitor: "<Beta>", tradeShow: "Medica 2026", lists: ["Favorites", "Leads"], changes: [{ label: "Email", value: "b@beta.dk" }, { label: "Phone", value: null }] },
       ],
     });
-    expect(mail.subject).toBe("Bolt & Co: 1 new exhibitor, 1 updated on your saved lists");
+    expect(mail.subject).toBe("Bolt & Co: 1 new exhibitor, 1 updated in your Favorites");
     expect(mail.text).toContain("Added to Leads by Anna");
     expect(mail.text).toContain("<Beta> (Medica 2026) · Favorites, Leads");
     expect(mail.text).toContain("Phone: removed");

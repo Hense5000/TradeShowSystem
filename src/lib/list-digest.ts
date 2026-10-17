@@ -1,6 +1,6 @@
 import { countryName } from "@/lib/countries";
 
-// The daily email about what is new on an account's saved lists. This file
+// The daily email about what is new in an account's Favorites list. This file
 // holds the parts that need no database, so they can be tested on their own.
 
 /** The exhibitor details the email watches, with the label it uses for each. */
@@ -53,7 +53,7 @@ export function digestEmail({ accountName, entries, listsUrl }: { accountName: s
     added > 0 && `${added} new ${added === 1 ? "exhibitor" : "exhibitors"}`,
     changed > 0 && `${changed} updated`,
   ].filter(Boolean);
-  const subject = `${accountName}: ${parts.join(", ")} on your saved lists`;
+  const subject = `${accountName}: ${parts.join(", ")} in your Favorites`;
 
   const lines = (e: DigestEntry) => [
     ...(e.addedBy ? [`Added to ${e.lists.join(", ")} by ${e.addedBy}`] : []),
@@ -62,17 +62,17 @@ export function digestEmail({ accountName, entries, listsUrl }: { accountName: s
   const footer = `You get this email because you are a user of ${accountName} in Trade Show System. Turn it off on the Saved lists page: ${listsUrl}`;
 
   const text = [
-    `What is new on ${accountName}'s saved lists:`,
+    `What is new in ${accountName}'s Favorites:`,
     "",
     ...entries.flatMap((e) => [`${e.exhibitor} (${e.tradeShow})${e.addedBy ? "" : ` · ${e.lists.join(", ")}`}`, ...lines(e).map((l) => `  - ${l}`), ""]),
-    `Open your lists: ${listsUrl}`,
+    `Open your Favorites: ${listsUrl}/favorites`,
     "",
     footer,
   ].join("\n");
 
   const html =
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1b2a3a;max-width:600px">` +
-    `<h2 style="font-size:18px;margin:0 0 12px">What is new on ${escape(accountName)}'s saved lists</h2>` +
+    `<h2 style="font-size:18px;margin:0 0 12px">What is new in ${escape(accountName)}'s Favorites</h2>` +
     entries
       .map(
         (e) =>
@@ -83,7 +83,7 @@ export function digestEmail({ accountName, entries, listsUrl }: { accountName: s
           `</div>`,
       )
       .join("") +
-    `<p style="margin:16px 0"><a href="${escape(listsUrl)}" style="background:#287bbf;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:bold">Open your lists</a></p>` +
+    `<p style="margin:16px 0"><a href="${escape(`${listsUrl}/favorites`)}" style="background:#287bbf;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:bold">Open your Favorites</a></p>` +
     `<p style="color:#64748b;font-size:12px">${escape(footer)}</p>` +
     `</div>`;
 

@@ -92,7 +92,7 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
                 Daily email {user.listEmails ? <span className="pill pill-ok">On</span> : <span className="pill pill-neutral">Off</span>}
               </h2>
               <p className="mt-0.5 text-sm text-muted">
-                Each morning you get one email to {user.email} when something is new on these lists: exhibitors other users added, and new or changed details such as contact person, email or phone. Only you are affected by this setting.
+                Each morning you get one email to {user.email} when something is new in {FAVORITES_NAME}: exhibitors other users starred, and new or changed details such as contact person, email or phone. Your other lists are not included. Only you are affected by this setting.
               </p>
             </div>
           </div>
