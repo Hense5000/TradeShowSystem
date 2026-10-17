@@ -59,6 +59,7 @@ model Organization {
   featureAccess FeatureAccess[]
   subscriptions Subscription[]
   invoices      Invoice[]
+  savedLists    SavedList[]
 }
 
 enum Role {
@@ -308,10 +309,45 @@ model Exhibitor {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  tradeShow TradeShow @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+  tradeShow TradeShow       @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+  savedIn   SavedListItem[]
 
   @@index([tradeShowId])
   @@index([name])
+}
+
+// ---------------------------------------------------------------------------
+// Saved lists: an account's own lists of exhibitors it wants to contact.
+// Every member of the account sees and changes them; other accounts never do.
+// ---------------------------------------------------------------------------
+
+model SavedList {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  // The account's Favorites list (the star on the Exhibitors page). At most
+  // one per account, enforced by a partial unique index in the migration. It
+  // is created the first time a star is clicked and cannot be renamed or deleted.
+  favorites      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items        SavedListItem[]
+
+  @@index([organizationId])
+}
+
+model SavedListItem {
+  listId      String
+  exhibitorId String
+  addedAt     DateTime @default(now())
+
+  list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+
+  @@id([listId, exhibitorId])
+  @@index([exhibitorId])
 }
 
 // ---------------------------------------------------------------------------

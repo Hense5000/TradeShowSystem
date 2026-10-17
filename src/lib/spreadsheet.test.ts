@@ -55,4 +55,12 @@ describe("toXlsx", () => {
     expect(sheet).toContain('<autoFilter ref="A1:B2"/>');
     expect(files["xl/workbook.xml"]).toContain('<sheet name="Exhibitors"');
   });
+
+  it("makes any list name a sheet name Excel accepts", () => {
+    const name = (n: string) => unzip(toXlsx({ headers: ["A"], rows: [] }, n))["xl/workbook.xml"].match(/<sheet name="([^"]*)"/)![1];
+    expect(name("Leads: Q1/Q2 [hot]?")).toBe("Leads  Q1 Q2  hot");
+    expect(name("'quoted'")).toBe("quoted");
+    expect(name("***")).toBe("Sheet1");
+    expect(name("x".repeat(40))).toHaveLength(31);
+  });
 });

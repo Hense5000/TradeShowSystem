@@ -19,7 +19,9 @@ export function toCsv({ headers, rows }: Table): string {
 }
 
 /** The table as an Excel workbook (.xlsx) with a bold, frozen header row and filter buttons. */
-export function toXlsx({ headers, rows }: Table, sheetName = "Sheet1"): Buffer {
+export function toXlsx({ headers, rows }: Table, name = "Sheet1"): Buffer {
+  // Excel refuses sheet names with []:*?/\, over 31 characters or starting or ending with an apostrophe.
+  const sheetName = name.replace(/[[\]:*?/\\]/g, " ").slice(0, 31).replace(/^'+|'+$/g, "").trim() || "Sheet1";
   const all = [headers, ...rows];
   const lastCol = columnName(headers.length - 1);
   const widths = headers.map((_, i) => Math.min(60, Math.max(10, ...all.slice(0, 500).map((r) => (r[i] ?? "").length + 2))));
@@ -52,7 +54,7 @@ export function toXlsx({ headers, rows }: Table, sheetName = "Sheet1"): Buffer {
     ],
     [
       "xl/workbook.xml",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xml(sheetName.slice(0, 31))}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${xml(sheetName.slice(0, 31).replaceAll("'", "''"))}'!$A$1:$${lastCol}$${all.length}</definedName></definedNames></workbook>`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xml(sheetName)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${xml(sheetName.replaceAll("'", "''"))}'!$A$1:$${lastCol}$${all.length}</definedName></definedNames></workbook>`,
     ],
     [
       "xl/_rels/workbook.xml.rels",

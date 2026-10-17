@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { emptyProfileWhere, isCompanyProfileConfigured } from "@/lib/company-profile-run";
@@ -8,9 +9,12 @@ import { db } from "@/lib/db";
 import { exhibitorFilters, exhibitorQuery, exhibitorWhere } from "@/lib/exhibitor-list";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
+import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
+import { addShownToList, setListMembership, toggleFavorite } from "../lists/actions";
 import { fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
+import { ListMenu } from "./list-menu";
 import { ProfileFillCard } from "./profile-fill-card";
 import { tradeShowOptions } from "./show-select";
 
@@ -21,7 +25,7 @@ export const maxDuration = 300;
 
 export default async function ExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors">) {
   const { slug } = await params;
-  const { user } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const canEdit = isPlatformAdmin(user.email);
 
   const sp = await searchParams;
@@ -43,6 +47,17 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     tradeShowOptions(),
     db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
+  // This account's saved lists, and which of them each exhibitor on this page is on.
+  const [lists, saved] = await Promise.all([
+    db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
+    db.savedListItem.findMany({
+      where: { exhibitorId: { in: exhibitors.map((e) => e.id) }, list: { organizationId: organization.id } },
+      select: { listId: true, exhibitorId: true },
+    }),
+  ]);
+  const favoritesId = lists.find((l) => l.favorites)?.id;
+  const ownLists = lists.filter((l) => !l.favorites);
+  const savedIn = new Set(saved.map((s) => `${s.listId}:${s.exhibitorId}`));
   const useAi = canEdit && isCompanyProfileConfigured();
   const [missingProfiles, missingContacts] = useAi
     ? await Promise.all([
@@ -158,6 +173,22 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
             {filtered ? `${matching} of ${total} exhibitors match` : `${total} ${total === 1 ? "exhibitor" : "exhibitors"}`}
             {pages > 1 && ` · page ${page} of ${pages}`}
           </p>
+          {filtered && matching > 0 && (
+            <ActionForm action={addShownToList.bind(null, slug, filters)} className="flex flex-wrap items-center gap-2 border-t border-line bg-subtle px-5 py-2.5 text-sm">
+              <Icon name="bookmark" className="size-4 text-brand" />
+              <span className="font-semibold">
+                Save {matching > MAX_ADD_AT_ONCE ? `the first ${MAX_ADD_AT_ONCE}` : matching === 1 ? "this exhibitor" : `all ${matching}`} to
+              </span>
+              <select className="input w-auto max-w-64 py-1.5" name="list" aria-label="List" required defaultValue="">
+                <option value="" disabled>Choose a list</option>
+                <option value="favorites">Favorites</option>
+                {ownLists.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+              <button className="btn-secondary">Save</button>
+            </ActionForm>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -167,7 +198,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                   <th className="px-5 py-2.5">Contact</th>
                   <th className="px-5 py-2.5">Country</th>
                   <th className="px-5 py-2.5">Booth</th>
-                  {canEdit && <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>}
+                  <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -211,16 +242,22 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                         </a>
                       )}
                     </td>
-                    {canEdit && (
-                      <td className="px-5 py-3 text-right">
-                        <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>
-                      </td>
-                    )}
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <FavoriteStar slug={slug} exhibitorId={e.id} name={e.name} on={savedIn.has(`${favoritesId}:${e.id}`)} />
+                        <ListMenu
+                          action={setListMembership.bind(null, slug, e.id)}
+                          lists={ownLists.map((l) => ({ id: l.id, name: l.name, inList: savedIn.has(`${l.id}:${e.id}`) }))}
+                          newListHref={`/a/${slug}/lists`}
+                        />
+                        {canEdit && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {exhibitors.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 6 : 5} className="px-5 py-8 text-center text-muted">
+                    <td colSpan={6} className="px-5 py-8 text-center text-muted">
                       No exhibitors match your search.
                     </td>
                   </tr>
@@ -238,5 +275,21 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         </section>
       )}
     </>
+  );
+}
+
+/** The star that puts an exhibitor on the account's Favorites list, or takes it off. */
+function FavoriteStar({ slug, exhibitorId, name, on }: { slug: string; exhibitorId: string; name: string; on: boolean }) {
+  return (
+    <form action={toggleFavorite.bind(null, slug, exhibitorId, !on)}>
+      <button
+        className={`grid size-8 place-items-center rounded-lg hover:bg-subtle ${on ? "text-brand" : "text-faint hover:text-muted"}`}
+        title={on ? "Remove from Favorites" : "Add to Favorites"}
+        aria-label={on ? `Remove ${name} from Favorites` : `Add ${name} to Favorites`}
+        aria-pressed={on}
+      >
+        <Icon name="star" className="size-5" filled={on} />
+      </button>
+    </form>
   );
 }
