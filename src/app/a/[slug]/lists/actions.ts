@@ -49,9 +49,9 @@ async function favoritesListId(organizationId: string) {
   }
 }
 
-async function setInList(listId: string, exhibitorId: string, add: boolean) {
+async function setInList(listId: string, exhibitorId: string, add: boolean, addedById: string) {
   if (add) {
-    await db.savedListItem.createMany({ data: [{ listId, exhibitorId }], skipDuplicates: true });
+    await db.savedListItem.createMany({ data: [{ listId, exhibitorId, addedById }], skipDuplicates: true });
   } else {
     await db.savedListItem.deleteMany({ where: { listId, exhibitorId } });
   }
@@ -91,8 +91,8 @@ export async function deleteList(slug: string, listId: string): Promise<ActionSt
 
 /** The star on the Exhibitors page: adds the exhibitor to Favorites, or takes it off. */
 export async function toggleFavorite(slug: string, exhibitorId: string, add: boolean) {
-  const { organization } = await requireMembership(slug);
-  await setInList(await favoritesListId(organization.id), exhibitorId, add);
+  const { user, organization } = await requireMembership(slug);
+  await setInList(await favoritesListId(organization.id), exhibitorId, add, user.id);
   refresh(slug);
 }
 
@@ -101,17 +101,17 @@ export async function toggleFavorite(slug: string, exhibitorId: string, add: boo
  * or "remove:<list id>", so one action serves every list in the menu.
  */
 export async function setListMembership(slug: string, exhibitorId: string, formData: FormData) {
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const [change, listId] = String(formData.get("change") ?? "").split(":");
   const id = listId && (await ownListId(organization.id, listId));
   if (!id || (change !== "add" && change !== "remove")) return;
-  await setInList(id, exhibitorId, change === "add");
+  await setInList(id, exhibitorId, change === "add", user.id);
   refresh(slug);
 }
 
 /** Adds every exhibitor the Exhibitors page shows with these filters to the chosen list. */
 export async function addShownToList(slug: string, filters: ExhibitorFilters, _prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const chosen = String(formData.get("list") ?? "");
   const listId = chosen === "favorites" ? await favoritesListId(organization.id) : await ownListId(organization.id, chosen);
   if (!listId) return { error: "Choose a list." };
@@ -122,8 +122,15 @@ export async function addShownToList(slug: string, filters: ExhibitorFilters, _p
     orderBy: [{ name: "asc" }],
     take: MAX_ADD_AT_ONCE,
   });
-  await db.savedListItem.createMany({ data: exhibitors.map((e) => ({ listId, exhibitorId: e.id })), skipDuplicates: true });
+  await db.savedListItem.createMany({ data: exhibitors.map((e) => ({ listId, exhibitorId: e.id, addedById: user.id })), skipDuplicates: true });
   await db.savedList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
   refresh(slug);
   redirect(`/a/${slug}/lists/${listId}`);
+}
+
+/** The signed-in user's own choice: the daily email about what is new on the lists, on or off. */
+export async function setListEmails(slug: string, on: boolean) {
+  const { user } = await requireMembership(slug);
+  await db.user.update({ where: { id: user.id }, data: { listEmails: on } });
+  revalidatePath(`/a/${slug}/lists`);
 }

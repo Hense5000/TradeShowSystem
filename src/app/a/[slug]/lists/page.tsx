@@ -3,13 +3,14 @@ import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
+import { isEmailConfigured } from "@/lib/email";
 import { FAVORITES_NAME, MAX_LIST_NAME } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
-import { createList } from "./actions";
+import { createList, setListEmails } from "./actions";
 
 export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/lists">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
 
   const lists = await db.savedList.findMany({
     where: { organizationId: organization.id },
@@ -79,6 +80,27 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
           </p>
         )}
       </section>
+
+      {isEmailConfigured() && (
+        <section className="card flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+              <Icon name="mail" className="size-5" />
+            </span>
+            <div>
+              <h2 className="flex items-center gap-2 font-bold">
+                Daily email {user.listEmails ? <span className="pill pill-ok">On</span> : <span className="pill pill-neutral">Off</span>}
+              </h2>
+              <p className="mt-0.5 text-sm text-muted">
+                Each morning you get one email to {user.email} when something is new on these lists: exhibitors other users added, and new or changed details such as contact person, email or phone. Only you are affected by this setting.
+              </p>
+            </div>
+          </div>
+          <form action={setListEmails.bind(null, slug, !user.listEmails)}>
+            <button className={user.listEmails ? "btn-secondary" : "btn"}>{user.listEmails ? "Turn off" : "Turn on"}</button>
+          </form>
+        </section>
+      )}
     </>
   );
 }

@@ -24,11 +24,14 @@ model User {
   name          String?
   passwordHash  String?
   emailVerified DateTime?
+  // Gets the daily email about what is new on the saved lists of their accounts.
+  listEmails    Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   memberships     Membership[]
-  invitationsSent Invitation[] @relation("InvitedBy")
+  invitationsSent Invitation[]    @relation("InvitedBy")
+  savedListItems  SavedListItem[]
 }
 
 model Organization {
@@ -342,9 +345,15 @@ model SavedListItem {
   listId      String
   exhibitorId String
   addedAt     DateTime @default(now())
+  addedById   String?
+  // The exhibitor's details as the daily list email last reported them, so
+  // the next email can tell what changed. Null until the first email has
+  // reported the exhibitor as added.
+  snapshot    Json?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  addedBy   User?     @relation(fields: [addedById], references: [id], onDelete: SetNull)
 
   @@id([listId, exhibitorId])
   @@index([exhibitorId])
