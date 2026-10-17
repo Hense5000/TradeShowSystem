@@ -1,8 +1,20 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
-import { cleanProfile, type FillResult, MAX_PROFILE_WORDS, MAX_SITE_CHARS, NO_INFORMATION } from "@/lib/company-profile";
+import {
+  cleanProfile,
+  type FillResult,
+  MAX_PROFILE_CHARS,
+  MAX_SITE_CHARS,
+  NO_INFORMATION,
+  profileLine,
+  type ProfileRunResult,
+} from "@/lib/company-profile";
+import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { answerLine } from "@/lib/events-page";
+import { seenUrls } from "@/lib/events-page-run";
+import { directoryCandidate } from "@/lib/exhibitor-fetch";
 import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
 
@@ -24,7 +36,7 @@ export function isCompanyProfileConfigured(): boolean {
 const SYSTEM = `You write the company profile of a trade show exhibitor for a directory of exhibitors, from the company's own website.
 
 Write in English, in the third person, in a plain and factual tone. Say what the company does: its products or services, who its customers are, its markets or industries, and where it is based, if the website says so. Leave out slogans, marketing superlatives, contact details, opening hours and anything about cookies or the website itself.
-Use at most ${MAX_PROFILE_WORDS} words, in one to three short paragraphs of plain text, with no headings, lists or markdown.
+Use at most ${MAX_PROFILE_CHARS} characters including spaces (about two sentences), in one paragraph of plain text, with no headings, lists or markdown.
 Only use what the website says; never guess or add facts from elsewhere.
 If the website does not say what the company does (for example it is empty, parked, for sale or only a login page), answer exactly: ${NO_INFORMATION}`;
 
@@ -90,7 +102,7 @@ async function writeWithFetch(client: Anthropic, company: Company): Promise<stri
 }
 
 /**
- * Writes a company profile of at most 300 words from the company's website.
+ * Writes a company profile of at most 300 characters from the company's website.
  * Returns null when the website does not say what the company does.
  */
 export async function writeCompanyProfile(company: Company, client = new Anthropic()): Promise<string | null> {
@@ -176,5 +188,120 @@ export async function fillMissingProfiles({
   }
   await Promise.all(Array.from({ length: PARALLEL }, worker));
   totals.left = await db.exhibitor.count({ where: missingProfileWhere(tradeShowId) });
+  return totals;
+}
+
+const SEARCH_SYSTEM = `You write the company profile of a trade show exhibitor for a directory of exhibitors. You are given the company's name and the trade show it exhibits at, and sometimes its website.
+
+Search the web for the company and find its own website (not a directory, a trade show page or social media). Read what the company does there.
+Then write the profile in English, in the third person, in a plain and factual tone: what the company does, its products or services, its customers or industries, and where it is based. Leave out slogans, marketing superlatives and contact details. Use at most ${MAX_PROFILE_CHARS} characters including spaces (about two sentences), in one line of plain text.
+Only use what you found about this very company; never guess. If you cannot find out what the company does, write ${NO_INFORMATION} as the profile.
+
+End your answer with exactly these two lines:
+WEBSITE: <the company's own website, or NONE>
+PROFILE: <the profile, or ${NO_INFORMATION}>`;
+
+type Exhibitor = { name: string; website: string | null; country: string | null; showName: string };
+
+/**
+ * Lets Claude search the web for the company and write the profile from what
+ * it finds, for exhibitors without a website or whose website we could not
+ * use. Also returns the company's website when the search really showed it.
+ */
+async function searchCompanyProfile(client: Anthropic, e: Exhibitor, deadline: number): Promise<{ profile: string | null; website: string | null }> {
+  const tools: Anthropic.ToolUnion[] = [
+    { type: "web_search_20260209", name: "web_search", max_uses: 3 },
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 },
+  ];
+  const lines = [
+    `Company: ${e.name}`,
+    `Exhibits at: ${e.showName}`,
+    e.country && `Country: ${countryName(e.country)}`,
+    e.website && `Website (could not be read): ${e.website}`,
+  ];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: lines.filter(Boolean).join("\n") }];
+  const seen: string[] = [];
+  for (let round = 0; round < 3; round++) {
+    const timeout = Math.min(120_000, deadline - Date.now());
+    if (timeout < 20_000) throw new Error("There was not enough time left to search the web.");
+    const response = await client.messages.create(
+      { model: MODEL, max_tokens: 8000, system: SEARCH_SYSTEM, output_config: { effort: "low" }, tools, messages },
+      { timeout },
+    );
+    if (response.stop_reason === "refusal") throw new Error("The AI declined to look up this company.");
+    seen.push(...seenUrls(response.content));
+    if (response.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: response.content });
+      continue;
+    }
+    const text = answerText(response);
+    const site = answerLine(text, "WEBSITE");
+    // Only an address the search really showed is kept, never a guessed one.
+    return { profile: profileLine(text), website: site && directoryCandidate(site, seen) ? site.replace(/\/$/, "") : null };
+  }
+  return { profile: null, website: null };
+}
+
+/** Exhibitors with an empty company profile, whether or not the AI has tried before. */
+export function emptyProfileWhere(tradeShowId?: string): Prisma.ExhibitorWhereInput {
+  return { ...(tradeShowId && { tradeShowId }), OR: [{ companyProfile: null }, { companyProfile: "" }] };
+}
+
+/**
+ * Writes the profiles of the given exhibitors, side by side, for the
+ * "Fill missing profiles" button. Unlike the nightly run it also tries
+ * exhibitors the AI tried before, and finds those without a website (or with
+ * a website that says nothing) by searching the web; a website found that
+ * way is saved when the field is empty.
+ */
+export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
+  const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0 };
+  const rows = await db.exhibitor.findMany({
+    where: { id: { in: ids }, ...emptyProfileWhere() },
+    select: { id: true, name: true, website: true, country: true, tradeShow: { select: { name: true } } },
+  });
+  const client = new Anthropic();
+  // The page may run for 300 seconds; stop starting web searches well before.
+  const deadline = Date.now() + 240_000;
+  let stopped = false;
+  await Promise.all(
+    rows.map(async (row) => {
+      const e: Exhibitor = { name: row.name, website: row.website, country: row.country, showName: row.tradeShow.name };
+      let profile: string | null = null;
+      let website: string | null = null;
+      try {
+        if (e.website) {
+          try {
+            profile = await writeCompanyProfile({ name: e.name, website: e.website }, client);
+          } catch (error) {
+            if (error instanceof Anthropic.APIError) throw error;
+            // The website could not be used; search the web instead.
+          }
+        }
+        if (!profile && !stopped) {
+          const found = await searchCompanyProfile(client, e, deadline);
+          profile = found.profile;
+          if (!e.website) website = found.website;
+        }
+        if (profile) totals.written++;
+        else totals.noInfo++;
+      } catch (error) {
+        // A busy or broken AI service fails every row; stop and leave them for the next press.
+        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.RateLimitError) {
+          stopped = true;
+          totals.stoppedBy = describeProfileError(error);
+          return;
+        }
+        totals.failed++;
+      }
+      await db.exhibitor.updateMany({ where: { id: row.id }, data: { profileTriedAt: new Date() } });
+      // Only fill fields that are still empty, in case someone typed them meanwhile.
+      if (profile) await db.exhibitor.updateMany({ where: { id: row.id, ...emptyProfileWhere() }, data: { companyProfile: profile } });
+      if (website) {
+        const saved = await db.exhibitor.updateMany({ where: { id: row.id, website: null }, data: { website } });
+        totals.websitesFound += saved.count;
+      }
+    }),
+  );
   return totals;
 }

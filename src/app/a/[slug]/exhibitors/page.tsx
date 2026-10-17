@@ -2,20 +2,21 @@ import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { isCompanyProfileConfigured, missingProfileWhere } from "@/lib/company-profile-run";
+import { emptyProfileWhere, isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName, isCountryCode } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { fillContacts, fillCountries, fillProfiles } from "./actions";
+import { fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
+import { ProfileFillCard } from "./profile-fill-card";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
 
-// "Write missing profiles" and "Find missing contacts" run on this page and may take a few minutes.
+// "Fill missing profiles" and "Find missing contacts" run on this page and may take a few minutes.
 export const maxDuration = 300;
 
 export default async function ExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors">) {
@@ -56,7 +57,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   const useAi = canEdit && isCompanyProfileConfigured();
   const [missingProfiles, missingContacts] = useAi
     ? await Promise.all([
-        db.exhibitor.count({ where: missingProfileWhere(show || undefined) }),
+        db.exhibitor.count({ where: emptyProfileWhere(show || undefined) }),
         db.exhibitor.count({ where: missingContactWhere(show || undefined) }),
       ])
     : [0, 0];
@@ -92,15 +93,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         }
       />
 
-      {missingProfiles > 0 && (
-        <AiFillCard
-          title={`${missingProfiles} ${missingProfiles === 1 ? "exhibitor has" : "exhibitors have"} a website but no company profile`}
-          text="AI writes them from each website, up to 300 words. They are also written automatically during the night."
-          button="Write missing profiles"
-          pendingButton="Writing profiles…"
-          action={fillProfiles.bind(null, slug, show || undefined)}
-        />
-      )}
+      {missingProfiles > 0 && <ProfileFillCard slug={slug} tradeShowId={show || undefined} missing={missingProfiles} />}
       {missingContacts > 0 && (
         <AiFillCard
           title={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email`}

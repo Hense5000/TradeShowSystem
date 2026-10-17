@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
-import { type FillResult, fillSummary } from "@/lib/company-profile";
+import type { FillResult, ProfileRunResult } from "@/lib/company-profile";
 import {
   describeProfileError,
+  emptyProfileWhere,
   fillMissingProfiles,
   isCompanyProfileConfigured,
   missingProfileWhere,
   writeCompanyProfile,
+  writeProfiles,
 } from "@/lib/company-profile-run";
 import { type ContactFillResult, contactSummary, type FoundContact } from "@/lib/contact-finder";
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere } from "@/lib/contact-finder-run";
@@ -21,7 +23,7 @@ import { withPhoneCountry } from "@/lib/phone-country";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
-/** How long an import or a "Write missing profiles" press spends on AI profiles; the page may run for 300 seconds. */
+/** How long an import or a contact lookup press spends on AI profiles; the page may run for 300 seconds. */
 const PROFILE_BUDGET_MS = 150_000;
 
 const showExists = async (id: string) => Boolean(await db.tradeShow.findUnique({ where: { id }, select: { id: true } }));
@@ -147,13 +149,22 @@ export async function generateExhibitorProfile(slug: string, name: string, site:
 
 export type FillState = { message?: string } | undefined;
 
-/** Writes the missing company profiles of one trade show (or all), as many as fit in the time. */
-export async function fillProfiles(slug: string, tradeShowId: string | undefined): Promise<FillState> {
+/** The exhibitors of one trade show (or all) with an empty company profile, for "Fill missing profiles". */
+export async function listEmptyProfiles(slug: string, tradeShowId: string | undefined): Promise<string[]> {
   await requirePlatformAdmin(slug);
-  if (!isCompanyProfileConfigured()) return { message: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
-  const result = await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
+  const rows = await db.exhibitor.findMany({ where: emptyProfileWhere(tradeShowId), orderBy: [{ name: "asc" }], select: { id: true } });
+  return rows.map((r) => r.id);
+}
+
+/** Writes the profiles of a few exhibitors, for the progress bar of "Fill missing profiles". */
+export async function writeProfilesFor(slug: string, ids: string[]): Promise<ProfileRunResult> {
+  await requirePlatformAdmin(slug);
+  if (!isCompanyProfileConfigured()) {
+    return { written: 0, noInfo: 0, failed: 0, websitesFound: 0, stoppedBy: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
+  }
+  const result = await writeProfiles(ids.slice(0, PROFILES_PER_CALL));
   revalidatePath(`/a/${slug}/exhibitors`);
-  return { message: fillSummary(result) };
+  return result;
 }
 
 /** How many exhibitors at the show still wait for AI to look up a contact person. */

@@ -55,7 +55,7 @@ export function CompanyProfileField({
         placeholder="A short description of what the company does."
       />
       <p className="hint">
-        {generate ? "AI writes up to 300 words from the company's website. Read it through before you save." : "A short description of what the company does."}
+        {generate ? "AI writes up to 300 characters in English from the company's website. Read it through before you save." : "A short description of what the company does."}
       </p>
       {error && <p className="error mt-2">{error}</p>}
     </div>
