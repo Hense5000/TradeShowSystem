@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/cron/show-finder", "schedule": "0 5 * * *" },
     { "path": "/api/cron/trade-show-cleanup", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/exhibitor-profiles", "schedule": "0 4 * * *" }
+    { "path": "/api/cron/exhibitor-profiles", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/list-digest", "schedule": "0 6 * * *" }
   ]
 }
