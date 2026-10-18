@@ -23,6 +23,7 @@ import { exhibitorQuery } from "@/lib/exhibitor-list";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { fillCountriesFromPhones } from "@/lib/phone-country-run";
 import { withPhoneCountry } from "@/lib/phone-country";
+import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership, requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
@@ -40,8 +41,16 @@ async function findDuplicate(tradeShowId: string, name: string, exceptId?: strin
   return match?.id;
 }
 
+/** The exhibitor if this user may edit or delete it, else null (see canEditExhibitor). */
+async function editableExhibitor(slug: string, id: string) {
+  const { user, organization } = await requireMembership(slug);
+  const exhibitor = await db.exhibitor.findUnique({ where: { id }, select: { id: true, addedByOrganizationId: true } });
+  return exhibitor && canEditExhibitor(user.email, organization.id, exhibitor) ? exhibitor : null;
+}
+
+/** Every member may add an exhibitor; their account may then edit and delete it. */
 export async function createExhibitor(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  await requirePlatformAdmin(slug);
+  const { organization } = await requireMembership(slug);
   const parsed = exhibitorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   if (!(await showExists(parsed.data.tradeShowId))) return { error: "Choose the trade show." };
@@ -49,13 +58,13 @@ export async function createExhibitor(slug: string, _prev: SaveState, formData: 
     return { error: `${parsed.data.name} is already an exhibitor at that trade show.` };
   }
 
-  await db.exhibitor.create({ data: withPhoneCountry(parsed.data) });
+  await db.exhibitor.create({ data: { ...withPhoneCountry(parsed.data), addedByOrganizationId: organization.id } });
   revalidatePath(`/a/${slug}/exhibitors`);
   redirect(`/a/${slug}/exhibitors?show=${parsed.data.tradeShowId}`);
 }
 
 export async function updateExhibitor(slug: string, id: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  await requirePlatformAdmin(slug);
+  if (!(await editableExhibitor(slug, id))) return { error: "This exhibitor no longer exists, or your account did not add it." };
   const parsed = exhibitorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   if (!(await showExists(parsed.data.tradeShowId))) return { error: "Choose the trade show." };
@@ -76,7 +85,7 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
 }
 
 export async function deleteExhibitor(slug: string, id: string): Promise<ActionState> {
-  await requirePlatformAdmin(slug);
+  if (!(await editableExhibitor(slug, id))) return { error: "This exhibitor no longer exists, or your account did not add it." };
   await db.exhibitor.deleteMany({ where: { id } });
   revalidatePath(`/a/${slug}/exhibitors`);
   redirect(`/a/${slug}/exhibitors`);

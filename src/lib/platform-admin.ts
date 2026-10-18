@@ -15,3 +15,16 @@ export function platformAdminEmails(value = process.env.PLATFORM_ADMIN_EMAILS): 
 export function isPlatformAdmin(email: string, value?: string): boolean {
   return platformAdminEmails(value).has(email.trim().toLowerCase());
 }
+
+/**
+ * Whether this user may edit or delete an exhibitor: platform admins any of
+ * them, a customer account only the ones it added itself with "Add exhibitor".
+ */
+export function canEditExhibitor(
+  email: string,
+  organizationId: string,
+  exhibitor: { addedByOrganizationId: string | null },
+  value?: string,
+): boolean {
+  return isPlatformAdmin(email, value) || exhibitor.addedByOrganizationId === organizationId;
+}
