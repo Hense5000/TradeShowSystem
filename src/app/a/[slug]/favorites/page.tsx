@@ -2,17 +2,23 @@ import type { LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { defaultDraftLanguage } from "@/lib/email-draft";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
+import { EmailDraftButton } from "./email-draft";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
 
 const PAGE_SIZE = 50;
+
+// "Write email" waits for the AI on this page.
+export const maxDuration = 60;
 
 export default async function FavoritesPage({ params, searchParams }: PageProps<"/a/[slug]/favorites">) {
   const { slug } = await params;
@@ -74,6 +80,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
     });
 
   const base = `/a/${slug}/favorites`;
+  const canDraft = isCompanyProfileConfigured();
   const pages = Math.max(1, Math.ceil(shownCount / PAGE_SIZE));
   const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp || filters.owner);
   const mine = tab === "exhibitors" && filters.owner === "me";
@@ -254,6 +261,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                         </td>
                         <td className="px-5 py-3">
                           <LeadNote key={leadNote ?? ""} slug={slug} exhibitorId={e.id} name={e.name} note={leadNote} />
+                          {canDraft && <EmailDraftButton slug={slug} exhibitorId={e.id} name={e.name} email={e.email} language={defaultDraftLanguage(e.country)} />}
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex justify-end">
