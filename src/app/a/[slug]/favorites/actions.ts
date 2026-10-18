@@ -120,3 +120,12 @@ export async function setVisited(slug: string, exhibitorId: string, visited: boo
   });
   revalidatePath(`/a/${slug}/favorites/plan`);
 }
+
+/** "Not interested" on a recommended trade show: it is not recommended to the account again. */
+export async function hideRecommendation(slug: string, tradeShowId: string) {
+  const { organization } = await requireMembership(slug);
+  const show = await db.tradeShow.findUnique({ where: { id: tradeShowId }, select: { id: true } });
+  if (!show) return;
+  await db.hiddenShowRecommendation.createMany({ data: [{ organizationId: organization.id, tradeShowId }], skipDuplicates: true });
+  refresh(slug);
+}

@@ -5,8 +5,10 @@ import { countryName } from "@/lib/countries";
 import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { ACTIVE_LEAD_STATUSES, FOLLOW_UP_PILL, FOLLOW_UP_SOON_DAYS, followUpLabel, followUpState, mineOrUnassigned } from "@/lib/leads";
+import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
+import { RecommendedShows } from "./favorites/recommended-shows";
 
 // The follow-ups card under "Lead retrieval active" lists at most this many.
 const FOLLOW_UPS_SHOWN = 8;
@@ -47,7 +49,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
   // The follow-ups card shows the user's own leads and the ones no one is responsible for.
   const myLeads = { list: { organizationId: organization.id, favorites: true }, ...mineOrUnassigned(user.id) };
   const followUpWhere = { ...myLeads, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
-  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
@@ -70,6 +72,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
       orderBy: [{ startDate: "asc" }, { name: "asc" }],
     }),
+    recommendedShows(organization.id, day, 3),
   ]);
 
   const tab = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
@@ -93,48 +96,52 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
 
       {/* The follow-ups sit right under "Lead retrieval active", next to the upcoming trade shows. */}
       <div className="grid items-start gap-3.5 xl:grid-cols-4">
-        <section className="card flex flex-col gap-3 xl:col-start-4 xl:row-start-1">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h2 className="font-bold">Follow-ups</h2>
-              <p className="text-sm text-muted">
-                {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`}
-              </p>
-              <p className="text-xs text-faint">Your leads and unassigned ones</p>
+        <div className="flex flex-col gap-3.5 xl:col-start-4 xl:row-start-1">
+          <section className="card flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="font-bold">Follow-ups</h2>
+                <p className="text-sm text-muted">
+                  {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`}
+                </p>
+                <p className="text-xs text-faint">Your leads and unassigned ones</p>
+              </div>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+                <Icon name="calendar" className="size-4.5" />
+              </span>
             </div>
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-              <Icon name="calendar" className="size-4.5" />
-            </span>
-          </div>
-          {followUps.length === 0 ? (
-            <p className="text-sm text-muted">
-              No follow-ups in the next {FOLLOW_UP_SOON_DAYS} days. Set a follow-up date on a lead on the{" "}
-              <Link href={`/a/${slug}/favorites`} className="font-semibold text-brand hover:underline">Favorites page</Link>.
-            </p>
-          ) : (
-            <ul className="-mx-2 flex flex-col">
-              {followUps.map((f, i) => (
-                <li key={i}>
-                  <Link
-                    href={`/a/${slug}/favorites?q=${encodeURIComponent(f.exhibitor.name)}`}
-                    className="flex flex-col gap-0.5 rounded-lg px-2 py-2 hover:bg-subtle"
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">{f.exhibitor.name}</span>
-                      <span className={`pill shrink-0 ${FOLLOW_UP_PILL[followUpState(f.followUpAt!, day)]}`}>{followUpLabel(f.followUpAt!, day)}</span>
-                    </span>
-                    <span className="truncate text-xs text-muted">{f.followUpNote ?? f.exhibitor.tradeShow.name}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {followUpCount > 0 && (
-            <Link href={`/a/${slug}/favorites?followup=set`} className="text-sm font-semibold text-brand hover:underline">
-              {followUpCount > followUps.length ? `See all ${followUpCount} follow-ups` : "Open in Favorites"}
-            </Link>
-          )}
-        </section>
+            {followUps.length === 0 ? (
+              <p className="text-sm text-muted">
+                No follow-ups in the next {FOLLOW_UP_SOON_DAYS} days. Set a follow-up date on a lead on the{" "}
+                <Link href={`/a/${slug}/favorites`} className="font-semibold text-brand hover:underline">Favorites page</Link>.
+              </p>
+            ) : (
+              <ul className="-mx-2 flex flex-col">
+                {followUps.map((f, i) => (
+                  <li key={i}>
+                    <Link
+                      href={`/a/${slug}/favorites?q=${encodeURIComponent(f.exhibitor.name)}`}
+                      className="flex flex-col gap-0.5 rounded-lg px-2 py-2 hover:bg-subtle"
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold">{f.exhibitor.name}</span>
+                        <span className={`pill shrink-0 ${FOLLOW_UP_PILL[followUpState(f.followUpAt!, day)]}`}>{followUpLabel(f.followUpAt!, day)}</span>
+                      </span>
+                      <span className="truncate text-xs text-muted">{f.followUpNote ?? f.exhibitor.tradeShow.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {followUpCount > 0 && (
+              <Link href={`/a/${slug}/favorites?followup=set`} className="text-sm font-semibold text-brand hover:underline">
+                {followUpCount > followUps.length ? `See all ${followUpCount} follow-ups` : "Open in Favorites"}
+              </Link>
+            )}
+          </section>
+          {/* Only once the account has favorites to recommend from. */}
+          {openLeads + favoriteShows > 0 && <RecommendedShows slug={slug} items={recommended} compact />}
+        </div>
 
         <section className="card xl:col-span-3 xl:col-start-1 xl:row-start-1">
           <h2 className="text-lg font-bold">Upcoming trade shows</h2>

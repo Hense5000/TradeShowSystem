@@ -8,12 +8,14 @@ import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { defaultDraftLanguage } from "@/lib/email-draft";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
+import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
+import { RecommendedShows } from "./recommended-shows";
 
 const PAGE_SIZE = 50;
 
@@ -33,7 +35,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
   const day = today();
   const where = favoriteWhere(listId, filters, { today: day, userId: user.id });
 
-  const [byStatus, shownCount, items, leadShows, favoriteShows, memberships, myCount] = await Promise.all([
+  const [byStatus, shownCount, items, leadShows, favoriteShows, memberships, myCount, recommended] = await Promise.all([
     db.savedListItem.groupBy({ by: ["leadStatus"], where: { listId }, _count: true }),
     db.savedListItem.count({ where }),
     tab === "exhibitors"
@@ -55,6 +57,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
     // The users a lead can be assigned to.
     db.membership.findMany({ where: { organizationId: organization.id }, select: { user: { select: { id: true, name: true, email: true } } } }),
     db.savedListItem.count({ where: { listId, assigneeId: user.id } }),
+    tab === "shows" ? recommendedShows(organization.id, day) : [],
   ]);
   const members = memberships
     .map((m) => ({ id: m.user.id, name: m.user.id === user.id ? `${m.user.name ?? m.user.email} (you)` : (m.user.name ?? m.user.email) }))
@@ -307,64 +310,69 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
             </section>
           </>
         )
-      ) : shows.length === 0 ? (
-        <Empty icon="calendar" text="Click the star next to a trade show on the Trade shows page to add it here." href={`/a/${slug}/trade-shows`} label="Go to trade shows" />
       ) : (
-        <section className="card">
-          <ul className="flex flex-col gap-2.5">
-            {shows.map((s) => {
-              const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
-              const leads = leadsAtShow.get(s.id) ?? 0;
-              return (
-                <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
-                  <FavoriteShowStar slug={slug} tradeShowId={s.id} name={s.name} on />
-                  <div className="min-w-48 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 font-semibold">
-                      {s.name}
-                      <span className={`pill ${STATUS_PILL[s.status]}`}>{STATUS_LABEL[s.status]}</span>
-                    </p>
-                    {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
-                  </div>
-                  <div className="w-24 text-center">
-                    <p className="text-xs text-muted">Exhibitors</p>
-                    {s._count.exhibitors > 0 ? (
-                      <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
-                        {s._count.exhibitors}
-                      </Link>
-                    ) : (
-                      <p className="font-bold tabular-nums">0</p>
-                    )}
-                  </div>
-                  <div className="w-24 text-center">
-                    <p className="text-xs text-muted">Favorites</p>
-                    {leads > 0 ? (
-                      <Link href={`${base}?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
-                        {leads}
-                      </Link>
-                    ) : (
-                      <p className="font-bold tabular-nums">0</p>
-                    )}
-                  </div>
-                  <div className="w-28">
-                    {leads > 0 && (
-                      <Link href={`${base}/plan?show=${s.id}`} className="pill pill-soft gap-1 hover:underline" title="Your favorite exhibitors at this show in booth order, to tick off at the show">
-                        <Icon name="check" className="size-3.5" /> Meeting plan
-                      </Link>
-                    )}
-                  </div>
-                  <div className="w-20">
-                    {s.website && (
-                      <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
-                        <Icon name="globe" className="size-3.5" /> Website
-                      </a>
-                    )}
-                  </div>
-                  <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <>
+          {exhibitorTotal > 0 && <RecommendedShows slug={slug} items={recommended} />}
+          {shows.length === 0 ? (
+            <Empty icon="calendar" text="Click the star next to a trade show on the Trade shows page to add it here." href={`/a/${slug}/trade-shows`} label="Go to trade shows" />
+          ) : (
+            <section className="card">
+              <ul className="flex flex-col gap-2.5">
+                {shows.map((s) => {
+                  const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
+                  const leads = leadsAtShow.get(s.id) ?? 0;
+                  return (
+                    <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
+                      <FavoriteShowStar slug={slug} tradeShowId={s.id} name={s.name} on />
+                      <div className="min-w-48 flex-1">
+                        <p className="flex flex-wrap items-center gap-2 font-semibold">
+                          {s.name}
+                          <span className={`pill ${STATUS_PILL[s.status]}`}>{STATUS_LABEL[s.status]}</span>
+                        </p>
+                        {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
+                      </div>
+                      <div className="w-24 text-center">
+                        <p className="text-xs text-muted">Exhibitors</p>
+                        {s._count.exhibitors > 0 ? (
+                          <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
+                            {s._count.exhibitors}
+                          </Link>
+                        ) : (
+                          <p className="font-bold tabular-nums">0</p>
+                        )}
+                      </div>
+                      <div className="w-24 text-center">
+                        <p className="text-xs text-muted">Favorites</p>
+                        {leads > 0 ? (
+                          <Link href={`${base}?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
+                            {leads}
+                          </Link>
+                        ) : (
+                          <p className="font-bold tabular-nums">0</p>
+                        )}
+                      </div>
+                      <div className="w-28">
+                        {leads > 0 && (
+                          <Link href={`${base}/plan?show=${s.id}`} className="pill pill-soft gap-1 hover:underline" title="Your favorite exhibitors at this show in booth order, to tick off at the show">
+                            <Icon name="check" className="size-3.5" /> Meeting plan
+                          </Link>
+                        )}
+                      </div>
+                      <div className="w-20">
+                        {s.website && (
+                          <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
+                            <Icon name="globe" className="size-3.5" /> Website
+                          </a>
+                        )}
+                      </div>
+                      <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </>
   );
