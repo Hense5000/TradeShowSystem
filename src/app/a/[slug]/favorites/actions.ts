@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
-import { checkLeadNote, parseLeadStatus } from "@/lib/leads";
+import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 
 // Every member of an account works the same favorites. Each action only
@@ -48,6 +48,20 @@ export async function saveLeadNote(slug: string, exhibitorId: string, _prev: Sav
   const { count } = await db.savedListItem.updateMany({
     where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
     data: { leadNote: checked.note, leadUpdatedAt: new Date() },
+  });
+  if (count === 0) return { error: "This exhibitor is no longer in Favorites." };
+  refresh(slug);
+  return { saved: true };
+}
+
+/** The follow-up reminder on a favorite exhibitor: a date and a short text. No date clears it. */
+export async function saveFollowUp(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+  const { organization } = await requireMembership(slug);
+  const checked = checkFollowUp(formData.get("date"), formData.get("note"));
+  if (checked.error !== undefined) return { error: checked.error };
+  const { count } = await db.savedListItem.updateMany({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    data: { followUpAt: checked.date, followUpNote: checked.note, leadUpdatedAt: new Date() },
   });
   if (count === 0) return { error: "This exhibitor is no longer in Favorites." };
   refresh(slug);

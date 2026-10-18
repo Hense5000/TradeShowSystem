@@ -1,4 +1,5 @@
 import type { LeadStatus, Prisma } from "@prisma/client";
+import { isoDate, parseDate, today as todayUtc } from "@/lib/dates";
 
 // Lead work on the Favorites page: each favorite exhibitor has a status and
 // notes, shared by everyone in the account.
@@ -37,7 +38,53 @@ export function checkLeadNote(value: unknown): { note: string | null; error?: un
   return { note: note || null };
 }
 
-export type FavoriteFilters = { q: string; show: string; status: LeadStatus | "" };
+export const MAX_FOLLOW_UP_NOTE = 200;
+// The dashboard shows follow-ups due within this many days.
+export const FOLLOW_UP_SOON_DAYS = 7;
+
+/** The follow-up date and text from the form; no date clears the follow-up. */
+export function checkFollowUp(date: unknown, note: unknown): { date: Date | null; note: string | null; error?: undefined } | { error: string } {
+  const text = typeof note === "string" ? note.trim().replace(/\s+/g, " ") : "";
+  if (text.length > MAX_FOLLOW_UP_NOTE) return { error: `Keep the reminder under ${MAX_FOLLOW_UP_NOTE} characters.` };
+  const raw = typeof date === "string" ? date.trim() : "";
+  if (!raw) return { date: null, note: null };
+  const parsed = parseDate(raw);
+  if (!parsed) return { error: "Pick a date." };
+  return { date: parsed, note: text || null };
+}
+
+export type FollowUpState = "overdue" | "today" | "soon" | "later";
+
+/** Whether a follow-up is overdue, due today, due within a week or later. */
+export function followUpState(date: Date, today: Date): FollowUpState {
+  const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  if (days < 0) return "overdue";
+  if (days === 0) return "today";
+  return days <= FOLLOW_UP_SOON_DAYS ? "soon" : "later";
+}
+
+export const FOLLOW_UP_PILL: Record<FollowUpState, string> = {
+  overdue: "bg-bad-soft text-bad",
+  today: "pill-warn",
+  soon: "pill-soft",
+  later: "pill-neutral",
+};
+
+/** "Overdue · Oct 15", "Today", "Tomorrow" or "Mon, Oct 21". */
+export function followUpLabel(date: Date, today: Date): string {
+  const state = followUpState(date, today);
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(date);
+  if (state === "overdue") return `Overdue · ${day}`;
+  if (state === "today") return "Today";
+  if (isoDate(date) === isoDate(new Date(today.getTime() + 86_400_000))) return "Tomorrow";
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(date);
+}
+
+// "due": overdue or due today. "set": has a follow-up date.
+const FOLLOW_UP_FILTERS = ["due", "set"] as const;
+export type FollowUpFilter = (typeof FOLLOW_UP_FILTERS)[number];
+
+export type FavoriteFilters = { q: string; show: string; status: LeadStatus | ""; followUp: FollowUpFilter | "" };
 
 type Params = Record<string, string | string[] | undefined> | URLSearchParams;
 
@@ -47,14 +94,17 @@ export function favoriteFilters(params: Params): FavoriteFilters {
     const value = params instanceof URLSearchParams ? params.get(key) : params[key];
     return typeof value === "string" ? value : "";
   };
-  return { q: get("q").trim(), show: get("show"), status: parseLeadStatus(get("status")) ?? "" };
+  const followUp = FOLLOW_UP_FILTERS.find((f) => f === get("followup")) ?? "";
+  return { q: get("q").trim(), show: get("show"), status: parseLeadStatus(get("status")) ?? "", followUp };
 }
 
 /** The Favorites list items those filters show, so the page and its export list the same exhibitors. */
-export function favoriteWhere(listId: string, { q, show, status }: FavoriteFilters): Prisma.SavedListItemWhereInput {
+export function favoriteWhere(listId: string, { q, show, status, followUp }: FavoriteFilters, today = todayUtc()): Prisma.SavedListItemWhereInput {
   return {
     listId,
     ...(status && { leadStatus: status }),
+    ...(followUp === "due" && { followUpAt: { lte: today } }),
+    ...(followUp === "set" && { followUpAt: { not: null } }),
     ...((show || q) && {
       exhibitor: {
         ...(show && { tradeShowId: show }),
@@ -71,7 +121,7 @@ export function favoriteWhere(listId: string, { q, show, status }: FavoriteFilte
 }
 
 /** The filters as a query string ("" when none are set), with any extra parameters added. */
-export function favoriteQuery({ q, show, status }: FavoriteFilters, extra: Record<string, string> = {}): string {
-  const qs = new URLSearchParams({ ...(q && { q }), ...(show && { show }), ...(status && { status }), ...extra });
+export function favoriteQuery({ q, show, status, followUp }: FavoriteFilters, extra: Record<string, string> = {}): string {
+  const qs = new URLSearchParams({ ...(q && { q }), ...(show && { show }), ...(status && { status }), ...(followUp && { followup: followUp }), ...extra });
   return qs.size ? `?${qs}` : "";
 }
