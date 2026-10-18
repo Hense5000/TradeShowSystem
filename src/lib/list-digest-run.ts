@@ -11,9 +11,10 @@ import { changedFields, type DigestEntry, type DigestFollowUp, digestEmail, exhi
  * Sends each user the day's news on their accounts' Favorites lists (the
  * star; other saved lists are left out): exhibitors someone else starred,
  * starred exhibitors whose details changed, and follow-ups due today or
- * overdue. Afterwards every reported exhibitor's details are remembered, so
- * nothing is told twice; a due follow-up is told every day until it is moved
- * or cleared on the Favorites page.
+ * overdue on the user's own and unassigned leads. Afterwards every reported
+ * exhibitor's details are remembered, so nothing is told twice; a due
+ * follow-up is told every day until it is moved or cleared on the Favorites
+ * page.
  */
 export async function runListDigest() {
   if (!isEmailConfigured()) return { skipped: "No email service is set up (RESEND_API_KEY and EMAIL_FROM)." };
@@ -45,11 +46,10 @@ export async function runListDigest() {
       if (!added && changes.length === 0) return [];
       return [{ item, now, added, changes }];
     });
-    const followUps: DigestFollowUp[] = items
+    const due = items
       .filter((i) => i.followUpAt && i.followUpAt <= day)
-      .sort((a, b) => a.followUpAt!.getTime() - b.followUpAt!.getTime())
-      .map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, due: followUpLabel(i.followUpAt!, day), note: i.followUpNote }));
-    if (news.length === 0 && followUps.length === 0) continue;
+      .sort((a, b) => a.followUpAt!.getTime() - b.followUpAt!.getTime());
+    if (news.length === 0 && due.length === 0) continue;
 
     const members = await db.membership.findMany({
       where: { organizationId: org.id, user: { listEmails: true } },
@@ -74,6 +74,10 @@ export async function runListDigest() {
           entries.set(key, entry);
         }
       }
+      // Each user is reminded about their own leads and the ones no one is responsible for.
+      const followUps: DigestFollowUp[] = due
+        .filter((i) => i.assigneeId === null || i.assigneeId === user.id)
+        .map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, due: followUpLabel(i.followUpAt!, day), note: i.followUpNote }));
       if (entries.size === 0 && followUps.length === 0) continue;
       try {
         const base = `${appUrl()}/a/${org.slug}`;

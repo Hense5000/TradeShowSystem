@@ -18,7 +18,7 @@ export const maxDuration = 60;
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
@@ -30,13 +30,17 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
   const leads = list?.favorites;
   const exhibitors = await db.exhibitor.findMany({
     where: leads
-      ? { savedIn: { some: favoriteWhere(list.id, favoriteFilters(url.searchParams)) } }
+      ? { savedIn: { some: favoriteWhere(list.id, favoriteFilters(url.searchParams), { userId: user.id }) } }
       : list
         ? { savedIn: { some: { listId: list.id } } }
         : exhibitorWhere(filters),
     include: {
       tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } },
-      ...(leads && { savedIn: { where: { listId: list.id }, select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true } } }),
+      // The lead details on the Favorites list (none for other exports).
+      savedIn: {
+        where: { listId: leads ? list.id : "" },
+        select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true, assignee: { select: { name: true, email: true } } },
+      },
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
@@ -59,7 +63,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Booth No.",
       "Stand Location URL",
       "Company Profile",
-      ...(leads ? ["Lead Status", "Notes", "Follow-up Date", "Follow-up Reminder"] : []),
+      ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder"] : []),
     ],
     rows: exhibitors.map((e) => [
       e.name,
@@ -80,6 +84,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       ...(leads
         ? [
             e.savedIn[0] && LEAD_LABEL[e.savedIn[0].leadStatus],
+            e.savedIn[0]?.assignee && (e.savedIn[0].assignee.name ?? e.savedIn[0].assignee.email),
             e.savedIn[0]?.leadNote,
             e.savedIn[0]?.followUpAt && day(e.savedIn[0].followUpAt),
             e.savedIn[0]?.followUpNote,

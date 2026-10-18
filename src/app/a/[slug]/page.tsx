@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { countryName } from "@/lib/countries";
 import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { ACTIVE_LEAD_STATUSES, FOLLOW_UP_PILL, FOLLOW_UP_SOON_DAYS, followUpLabel, followUpState } from "@/lib/leads";
+import { ACTIVE_LEAD_STATUSES, FOLLOW_UP_PILL, FOLLOW_UP_SOON_DAYS, followUpLabel, followUpState, mineOrUnassigned } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
 
@@ -38,13 +38,15 @@ function Stat({ icon, label, value, note, href }: { icon: IconName; label: strin
 
 export default async function Dashboard({ params, searchParams }: PageProps<"/a/[slug]">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const sp = await searchParams;
   const range: Range = RANGES.find((r) => String(r) === sp.months) ?? RANGES[0];
   const day = today();
   const until = addMonths(day, range);
 
-  const followUpWhere = { list: { organizationId: organization.id, favorites: true }, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
+  // The follow-ups card shows the user's own leads and the ones no one is responsible for.
+  const myLeads = { list: { organizationId: organization.id, favorites: true }, ...mineOrUnassigned(user.id) };
+  const followUpWhere = { ...myLeads, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
   const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
@@ -61,7 +63,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       take: FOLLOW_UPS_SHOWN,
     }),
     db.savedListItem.count({ where: followUpWhere }),
-    db.savedListItem.count({ where: { list: { organizationId: organization.id, favorites: true }, followUpAt: { lte: day } } }),
+    db.savedListItem.count({ where: { ...myLeads, followUpAt: { lte: day } } }),
     // Shows still to come or running now, starting within the chosen range.
     db.tradeShow.findMany({
       where: { endDate: { gte: day }, startDate: { lte: until } },
@@ -96,7 +98,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
             <div>
               <h2 className="font-bold">Follow-ups</h2>
               <p className="text-sm text-muted">
-                {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`}
+                {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`} · yours and unassigned
               </p>
             </div>
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
