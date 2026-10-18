@@ -34,7 +34,7 @@ export default async function MeetingPlanPage({ params, searchParams }: PageProp
 
   return (
     <>
-      <Link href={`/a/${slug}/favorites?tab=shows`} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink print:hidden">
+      <Link href={`/a/${slug}/favorites/trade-shows`} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink print:hidden">
         <Icon name="chevron" className="size-4 rotate-90" /> Favorite trade shows
       </Link>
       <div className="flex flex-wrap items-end justify-between gap-3">
