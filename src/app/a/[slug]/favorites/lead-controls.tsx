@@ -2,8 +2,8 @@
 
 import type { LeadStatus } from "@prisma/client";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { LEAD_LABEL, LEAD_STATUSES, MAX_LEAD_NOTE } from "@/lib/leads";
-import { saveLeadNote, setLeadStatus } from "./actions";
+import { LEAD_LABEL, LEAD_STATUSES, MAX_FOLLOW_UP_NOTE, MAX_LEAD_NOTE } from "@/lib/leads";
+import { saveFollowUp, saveLeadNote, setLeadStatus } from "./actions";
 
 /** The status of a favorite exhibitor. Saves as soon as another status is picked. */
 export function LeadStatusSelect({ slug, exhibitorId, name, status }: { slug: string; exhibitorId: string; name: string; status: LeadStatus }) {
@@ -61,6 +61,74 @@ export function LeadNote({ slug, exhibitorId, name, note }: { slug: string; exhi
       ) : (
         showSaved && <p className="mt-1 text-xs text-ok">Saved</p>
       )}
+    </form>
+  );
+}
+
+/**
+ * The follow-up reminder on a favorite exhibitor. Saves when a date is picked
+ * or the reminder text is left; Clear removes both.
+ */
+export function LeadFollowUp({
+  slug,
+  exhibitorId,
+  name,
+  date,
+  note,
+  overdue,
+}: {
+  slug: string;
+  exhibitorId: string;
+  name: string;
+  date: string; // "2026-11-05", or "" when none is set
+  note: string | null;
+  overdue: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(saveFollowUp.bind(null, slug, exhibitorId), undefined);
+  const savedNote = useRef(note ?? "");
+
+  return (
+    <form action={formAction} className="flex min-w-48 flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="date"
+          name="date"
+          defaultValue={date}
+          aria-label={`Follow-up date for ${name}`}
+          className={`input w-auto py-1.5 ${overdue ? "border-bad text-bad" : ""}`}
+          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+        />
+        {date && (
+          <button
+            type="button"
+            className="px-1 text-xs font-semibold text-muted hover:text-ink"
+            title="Remove the follow-up"
+            onClick={(e) => {
+              const form = e.currentTarget.form!;
+              (form.elements.namedItem("date") as HTMLInputElement).value = "";
+              (form.elements.namedItem("note") as HTMLInputElement).value = "";
+              form.requestSubmit();
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <input
+        name="note"
+        defaultValue={note ?? ""}
+        maxLength={MAX_FOLLOW_UP_NOTE}
+        placeholder="Reminder, e.g. Call again"
+        aria-label={`Follow-up reminder for ${name}`}
+        className="input py-1.5"
+        onBlur={(e) => {
+          if (e.currentTarget.value.trim() === savedNote.current.trim()) return;
+          savedNote.current = e.currentTarget.value;
+          // Without a date there is nothing to remind about yet; it is saved with the date.
+          if ((e.currentTarget.form!.elements.namedItem("date") as HTMLInputElement).value) e.currentTarget.form?.requestSubmit();
+        }}
+      />
+      {pending ? <p className="hint">Saving…</p> : state?.error && <p className="text-xs text-bad">{state.error}</p>}
     </form>
   );
 }

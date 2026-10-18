@@ -42,14 +42,38 @@ export type DigestEntry = {
   changes: Change[];
 };
 
+/** A follow-up reminder that is due today or overdue. */
+export type DigestFollowUp = {
+  exhibitor: string;
+  tradeShow: string;
+  due: string; // e.g. "Today" or "Overdue · Oct 15"
+  note: string | null;
+};
+
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const short = (s: string) => (s.length > 200 ? `${s.slice(0, 197)}…` : s);
 
-/** The email for one person: subject, HTML and plain text. */
-export function digestEmail({ accountName, entries, listsUrl }: { accountName: string; entries: DigestEntry[]; listsUrl: string }) {
+/**
+ * The email for one person: subject, HTML and plain text. Follow-ups due
+ * today or overdue come first; then what was added and what changed.
+ */
+export function digestEmail({
+  accountName,
+  entries,
+  followUps = [],
+  listsUrl,
+  favoritesUrl,
+}: {
+  accountName: string;
+  entries: DigestEntry[];
+  followUps?: DigestFollowUp[];
+  listsUrl: string;
+  favoritesUrl: string;
+}) {
   const added = entries.filter((e) => e.addedBy).length;
   const changed = entries.filter((e) => e.changes.length > 0).length;
   const parts = [
+    followUps.length > 0 && `${followUps.length} ${followUps.length === 1 ? "follow-up" : "follow-ups"} due`,
     added > 0 && `${added} new ${added === 1 ? "exhibitor" : "exhibitors"}`,
     changed > 0 && `${changed} updated`,
   ].filter(Boolean);
@@ -62,17 +86,41 @@ export function digestEmail({ accountName, entries, listsUrl }: { accountName: s
   const footer = `You get this email because you are a user of ${accountName} in Trade Show System. Turn it off on the Saved lists page: ${listsUrl}`;
 
   const text = [
-    `What is new in ${accountName}'s Favorites:`,
-    "",
-    ...entries.flatMap((e) => [`${e.exhibitor} (${e.tradeShow})${e.addedBy ? "" : ` · ${e.lists.join(", ")}`}`, ...lines(e).map((l) => `  - ${l}`), ""]),
-    `Open your Favorites: ${listsUrl}/favorites`,
+    ...(followUps.length > 0
+      ? [
+          "Follow-ups due:",
+          "",
+          ...followUps.flatMap((f) => [`${f.due}: ${f.exhibitor} (${f.tradeShow})`, ...(f.note ? [`  - ${short(f.note)}`] : []), ""]),
+        ]
+      : []),
+    ...(entries.length > 0
+      ? [
+          `What is new in ${accountName}'s Favorites:`,
+          "",
+          ...entries.flatMap((e) => [`${e.exhibitor} (${e.tradeShow})${e.addedBy ? "" : ` · ${e.lists.join(", ")}`}`, ...lines(e).map((l) => `  - ${l}`), ""]),
+        ]
+      : []),
+    `Open your Favorites: ${favoritesUrl}`,
     "",
     footer,
   ].join("\n");
 
   const html =
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1b2a3a;max-width:600px">` +
-    `<h2 style="font-size:18px;margin:0 0 12px">What is new in ${escape(accountName)}'s Favorites</h2>` +
+    (followUps.length > 0
+      ? `<h2 style="font-size:18px;margin:0 0 12px">Follow-ups due</h2>` +
+        followUps
+          .map(
+            (f) =>
+              `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 10px">` +
+              `<div><span style="font-weight:bold">${escape(f.exhibitor)}</span> <span style="color:${f.due.startsWith("Overdue") ? "#c9372c" : "#a86500"};font-size:12px;font-weight:bold">${escape(f.due)}</span></div>` +
+              `<div style="color:#64748b;font-size:12px">${escape(f.tradeShow)}</div>` +
+              (f.note ? `<div style="margin-top:6px">${escape(short(f.note))}</div>` : "") +
+              `</div>`,
+          )
+          .join("")
+      : "") +
+    (entries.length > 0 ? `<h2 style="font-size:18px;margin:${followUps.length > 0 ? "20px" : "0"} 0 12px">What is new in ${escape(accountName)}'s Favorites</h2>` : "") +
     entries
       .map(
         (e) =>
@@ -83,7 +131,7 @@ export function digestEmail({ accountName, entries, listsUrl }: { accountName: s
           `</div>`,
       )
       .join("") +
-    `<p style="margin:16px 0"><a href="${escape(`${listsUrl}/favorites`)}" style="background:#287bbf;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:bold">Open your Favorites</a></p>` +
+    `<p style="margin:16px 0"><a href="${escape(favoritesUrl)}" style="background:#287bbf;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:bold">Open your Favorites</a></p>` +
     `<p style="color:#64748b;font-size:12px">${escape(footer)}</p>` +
     `</div>`;
 

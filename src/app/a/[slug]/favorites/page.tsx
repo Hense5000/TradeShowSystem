@@ -3,14 +3,14 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { countryName } from "@/lib/countries";
-import { formatDateRange } from "@/lib/dates";
+import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { favoriteFilters, favoriteQuery, favoriteWhere, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
+import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
-import { LeadNote, LeadStatusSelect } from "./lead-controls";
+import { LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
 
 const PAGE_SIZE = 50;
 
@@ -24,7 +24,8 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
 
   const list = await db.savedList.findFirst({ where: { organizationId: organization.id, favorites: true }, select: { id: true } });
   const listId = list?.id ?? "";
-  const where = favoriteWhere(listId, filters);
+  const day = today();
+  const where = favoriteWhere(listId, filters, day);
 
   const [byStatus, shownCount, items, leadShows, favoriteShows] = await Promise.all([
     db.savedListItem.groupBy({ by: ["leadStatus"], where: { listId }, _count: true }),
@@ -33,7 +34,8 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
       ? db.savedListItem.findMany({
           where,
           include: { exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } } },
-          orderBy: [{ exhibitor: { name: "asc" } }],
+          // With a follow-up filter, the soonest follow-up first.
+          orderBy: filters.followUp ? [{ followUpAt: "asc" }, { exhibitor: { name: "asc" } }] : [{ exhibitor: { name: "asc" } }],
           skip: (page - 1) * PAGE_SIZE,
           take: PAGE_SIZE,
         })
@@ -67,7 +69,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
 
   const base = `/a/${slug}/favorites`;
   const pages = Math.max(1, Math.ceil(shownCount / PAGE_SIZE));
-  const narrowed = Boolean(filters.q || filters.show || filters.status);
+  const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp);
   const exportHref = (format: "xlsx" | "csv") => `/a/${slug}/exhibitors/export${favoriteQuery(filters, { list: listId, format })}`;
   const tabCls = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
   const tabOn = "border-brand bg-brand text-white";
@@ -147,6 +149,11 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                     <option key={s} value={s}>{LEAD_LABEL[s]}</option>
                   ))}
                 </select>
+                <select className="input w-auto" name="followup" defaultValue={filters.followUp} aria-label="Follow-up">
+                  <option value="">All follow-ups</option>
+                  <option value="due">Due today or overdue</option>
+                  <option value="set">With a follow-up date</option>
+                </select>
                 <button className="btn-secondary py-2">Search</button>
                 {narrowed && (
                   <Link href={base} className="px-2 text-sm font-semibold text-muted hover:text-ink">
@@ -164,13 +171,13 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                       <th className="px-5 py-2.5">Company</th>
                       <th className="px-5 py-2.5">Trade show</th>
                       <th className="px-5 py-2.5">Contact</th>
-                      <th className="px-5 py-2.5">Status</th>
+                      <th className="px-5 py-2.5">Status and follow-up</th>
                       <th className="px-5 py-2.5">Notes</th>
                       <th className="px-5 py-2.5"><span className="sr-only">Remove</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {items.map(({ exhibitor: e, leadStatus, leadNote }) => (
+                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote }) => (
                       <tr key={e.id} className="align-top">
                         <td className="px-5 py-3">
                           <div className="min-w-48">
@@ -211,7 +218,18 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                           </div>
                         </td>
                         <td className="px-5 py-3">
-                          <LeadStatusSelect slug={slug} exhibitorId={e.id} name={e.name} status={leadStatus} />
+                          <div className="flex flex-col gap-1.5">
+                            <LeadStatusSelect slug={slug} exhibitorId={e.id} name={e.name} status={leadStatus} />
+                            <LeadFollowUp
+                              key={`${followUpAt ? isoDate(followUpAt) : ""}:${followUpNote ?? ""}`}
+                              slug={slug}
+                              exhibitorId={e.id}
+                              name={e.name}
+                              date={followUpAt ? isoDate(followUpAt) : ""}
+                              note={followUpNote}
+                              overdue={followUpAt ? followUpState(followUpAt, day) === "overdue" : false}
+                            />
+                          </div>
                         </td>
                         <td className="px-5 py-3">
                           <LeadNote key={leadNote ?? ""} slug={slug} exhibitorId={e.id} name={e.name} note={leadNote} />

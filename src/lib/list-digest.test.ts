@@ -32,6 +32,7 @@ describe("list email", () => {
     const mail = digestEmail({
       accountName: "Bolt & Co",
       listsUrl: "https://x.test/a/bolt/lists",
+      favoritesUrl: "https://x.test/a/bolt/favorites",
       entries: [
         { exhibitor: "Acme", tradeShow: "Medica 2026", lists: ["Leads"], addedBy: "Anna", changes: [] },
         { exhibitor: "<Beta>", tradeShow: "Medica 2026", lists: ["Favorites", "Leads"], changes: [{ label: "Email", value: "b@beta.dk" }, { label: "Phone", value: null }] },
@@ -44,5 +45,25 @@ describe("list email", () => {
     expect(mail.html).toContain("&lt;Beta&gt;");
     expect(mail.html).toContain("Bolt &amp; Co");
     expect(mail.html).not.toContain("<Beta>");
+    expect(mail.text).toContain("Open your Favorites: https://x.test/a/bolt/favorites");
+    expect(mail.text).not.toContain("Follow-ups due");
+  });
+
+  it("puts due follow-ups first, also when nothing else is new", () => {
+    const mail = digestEmail({
+      accountName: "Bolt",
+      listsUrl: "https://x.test/a/bolt/lists",
+      favoritesUrl: "https://x.test/a/bolt/favorites",
+      entries: [],
+      followUps: [
+        { exhibitor: "Acme", tradeShow: "Medica 2026", due: "Overdue · Oct 15", note: "Call <Anna>" },
+        { exhibitor: "Beta", tradeShow: "Medica 2026", due: "Today", note: null },
+      ],
+    });
+    expect(mail.subject).toBe("Bolt: 2 follow-ups due in your Favorites");
+    expect(mail.text).toContain("Overdue · Oct 15: Acme (Medica 2026)\n  - Call <Anna>");
+    expect(mail.text).toContain("Today: Beta (Medica 2026)");
+    expect(mail.text).not.toContain("What is new");
+    expect(mail.html).toContain("Call &lt;Anna&gt;");
   });
 });

@@ -406,6 +406,10 @@ model SavedListItem {
   leadStatus    LeadStatus @default(NEW)
   leadNote      String?
   leadUpdatedAt DateTime?
+  // A reminder to follow up on the lead: the date it is due and a short text,
+  // e.g. "Call again". Shown on the dashboard and in the daily email.
+  followUpAt    DateTime?  @db.Date
+  followUpNote  String?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)

@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
         : exhibitorWhere(filters),
     include: {
       tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } },
-      ...(leads && { savedIn: { where: { listId: list.id }, select: { leadStatus: true, leadNote: true } } }),
+      ...(leads && { savedIn: { where: { listId: list.id }, select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true } } }),
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
@@ -59,7 +59,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Booth No.",
       "Stand Location URL",
       "Company Profile",
-      ...(leads ? ["Lead Status", "Notes"] : []),
+      ...(leads ? ["Lead Status", "Notes", "Follow-up Date", "Follow-up Reminder"] : []),
     ],
     rows: exhibitors.map((e) => [
       e.name,
@@ -77,7 +77,14 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       e.boothNumber,
       e.standLocationUrl,
       e.companyProfile,
-      ...(leads ? [e.savedIn[0] && LEAD_LABEL[e.savedIn[0].leadStatus], e.savedIn[0]?.leadNote] : []),
+      ...(leads
+        ? [
+            e.savedIn[0] && LEAD_LABEL[e.savedIn[0].leadStatus],
+            e.savedIn[0]?.leadNote,
+            e.savedIn[0]?.followUpAt && day(e.savedIn[0].followUpAt),
+            e.savedIn[0]?.followUpNote,
+          ]
+        : []),
     ]),
   };
 

@@ -1,15 +1,19 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { appUrl } from "@/lib/app-url";
+import { today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { changedFields, type DigestEntry, digestEmail, exhibitorSnapshot, type Snapshot } from "@/lib/list-digest";
+import { followUpLabel } from "@/lib/leads";
+import { changedFields, type DigestEntry, type DigestFollowUp, digestEmail, exhibitorSnapshot, type Snapshot } from "@/lib/list-digest";
 
 /**
  * Sends each user the day's news on their accounts' Favorites lists (the
  * star; other saved lists are left out): exhibitors someone else starred,
- * and starred exhibitors whose details changed. Afterwards every
- * reported exhibitor's details are remembered, so nothing is told twice.
+ * starred exhibitors whose details changed, and follow-ups due today or
+ * overdue. Afterwards every reported exhibitor's details are remembered, so
+ * nothing is told twice; a due follow-up is told every day until it is moved
+ * or cleared on the Favorites page.
  */
 export async function runListDigest() {
   if (!isEmailConfigured()) return { skipped: "No email service is set up (RESEND_API_KEY and EMAIL_FROM)." };
@@ -18,6 +22,7 @@ export async function runListDigest() {
     where: { savedLists: { some: { favorites: true, items: { some: {} } } } },
     select: { id: true, name: true, slug: true },
   });
+  const day = today();
   let sent = 0;
   const errors: string[] = [];
 
@@ -40,7 +45,11 @@ export async function runListDigest() {
       if (!added && changes.length === 0) return [];
       return [{ item, now, added, changes }];
     });
-    if (news.length === 0) continue;
+    const followUps: DigestFollowUp[] = items
+      .filter((i) => i.followUpAt && i.followUpAt <= day)
+      .sort((a, b) => a.followUpAt!.getTime() - b.followUpAt!.getTime())
+      .map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, due: followUpLabel(i.followUpAt!, day), note: i.followUpNote }));
+    if (news.length === 0 && followUps.length === 0) continue;
 
     const members = await db.membership.findMany({
       where: { organizationId: org.id, user: { listEmails: true } },
@@ -65,9 +74,13 @@ export async function runListDigest() {
           entries.set(key, entry);
         }
       }
-      if (entries.size === 0) continue;
+      if (entries.size === 0 && followUps.length === 0) continue;
       try {
-        await sendEmail({ to: user.email, ...digestEmail({ accountName: org.name, entries: [...entries.values()], listsUrl: `${appUrl()}/a/${org.slug}/lists` }) });
+        const base = `${appUrl()}/a/${org.slug}`;
+        await sendEmail({
+          to: user.email,
+          ...digestEmail({ accountName: org.name, entries: [...entries.values()], followUps, listsUrl: `${base}/lists`, favoritesUrl: `${base}/favorites` }),
+        });
         sent++;
       } catch (e) {
         errors.push(`${user.email}: ${e instanceof Error ? e.message : String(e)}`);
@@ -75,14 +88,16 @@ export async function runListDigest() {
     }
 
     // Remember what was reported, also when a send failed, so the others are not told twice.
-    await db.$transaction(
-      news.map((n) =>
-        db.savedListItem.update({
-          where: { listId_exhibitorId: { listId: n.item.listId, exhibitorId: n.item.exhibitorId } },
-          data: { snapshot: n.now as Prisma.InputJsonObject },
-        }),
-      ),
-    );
+    if (news.length > 0) {
+      await db.$transaction(
+        news.map((n) =>
+          db.savedListItem.update({
+            where: { listId_exhibitorId: { listId: n.item.listId, exhibitorId: n.item.exhibitorId } },
+            data: { snapshot: n.now as Prisma.InputJsonObject },
+          }),
+        ),
+      );
+    }
   }
   return { sent, errors };
 }
