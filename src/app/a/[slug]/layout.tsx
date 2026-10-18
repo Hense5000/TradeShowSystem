@@ -13,11 +13,13 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const { slug } = await params;
   const { user, membership, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const userName = user.name ?? user.email;
-  const [primaryContact, featureCount, hasAccess, subscriptions] = await Promise.all([
+  const platformAdmin = isPlatformAdmin(user.email);
+  const [primaryContact, featureCount, hasAccess, subscriptions, ticketsWaiting] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
     db.feature.count({ where: visibleFeaturesWhere(organization.id) }),
     accountHasAccess(organization.id, user.email),
     db.subscription.findMany({ where: { organizationId: organization.id } }),
+    platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
   ]);
   const paymentFailed = currentSubscription(subscriptions)?.status === "past_due";
   const profileMissing = !isProfileComplete(organization, primaryContact);
@@ -52,13 +54,27 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
               path: "profile",
               badge: profileMissing ? <span className="block size-2 rounded-full bg-warn" title="Details missing" /> : undefined,
             },
+            { label: "Support", icon: "help", path: "support" },
             { label: "Users", icon: "users", path: "members" },
             { label: "Billing", icon: "card", path: "billing" },
           ],
         },
         // Only the platform admins in PLATFORM_ADMIN_EMAILS see this group.
-        ...(isPlatformAdmin(user.email)
-          ? [{ title: "Super admin", items: [{ label: "Feature control", icon: "shield" as const, path: "admin" }] }]
+        ...(platformAdmin
+          ? [
+              {
+                title: "Super admin",
+                items: [
+                  { label: "Feature control", icon: "shield" as const, path: "admin" },
+                  {
+                    label: "Support requests",
+                    icon: "help" as const,
+                    path: "admin/support",
+                    badge: ticketsWaiting > 0 ? <span className="pill pill-warn" title="Waiting for an answer">{ticketsWaiting}</span> : undefined,
+                  },
+                ],
+              },
+            ]
           : []),
       ]}
     >

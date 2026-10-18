@@ -33,13 +33,15 @@ model User {
   updatedAt      DateTime  @updatedAt
 
   memberships     Membership[]
-  invitationsSent Invitation[]    @relation("InvitedBy")
+  invitationsSent Invitation[]     @relation("InvitedBy")
   savedListItems  SavedListItem[]
-  assignedLeads   SavedListItem[] @relation("LeadAssignee")
-  visitedLeads    SavedListItem[] @relation("LeadVisitor")
+  assignedLeads   SavedListItem[]  @relation("LeadAssignee")
+  visitedLeads    SavedListItem[]  @relation("LeadVisitor")
   favoriteShows   FavoriteShow[]
   trustedDevices  TrustedDevice[]
   loginCodes      LoginCode[]
+  supportTickets  SupportTicket[]
+  supportMessages SupportMessage[]
 }
 
 // A browser that has confirmed a login code from the user's email. It can log
@@ -108,6 +110,7 @@ model Organization {
   savedLists            SavedList[]
   favoriteShows         FavoriteShow[]
   hiddenRecommendations HiddenShowRecommendation[]
+  supportTickets        SupportTicket[]
 }
 
 enum Role {
@@ -539,4 +542,51 @@ model HiddenShowRecommendation {
 
   @@id([organizationId, tradeShowId])
   @@index([tradeShowId])
+}
+
+// ---------------------------------------------------------------------------
+// Support
+// ---------------------------------------------------------------------------
+
+enum SupportStatus {
+  OPEN
+  CLOSED
+}
+
+// A support request from a customer account: a subject and a thread of
+// messages between the account's users and the platform admins.
+model SupportTicket {
+  id               String        @id @default(cuid())
+  organizationId   String
+  createdById      String?
+  subject          String
+  status           SupportStatus @default(OPEN)
+  // The customer wrote last, so the ticket waits for an answer from support.
+  waitingOnSupport Boolean       @default(true)
+  // When the latest message was written; the lists are sorted by it.
+  lastMessageAt    DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages     SupportMessage[]
+
+  @@index([organizationId, lastMessageAt])
+  @@index([status, waitingOnSupport])
+}
+
+model SupportMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  authorId    String?
+  // Written by a platform admin (shown as "Support") rather than by the customer.
+  fromSupport Boolean  @default(false)
+  body        String
+  createdAt   DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
 }
