@@ -17,10 +17,13 @@ import {
 import { type ContactFillResult, contactSummary, type FoundContact } from "@/lib/contact-finder";
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere } from "@/lib/contact-finder-run";
 import { db } from "@/lib/db";
+import { MAX_QUESTION } from "@/lib/exhibitor-ai-search";
+import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
+import { exhibitorQuery } from "@/lib/exhibitor-list";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { fillCountriesFromPhones } from "@/lib/phone-country-run";
 import { withPhoneCountry } from "@/lib/phone-country";
-import { requirePlatformAdmin } from "@/lib/tenant";
+import { requireMembership, requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
 /** How long an import or a contact lookup press spends on AI profiles; the page may run for 300 seconds. */
@@ -215,4 +218,20 @@ export async function fillCountries(slug: string): Promise<FillState> {
   const filled = await fillCountriesFromPhones();
   revalidatePath(`/a/${slug}/exhibitors`);
   return { message: `Filled the country of ${filled} ${filled === 1 ? "exhibitor" : "exhibitors"} from the phone number.` };
+}
+
+/** "Ask AI": turns the user's sentence into the page's filters and shows the exhibitors they match. */
+export async function askAiSearch(slug: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireMembership(slug);
+  const question = String(formData.get("question") ?? "").trim().slice(0, MAX_QUESTION);
+  if (!question) return { error: "Write what you are looking for." };
+  if (!isCompanyProfileConfigured()) return { error: "AI search is not set up yet." };
+  let filters;
+  try {
+    filters = await askAiForFilters(question);
+  } catch (e) {
+    console.error("AI search failed", e);
+    return { error: e instanceof Error && e.message.startsWith("The AI") ? e.message : "The AI could not be reached. Try again in a moment." };
+  }
+  redirect(`/a/${slug}/exhibitors${exhibitorQuery(filters)}`);
 }

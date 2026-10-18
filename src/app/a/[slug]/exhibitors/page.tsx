@@ -8,20 +8,24 @@ import { syncCompanyKeys } from "@/lib/company-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
-import { exhibitorFilters, exhibitorQuery, exhibitorWhere } from "@/lib/exhibitor-list";
+import { formatDateRange } from "@/lib/dates";
+import { type ExhibitorFilters, exhibitorFilters, exhibitorQuery, exhibitorWhere, industryTerms, isFiltered } from "@/lib/exhibitor-list";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
 import { addShownToList, setListMembership } from "../lists/actions";
-import { fillContacts, fillCountries } from "./actions";
+import { askAiSearch, fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
+import { AiSearch } from "./ai-search";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
 import { ProfileFillCard } from "./profile-fill-card";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
+// Filters set only by Ask AI (and the question itself); the search form keeps them as hidden fields.
+const AI_ONLY = ["industry", "showCountry", "showCity", "from", "to", "ai"] as const;
 // A company's trade shows listed in its row; the rest are on its company page.
 const SHOWS_IN_ROW = 3;
 
@@ -96,7 +100,12 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
-  const filtered = Boolean(q || show || country);
+  const filtered = isFiltered(filters);
+  const chips = filterChips(filters, shows);
+  const clearHref = (keys: (keyof ExhibitorFilters)[]) => {
+    const rest = { ...filters, ...Object.fromEntries(keys.map((k) => [k, ""])) };
+    return `/a/${slug}/exhibitors${exhibitorQuery(isFiltered(rest) ? rest : { ...rest, ai: "" })}`;
+  };
   const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
   const pageHref = (p: number) => `/a/${slug}/exhibitors${exhibitorQuery(filters, p > 1 ? { page: String(p) } : {})}`;
   const exportHref = (format: "xlsx" | "csv") => `/a/${slug}/exhibitors/export${exhibitorQuery(filters, { format })}`;
@@ -171,6 +180,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         </section>
       ) : (
         <section className="card overflow-hidden p-0">
+          {isCompanyProfileConfigured() && <AiSearch action={askAiSearch.bind(null, slug)} question={filters.ai} />}
           <form className="flex flex-wrap items-center gap-2 p-4" role="search">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
@@ -188,6 +198,10 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                 <option key={c.code} value={c.code}>{c.name}</option>
               ))}
             </select>
+            {/* Filters only Ask AI sets; they stay until their chip is removed. */}
+            {AI_ONLY.map((k) =>
+              filters[k] ? <input key={k} type="hidden" name={k} value={filters[k]} /> : null,
+            )}
             <button className="btn-secondary py-2">Search</button>
             {filtered && (
               <Link href={`/a/${slug}/exhibitors`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
@@ -195,6 +209,20 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
               </Link>
             )}
           </form>
+          {/* What the AI understood, or filters only it can set; the drop-downs above show the rest. */}
+          {chips.length > 0 && AI_ONLY.some((k) => filters[k]) && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-2.5 text-sm">
+              <span className="text-muted">{filters.ai ? "AI understood:" : "Filters:"}</span>
+              {chips.map((c) => (
+                <span key={c.label} className="inline-flex items-center gap-1 rounded-full border border-line bg-subtle py-0.5 pr-1 pl-2.5 text-xs font-medium">
+                  <span className="text-muted">{c.name}:</span> {c.label}
+                  <Link href={clearHref(c.keys)} className="grid size-5 place-items-center rounded-full text-faint hover:bg-line hover:text-ink" aria-label={`Remove ${c.name} filter`} title="Remove">
+                    ×
+                  </Link>
+                </span>
+              ))}
+            </div>
+          )}
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
             {filtered ? `${matching} of ${total} companies match` : `${total} ${total === 1 ? "company" : "companies"}`}
             {matchingRows > matching && ` · ${matchingRows} trade show entries`}
@@ -323,4 +351,22 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
       )}
     </>
   );
+}
+
+/** The filters that are set, each as a chip the user can remove, so they see what the AI understood. */
+function filterChips(f: ExhibitorFilters, shows: { id: string; label: string }[]): { name: string; label: string; keys: (keyof ExhibitorFilters)[] }[] {
+  const chips: { name: string; label: string; keys: (keyof ExhibitorFilters)[] }[] = [];
+  if (f.q) chips.push({ name: "Search", label: f.q, keys: ["q"] });
+  if (f.country) chips.push({ name: "Company country", label: countryName(f.country), keys: ["country"] });
+  const terms = industryTerms(f.industry);
+  if (terms.length) chips.push({ name: "Industry", label: terms.join(", "), keys: ["industry"] });
+  if (f.show) chips.push({ name: "Trade show", label: shows.find((s) => s.id === f.show)?.label ?? "Chosen show", keys: ["show"] });
+  if (f.showCountry) chips.push({ name: "Show in", label: countryName(f.showCountry), keys: ["showCountry"] });
+  if (f.showCity) chips.push({ name: "Show city", label: f.showCity, keys: ["showCity"] });
+  if (f.from || f.to) {
+    const d = (v: string) => formatDateRange(new Date(v), new Date(v));
+    const label = f.from && f.to ? `${d(f.from)} – ${d(f.to)}` : f.from ? `from ${d(f.from)}` : `until ${d(f.to)}`;
+    chips.push({ name: "Show dates", label, keys: ["from", "to"] });
+  }
+  return chips;
 }
