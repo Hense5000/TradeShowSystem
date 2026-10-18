@@ -8,13 +8,13 @@ import { db } from "@/lib/db";
 import { isExhibitorFetchConfigured, withoutExhibitorsWhere } from "@/lib/exhibitor-fetch-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
+import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
+import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
 import { FetchAllCard } from "./fetch-all-card";
+import { OrganizerCard } from "./organizer-card";
 
 // "Fetch exhibitors for all" reads one page of an exhibitor directory per call to this page.
 export const maxDuration = 300;
-
-const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running: "pill-ok", finished: "pill-neutral" };
 
 // "" (the default) hides finished shows, which is what people look for most.
 const VIEWS = [
@@ -64,20 +64,25 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     ...whereForView(view, day),
     ...(country && { country }),
     ...(q && {
-      OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }],
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { city: { contains: q, mode: "insensitive" } },
+        { organizer: { name: { contains: q, mode: "insensitive" } } },
+      ],
     }),
   };
   const useAi = canEdit && isExhibitorFetchConfigured();
-  const [shows, total, countries, withoutExhibitors] = await Promise.all([
+  const [shows, total, countries, withoutExhibitors, withoutOrganizer] = await Promise.all([
     db.tradeShow.findMany({
       where,
-      include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } },
+      include: { center: { select: { name: true } }, organizer: { select: { id: true, name: true } }, _count: { select: { exhibitors: true } } },
       // Finished shows: most recent first. Everything else: soonest first.
       orderBy: view === "finished" ? [{ startDate: "desc" }, { name: "asc" }] : [{ startDate: "asc" }, { name: "asc" }],
     }),
     db.tradeShow.count(),
     db.tradeShow.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
     useAi ? db.tradeShow.count({ where: withoutExhibitorsWhere(day) }) : 0,
+    canEdit && isOrganizerFinderConfigured() ? db.tradeShow.count({ where: missingOrganizerWhere }) : 0,
   ]);
   const countryOptions = countries
     .map((c) => c.country!)
@@ -105,6 +110,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
       />
 
       {withoutExhibitors > 0 && <FetchAllCard slug={slug} missing={withoutExhibitors} />}
+      {withoutOrganizer > 0 && <OrganizerCard slug={slug} missing={withoutOrganizer} />}
 
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
@@ -126,7 +132,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
           <form className="flex flex-wrap items-center gap-2 p-4" role="search">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
-              <input className="input pl-9" name="q" defaultValue={q} placeholder="Search by name or city" aria-label="Search trade shows" />
+              <input className="input pl-9" name="q" defaultValue={q} placeholder="Search by name, city or organizer" aria-label="Search trade shows" />
             </div>
             <select className="input w-auto" name="view" defaultValue={view} aria-label="Status">
               {VIEWS.map((v) => (
@@ -174,7 +180,14 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
                           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
                             <Icon name="calendar" className="size-4" />
                           </span>
-                          <span className="font-semibold">{s.name}</span>
+                          <div>
+                            <p className="font-semibold">{s.name}</p>
+                            {s.organizer && (
+                              <Link href={`/a/${slug}/organizers/${s.organizer.id}`} className="text-xs text-muted hover:text-brand hover:underline">
+                                {s.organizer.name}
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</td>

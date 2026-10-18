@@ -140,6 +140,16 @@ export const tradeShowSchema = z
       .max(150)
       .optional()
       .transform((v) => v?.trim() || null),
+    // The same for the organizer.
+    organizerId: z
+      .string()
+      .optional()
+      .transform((v) => v?.trim() || null),
+    organizerName: z
+      .string()
+      .max(150)
+      .optional()
+      .transform((v) => v?.trim() || null),
   })
   .refine((s) => s.endDate >= s.startDate, { message: "The end date can't be before the start date.", path: ["endDate"] });
 

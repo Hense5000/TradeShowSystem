@@ -10,6 +10,7 @@ import { requirePlatformAdmin } from "@/lib/tenant";
 import { deleteTradeShow, updateTradeShow } from "../actions";
 import { FetchExhibitors } from "../fetch-exhibitors";
 import { FindDirectory } from "../find-directory";
+import { tradeShowPickerOptions } from "../picker-options";
 import { TradeShowFields } from "../trade-show-fields";
 
 // "Fetch exhibitors" reads one page of the exhibitor directory per call to this page.
@@ -18,9 +19,9 @@ export const maxDuration = 300;
 export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]/trade-shows/[id]">) {
   const { slug, id } = await params;
   await requirePlatformAdmin(slug);
-  const [show, centers] = await Promise.all([
+  const [show, options] = await Promise.all([
     db.tradeShow.findUnique({ where: { id }, include: { _count: { select: { exhibitors: true } } } }),
-    db.exhibitionCenter.findMany({ select: { id: true, name: true, city: true }, orderBy: { name: "asc" } }),
+    tradeShowPickerOptions(),
   ]);
   if (!show) notFound();
 
@@ -32,7 +33,7 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
         action={<Link href={`/a/${slug}/trade-shows`} className="btn-secondary">Back to list</Link>}
       />
       <SaveForm action={updateTradeShow.bind(null, slug, id)} title="Trade show details" description="Name and dates are required." submitLabel="Save changes" readOnly={false}>
-        <TradeShowFields show={show} centers={centers} />
+        <TradeShowFields show={show} options={options} />
       </SaveForm>
       {show.exhibitorDirectoryUrl && isExhibitorFetchConfigured() && (
         <FetchExhibitors

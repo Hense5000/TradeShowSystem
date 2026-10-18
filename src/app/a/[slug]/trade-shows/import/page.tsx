@@ -12,6 +12,7 @@ const EXAMPLE = [
   ["Country", "Germany"],
   ["Website", "innotrans.de"],
   ["Exhibition center", "Messe Berlin"],
+  ["Organizer", "Messe Berlin GmbH"],
   ["Exhibitor directory URL", "innotrans.de/exhibitors"],
 ];
 
@@ -53,7 +54,7 @@ export default async function ImportTradeShowsPage({ params }: PageProps<"/a/[sl
         </div>
         <p className="mt-3 text-muted">
           Dates can be written as 2026-09-22, 22.09.2026 or 22/09/2026 (day first). Country can be a name (Germany) or a
-          code (DE). The exhibition center must be written as it is in the centers list. A Status column is ignored, because the status follows from the dates. Shows already in the list,
+          code (DE). The exhibition center must be written as it is in the centers list, and the organizer as it is in the organizers list (company forms such as GmbH or Ltd may be left out). A Status column is ignored, because the status follows from the dates. Shows already in the list,
           with the same name and start date, are skipped, so it is safe to import the same file again.
         </p>
       </section>

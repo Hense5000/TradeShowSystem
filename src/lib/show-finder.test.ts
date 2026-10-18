@@ -29,7 +29,7 @@ describe("checkFoundShows", () => {
   it("keeps shows with real dates in the next six months", () => {
     const result = checkFoundShows(
       [
-        { name: "  Agromek ", startDate: "2027-03-30", endDate: "2027-04-02", website: "https://agromek.dk" },
+        { name: "  Agromek ", startDate: "2027-03-30", endDate: "2027-04-02", website: "https://agromek.dk", organizer: " MCH  Messecenter Herning " },
         { name: "Running now", startDate: "2026-09-30", endDate: "2026-10-03", website: null },
         { name: "One day", startDate: "2027-01-05", endDate: "", website: "not a url" },
         { name: "Last day", startDate: "2027-04-02", endDate: "2027-04-04", website: null },
@@ -41,10 +41,10 @@ describe("checkFoundShows", () => {
       now,
     );
     expect(result).toEqual([
-      { name: "Agromek", startDate: d("2027-03-30"), endDate: d("2027-04-02"), website: "https://agromek.dk/" },
-      { name: "Running now", startDate: d("2026-09-30"), endDate: d("2026-10-03"), website: null },
-      { name: "One day", startDate: d("2027-01-05"), endDate: d("2027-01-05"), website: null },
-      { name: "Last day", startDate: d("2027-04-02"), endDate: d("2027-04-04"), website: null },
+      { name: "Agromek", startDate: d("2027-03-30"), endDate: d("2027-04-02"), website: "https://agromek.dk/", organizer: "MCH Messecenter Herning" },
+      { name: "Running now", startDate: d("2026-09-30"), endDate: d("2026-10-03"), website: null, organizer: null },
+      { name: "One day", startDate: d("2027-01-05"), endDate: d("2027-01-05"), website: null, organizer: null },
+      { name: "Last day", startDate: d("2027-04-02"), endDate: d("2027-04-04"), website: null, organizer: null },
     ]);
   });
 });

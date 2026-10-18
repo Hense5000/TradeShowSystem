@@ -6,6 +6,9 @@ export type ShowStatus = "upcoming" | "running" | "finished";
 
 export const STATUS_LABEL: Record<ShowStatus, string> = { upcoming: "Upcoming", running: "Running", finished: "Finished" };
 
+/** The pill style for each status, as used in the design. */
+export const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running: "pill-ok", finished: "pill-neutral" };
+
 /** A show's status follows from its dates, so nobody has to keep it up to date. */
 export function showStatus(show: { startDate: Date; endDate: Date }, now = new Date()): ShowStatus {
   const day = isoDate(today(now));
@@ -30,6 +33,7 @@ export function parseTradeShowRows(rows: string[][]) {
       country: ["country", "countrycode"],
       website: ["website", "officialwebsite", "web", "url", "homepage"],
       centerName: ["exhibitioncenter", "exhibitioncentername", "center", "centername", "venue"],
+      organizerName: ["organizer", "organiser", "organizername", "organisername", "organizercompany", "organisercompany", "exhibitionorganizer", "exhibitionorganiser"],
       exhibitorDirectoryUrl: ["exhibitordirectoryurl", "exhibitordirectory", "exhibitorlist", "exhibitorlisturl", "exhibitorsurl", "exhibitorurl", "exhibitors"],
     },
     schema: tradeShowSchema,
