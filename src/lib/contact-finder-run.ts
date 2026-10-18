@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { describeProfileError, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { describeProfileError, isCompanyProfileConfigured, stopsEveryRow } from "@/lib/company-profile-run";
 import {
   cleanContact,
   type ContactFillResult,
@@ -191,7 +191,7 @@ export async function fillMissingContacts({
         found = await findContact({ name: e.name, website: e.website! }, client);
       } catch (error) {
         // A busy or broken AI service fails every row; stop and leave them for the next run.
-        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.RateLimitError) {
+        if (stopsEveryRow(error)) {
           stopped = true;
           totals.stoppedBy = describeContactError(error);
           return;

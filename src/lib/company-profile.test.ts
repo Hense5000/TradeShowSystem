@@ -40,10 +40,10 @@ describe("profileLine", () => {
 
 describe("profileRunSummary", () => {
   it("says what was written and what is left", () => {
-    expect(profileRunSummary({ written: 2, noInfo: 1, failed: 0, websitesFound: 1 }, 0)).toBe(
+    expect(profileRunSummary({ written: 2, noInfo: 1, failed: 0, websitesFound: 1, problems: [] }, 0)).toBe(
       "AI wrote 2 company profiles. 1 exhibitor also got a website. For 1 company AI found nothing about what they do.",
     );
-    expect(profileRunSummary({ written: 0, noInfo: 0, failed: 1, websitesFound: 0 }, 3)).toContain("3 still without a profile");
+    expect(profileRunSummary({ written: 0, noInfo: 0, failed: 1, websitesFound: 0, problems: [] }, 3)).toContain("3 still without a profile");
   });
 });
 
