@@ -173,7 +173,7 @@ export async function listEmptyProfiles(slug: string, tradeShowId: string | unde
 export async function writeProfilesFor(slug: string, ids: string[]): Promise<ProfileRunResult> {
   await requirePlatformAdmin(slug);
   if (!isCompanyProfileConfigured()) {
-    return { written: 0, noInfo: 0, failed: 0, websitesFound: 0, stoppedBy: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
+    return { written: 0, noInfo: 0, failed: 0, websitesFound: 0, problems: [], stoppedBy: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
   }
   const result = await writeProfiles(ids.slice(0, PROFILES_PER_CALL));
   revalidatePath(`/a/${slug}/exhibitors`);

@@ -20,6 +20,7 @@ export function ProfileFillCard({ slug, tradeShowId, missing }: { slug: string; 
   const router = useRouter();
   const [progress, setProgress] = useState<{ done: number; total: number; written: number }>();
   const [message, setMessage] = useState<string>();
+  const [problems, setProblems] = useState<ProfileRunResult["problems"]>([]);
   const running = progress !== undefined;
 
   // Leaving the page stops the run; ask first.
@@ -32,7 +33,8 @@ export function ProfileFillCard({ slug, tradeShowId, missing }: { slug: string; 
 
   async function run() {
     setMessage(undefined);
-    const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0 };
+    setProblems([]);
+    const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0, problems: [] };
     let ids: string[] = [];
     let done = 0;
     let lostInARow = 0;
@@ -47,6 +49,7 @@ export function ProfileFillCard({ slug, tradeShowId, missing }: { slug: string; 
           totals.noInfo += r.noInfo;
           totals.failed += r.failed;
           totals.websitesFound += r.websitesFound;
+          if (r.problems.length) setProblems((p) => [...p, ...r.problems]);
           lostInARow = 0;
           if (r.stoppedBy) {
             totals.stoppedBy = r.stoppedBy;
@@ -55,6 +58,7 @@ export function ProfileFillCard({ slug, tradeShowId, missing }: { slug: string; 
         } catch {
           // The server timed out or the connection dropped on this batch; go on with the next.
           totals.failed += batch.length;
+          setProblems((p) => [...p, { name: `${batch.length} exhibitors`, reason: "The server took too long or the connection was lost." }]);
           if (++lostInARow >= 3) {
             totals.stoppedBy = "The connection was lost three times in a row.";
             done += batch.length;
@@ -101,6 +105,16 @@ export function ProfileFillCard({ slug, tradeShowId, missing }: { slug: string; 
           percent={percent}
           ariaLabel="Progress"
         />
+      )}
+      {problems.length > 0 && (
+        <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-lg border border-line text-sm" aria-label="Exhibitors without a profile">
+          {problems.map((p, i) => (
+            <li key={i} className="flex flex-wrap gap-x-2 px-3 py-1.5">
+              <span className="font-semibold">{p.name}</span>
+              <span className="text-muted">{p.reason}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

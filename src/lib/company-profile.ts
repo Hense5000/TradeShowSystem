@@ -55,6 +55,8 @@ export type ProfileRunResult = {
   failed: number;
   /** Exhibitors without a website that got one from AI's web search. */
   websitesFound: number;
+  /** The exhibitors that got no profile, and why, to show under the bar. */
+  problems: { name: string; reason: string }[];
   /** Why the run stopped early, e.g. an invalid AI key. */
   stoppedBy?: string;
 };

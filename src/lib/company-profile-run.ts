@@ -119,10 +119,21 @@ export async function writeCompanyProfile(company: Company, client = new Anthrop
   return writeWithFetch(client, company);
 }
 
+/** Whether the Anthropic account has no credit left; every call then fails with error 400. */
+function isOutOfCredit(error: unknown): boolean {
+  return error instanceof Anthropic.BadRequestError && /credit balance/i.test(error.message);
+}
+
+/** An error that fails every exhibitor alike (bad key, busy service, no credit), so a run should stop rather than go on. */
+export function stopsEveryRow(error: unknown): boolean {
+  return error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.RateLimitError || isOutOfCredit(error);
+}
+
 export function describeProfileError(error: unknown): string {
   if (error instanceof Anthropic.AuthenticationError) return "The AI key (ANTHROPIC_API_KEY) is not valid.";
+  if (isOutOfCredit(error)) return "The Anthropic account behind ANTHROPIC_API_KEY has no credit left. Top it up under Billing at console.anthropic.com.";
   if (error instanceof Anthropic.RateLimitError) return "The AI service is busy or the credit is used up. Try again later.";
-  if (error instanceof Anthropic.APIError) return `The AI service failed (error ${error.status}).`;
+  if (error instanceof Anthropic.APIError) return `The AI service failed (error ${error.status}): ${error.message.slice(0, 200)}`;
   if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "The website took too long to answer.";
   if (error instanceof Error && error.message) return error.message.slice(0, 300);
   return "Something went wrong.";
@@ -174,11 +185,12 @@ export async function fillMissingProfiles({
         else totals.noInfo++;
       } catch (error) {
         // A busy or broken AI service fails every row; stop and leave them for the next run.
-        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.RateLimitError) {
+        if (stopsEveryRow(error)) {
           stopped = true;
           totals.stoppedBy = describeProfileError(error);
           return;
         }
+        console.error(`Company profile for ${e.name} failed`, error);
         totals.failed++;
       }
       // Only fill a profile that is still empty, in case someone typed one meanwhile.
@@ -255,7 +267,7 @@ export function emptyProfileWhere(tradeShowId?: string): Prisma.ExhibitorWhereIn
  * way is saved when the field is empty.
  */
 export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
-  const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0 };
+  const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0, problems: [] };
   const rows = await db.exhibitor.findMany({
     where: { id: { in: ids }, ...emptyProfileWhere() },
     select: { id: true, name: true, website: true, country: true, tradeShow: { select: { name: true } } },
@@ -275,6 +287,7 @@ export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
             profile = await writeCompanyProfile({ name: e.name, website: e.website }, client);
           } catch (error) {
             if (error instanceof Anthropic.APIError) throw error;
+            console.warn(`Website of ${e.name} could not be used`, error);
             // The website could not be used; search the web instead.
           }
         }
@@ -284,15 +297,20 @@ export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
           if (!e.website) website = found.website;
         }
         if (profile) totals.written++;
-        else totals.noInfo++;
+        else {
+          totals.noInfo++;
+          totals.problems.push({ name: e.name, reason: "AI found nothing about what the company does." });
+        }
       } catch (error) {
         // A busy or broken AI service fails every row; stop and leave them for the next press.
-        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.RateLimitError) {
+        if (stopsEveryRow(error)) {
           stopped = true;
           totals.stoppedBy = describeProfileError(error);
           return;
         }
+        console.error(`Company profile for ${e.name} failed`, error);
         totals.failed++;
+        totals.problems.push({ name: e.name, reason: describeProfileError(error) });
       }
       await db.exhibitor.updateMany({ where: { id: row.id }, data: { profileTriedAt: new Date() } });
       // Only fill fields that are still empty, in case someone typed them meanwhile.
