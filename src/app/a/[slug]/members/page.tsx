@@ -15,7 +15,7 @@ const ROLE_HELP = [
 
 export default async function MembersPage({ params }: PageProps<"/a/[slug]/members">) {
   const { slug } = await params;
-  const { membership: me, organization } = await requireMembership(slug);
+  const { membership: me, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const isAdmin = canManageMembers(me.role);
 
   const [members, invitations] = await Promise.all([

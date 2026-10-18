@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentSubscription, formatMoney, intervalLabel, isLive, statusLabel, statusPill } from "./billing";
+import { currentSubscription, formatMoney, hasPaidAccess, intervalLabel, isLive, statusLabel, statusPill } from "./billing";
 
 describe("currentSubscription", () => {
   const old = { status: "canceled", createdAt: new Date("2026-01-01") };
@@ -45,5 +45,20 @@ describe("formatting", () => {
     expect(intervalLabel("month")).toBe("per month");
     expect(intervalLabel("year")).toBe("per year");
     expect(intervalLabel("month", 3)).toBe("every 3 months");
+  });
+});
+
+describe("hasPaidAccess", () => {
+  it("lets paying accounts in, also while a failed payment is retried", () => {
+    expect(hasPaidAccess({ status: "active" })).toBe(true);
+    expect(hasPaidAccess({ status: "trialing" })).toBe(true);
+    expect(hasPaidAccess({ status: "past_due" })).toBe(true);
+  });
+
+  it("blocks accounts that never paid or whose subscription ended", () => {
+    expect(hasPaidAccess(null)).toBe(false);
+    expect(hasPaidAccess({ status: "incomplete" })).toBe(false);
+    expect(hasPaidAccess({ status: "unpaid" })).toBe(false);
+    expect(hasPaidAccess({ status: "canceled" })).toBe(false);
   });
 });

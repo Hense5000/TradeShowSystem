@@ -32,6 +32,15 @@ export function isLive(status: string): boolean {
   return LIVE.has(status);
 }
 
+/**
+ * Whether an account may use the app. A failed payment (past_due) keeps
+ * access while Stripe retries the card; Stripe then moves the subscription to
+ * unpaid or canceled, which blocks it.
+ */
+export function hasPaidAccess(subscription: { status: string } | null): boolean {
+  return subscription?.status === "active" || subscription?.status === "trialing" || subscription?.status === "past_due";
+}
+
 /** The subscription to show: the newest live one, otherwise the newest of all. */
 export function currentSubscription<T extends SubscriptionLike>(subscriptions: T[]): T | null {
   const newest = [...subscriptions].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());

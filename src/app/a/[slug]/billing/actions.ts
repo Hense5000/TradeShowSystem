@@ -10,7 +10,7 @@ import { requireMembership } from "@/lib/tenant";
 
 /** Sends the owner to Stripe Checkout to start the subscription. */
 export async function startCheckout(slug: string, _prev: ActionState): Promise<ActionState> {
-  const { user, organization } = await requireMembership(slug, "OWNER");
+  const { user, organization } = await requireMembership(slug, "OWNER", { allowUnpaid: true });
   const price = planPriceId();
   if (!billingConfigured() || !price) return { error: "Payments are not set up yet." };
 
@@ -48,7 +48,7 @@ export async function startCheckout(slug: string, _prev: ActionState): Promise<A
 
 /** Opens Stripe's customer portal: change card, cancel, see invoices. */
 export async function openPortal(slug: string, _prev: ActionState): Promise<ActionState> {
-  const { organization } = await requireMembership(slug, "OWNER");
+  const { organization } = await requireMembership(slug, "OWNER", { allowUnpaid: true });
   if (!billingConfigured() || !organization.stripeCustomerId) return { error: "There is no subscription to manage yet." };
 
   let url: string;

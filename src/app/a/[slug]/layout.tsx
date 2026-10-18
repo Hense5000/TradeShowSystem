@@ -1,20 +1,25 @@
+import Link from "next/link";
+import { currentSubscription } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { visibleFeaturesWhere } from "@/lib/features";
 import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
-import { requireMembership } from "@/lib/tenant";
+import { accountHasAccess, requireMembership } from "@/lib/tenant";
 import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
   const { slug } = await params;
-  const { user, membership, organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const userName = user.name ?? user.email;
-  const [primaryContact, featureCount] = await Promise.all([
+  const [primaryContact, featureCount, hasAccess, subscriptions] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
     db.feature.count({ where: visibleFeaturesWhere(organization.id) }),
+    accountHasAccess(organization.id, user.email),
+    db.subscription.findMany({ where: { organizationId: organization.id } }),
   ]);
+  const paymentFailed = currentSubscription(subscriptions)?.status === "past_due";
   const profileMissing = !isProfileComplete(organization, primaryContact);
 
   return (
@@ -56,6 +61,36 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
           : []),
       ]}
     >
+      {!hasAccess ? (
+        <p className="rounded-lg bg-warn-soft px-3 py-2.5 text-sm text-warn">
+          This account needs an active subscription to use Trade Show System.{" "}
+          {membership.role === "OWNER" ? (
+            <>
+              Start it on the{" "}
+              <Link href={`/a/${slug}/billing`} className="font-semibold underline">
+                Billing page
+              </Link>
+              .
+            </>
+          ) : (
+            "Ask the account owner to start it."
+          )}
+        </p>
+      ) : (
+        paymentFailed && (
+          <p className="rounded-lg bg-warn-soft px-3 py-2.5 text-sm text-warn">
+            The last payment failed.{" "}
+            {membership.role === "OWNER" ? (
+              <Link href={`/a/${slug}/billing`} className="font-semibold underline">
+                Update your card
+              </Link>
+            ) : (
+              "Ask the account owner to update the card"
+            )}{" "}
+            to keep using Trade Show System.
+          </p>
+        )
+      )}
       {children}
     </AccountFrame>
   );

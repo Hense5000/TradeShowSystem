@@ -31,7 +31,7 @@ async function syncCheckout(sessionId: string, stripeCustomerId: string | null) 
 export default async function BillingPage({ params, searchParams }: PageProps<"/a/[slug]/billing">) {
   const { slug } = await params;
   const { checkout } = await searchParams;
-  const { membership, organization } = await requireMembership(slug);
+  const { membership, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const isOwner = hasRole(membership.role, "OWNER");
   const configured = billingConfigured();
 

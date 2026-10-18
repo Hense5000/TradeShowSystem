@@ -16,7 +16,7 @@ export type InviteState = { error?: string; link?: string; email?: string } | un
 const ownerCount = (organizationId: string) => db.membership.count({ where: { organizationId, role: "OWNER" } });
 
 export async function inviteMember(slug: string, _prev: InviteState, formData: FormData): Promise<InviteState> {
-  const { user, membership, organization } = await requireMembership(slug, "ADMIN");
+  const { user, membership, organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
   const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error), email: String(formData.get("email") ?? "") };
   const { email, role } = parsed.data;
@@ -46,7 +46,7 @@ export async function inviteMember(slug: string, _prev: InviteState, formData: F
 }
 
 export async function revokeInvitation(slug: string, invitationId: string): Promise<State> {
-  const { organization } = await requireMembership(slug, "ADMIN");
+  const { organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
   await db.invitation.updateMany({
     where: { id: invitationId, organizationId: organization.id, acceptedAt: null, revokedAt: null },
     data: { revokedAt: new Date() },
@@ -56,7 +56,7 @@ export async function revokeInvitation(slug: string, invitationId: string): Prom
 }
 
 export async function changeRole(slug: string, membershipId: string, _prev: State, formData: FormData): Promise<State> {
-  const { membership: actor, organization } = await requireMembership(slug);
+  const { membership: actor, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const next = roleSchema.safeParse(formData.get("role"));
   if (!next.success) return { error: "Pick a valid role." };
 
@@ -77,7 +77,7 @@ export async function changeRole(slug: string, membershipId: string, _prev: Stat
 }
 
 export async function removeMember(slug: string, membershipId: string): Promise<State> {
-  const { membership: actor, organization } = await requireMembership(slug);
+  const { membership: actor, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const target = await db.membership.findFirst({ where: { id: membershipId, organizationId: organization.id } });
   if (!target) return { error: "That user is not in this account." };
 
