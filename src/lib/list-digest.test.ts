@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changedFields, digestEmail, exhibitorSnapshot } from "./list-digest";
+import { changedFields, digestEmail, exhibitorSnapshot, MAX_SUGGESTIONS, similarExhibitors } from "./list-digest";
 
 const base = exhibitorSnapshot({
   name: "Acme",
@@ -65,5 +65,44 @@ describe("list email", () => {
     expect(mail.text).toContain("Today: Beta (Medica 2026)");
     expect(mail.text).not.toContain("What is new");
     expect(mail.html).toContain("Call &lt;Anna&gt;");
+  });
+});
+
+describe("new exhibitors you may like", () => {
+  const ex = (name: string, industry: string | null, country: string | null, companyKey: string | null = null) => ({ name, industry, country, companyKey });
+  const starred = [ex("Dräger", "Medical devices", "DE", "draeger"), ex("Ambu", " medical devices", "DK")];
+
+  it("finds exhibitors with the same industry or country, best match first", () => {
+    const found = similarExhibitors(starred, [
+      ex("Zeiss", "Optics", "DE"),
+      ex("Philips", "Medical Devices", "NL"),
+      ex("Coloplast", "Medical devices", "DK"),
+      ex("Nestlé", "Food", "CH"),
+    ]);
+    expect(found.map((f) => [f.exhibitor.name, f.why])).toEqual([
+      ["Coloplast", "Medical devices · Denmark"],
+      ["Philips", "Medical Devices"],
+      ["Zeiss", "Germany"],
+    ]);
+  });
+
+  it("leaves out companies that are already starred at another show", () => {
+    expect(similarExhibitors(starred, [ex("Drägerwerk", "Medical devices", "DE", "draeger")])).toEqual([]);
+  });
+
+  it("lists them in the email with a link to star them", () => {
+    const suggestions = Array.from({ length: MAX_SUGGESTIONS + 2 }, (_, i) => ({
+      exhibitor: `Co ${i}`,
+      tradeShow: "Medica 2026",
+      why: "Germany",
+      url: `https://x.test/a/bolt/exhibitors?show=s&q=Co%20${i}`,
+    }));
+    const mail = digestEmail({ accountName: "Bolt", entries: [], suggestions, listsUrl: "https://x.test/a/bolt/lists", favoritesUrl: "https://x.test/a/bolt/favorites" });
+    expect(mail.subject).toBe("Bolt: 12 new exhibitors you may like in your Favorites");
+    expect(mail.text).toContain("Co 0 (Medica 2026) · Germany\n  Star it: https://x.test/a/bolt/exhibitors?show=s&q=Co%200");
+    expect(mail.text).toContain("…and 2 more at your favorite trade shows.");
+    expect(mail.text).not.toContain("Co 10 ");
+    expect(mail.html).toContain("New exhibitors you may like");
+    expect(mail.html).toContain('href="https://x.test/a/bolt/exhibitors?show=s&amp;q=Co%200"');
   });
 });

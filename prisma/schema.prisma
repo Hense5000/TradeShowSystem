@@ -445,6 +445,9 @@ model FavoriteShow {
   tradeShowId    String
   addedAt        DateTime @default(now())
   addedById      String?
+  // Exhibitors added to the show up to this time have been looked at for the
+  // daily email's "New exhibitors you may like"; null until the first email.
+  suggestedUntil DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tradeShow    TradeShow    @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)

@@ -50,23 +50,62 @@ export type DigestFollowUp = {
   note: string | null;
 };
 
+/** A new exhibitor at a favorite trade show that looks like the account's favorites. */
+export type DigestSuggestion = {
+  exhibitor: string;
+  tradeShow: string;
+  why: string; // e.g. "Medical devices · Germany", what it shares with the favorites
+  url: string; // the exhibitor on the Exhibitors page, where it can be starred
+};
+
+/** At most this many suggestions are listed in one email; the rest are only counted. */
+export const MAX_SUGGESTIONS = 10;
+
+type Profile = { name: string; industry: string | null; country: string | null; companyKey: string | null };
+const norm = (s: string | null) => s?.trim().toLowerCase() || "";
+
+/**
+ * The candidates that share an industry or a country with the starred
+ * exhibitors, best first: industry and country, then industry, then country.
+ * Companies that are already starred (at any show) are left out.
+ */
+export function similarExhibitors<T extends Profile>(starred: Profile[], candidates: T[]): { exhibitor: T; why: string }[] {
+  const industries = new Set(starred.map((e) => norm(e.industry)).filter(Boolean));
+  const countries = new Set(starred.map((e) => norm(e.country)).filter(Boolean));
+  const keys = new Set(starred.map((e) => e.companyKey).filter(Boolean));
+  return candidates
+    .filter((c) => !(c.companyKey && keys.has(c.companyKey)))
+    .map((c) => {
+      const industry = industries.has(norm(c.industry));
+      const country = countries.has(norm(c.country));
+      const why = [industry && c.industry!.trim(), country && countryName(c.country!)].filter(Boolean).join(" · ");
+      return { exhibitor: c, why, score: (industry ? 2 : 0) + (country ? 1 : 0) };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score || a.exhibitor.name.localeCompare(b.exhibitor.name))
+    .map(({ exhibitor, why }) => ({ exhibitor, why }));
+}
+
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const short = (s: string) => (s.length > 200 ? `${s.slice(0, 197)}…` : s);
 
 /**
  * The email for one person: subject, HTML and plain text. Follow-ups due
- * today or overdue come first; then what was added and what changed.
+ * today or overdue come first; then what was added and what changed; then
+ * new exhibitors at favorite trade shows that look like the favorites.
  */
 export function digestEmail({
   accountName,
   entries,
   followUps = [],
+  suggestions = [],
   listsUrl,
   favoritesUrl,
 }: {
   accountName: string;
   entries: DigestEntry[];
   followUps?: DigestFollowUp[];
+  suggestions?: DigestSuggestion[];
   listsUrl: string;
   favoritesUrl: string;
 }) {
@@ -76,7 +115,11 @@ export function digestEmail({
     followUps.length > 0 && `${followUps.length} ${followUps.length === 1 ? "follow-up" : "follow-ups"} due`,
     added > 0 && `${added} new ${added === 1 ? "exhibitor" : "exhibitors"}`,
     changed > 0 && `${changed} updated`,
+    suggestions.length > 0 && `${suggestions.length} new ${suggestions.length === 1 ? "exhibitor" : "exhibitors"} you may like`,
   ].filter(Boolean);
+  const listed = suggestions.slice(0, MAX_SUGGESTIONS);
+  const more = suggestions.length - listed.length;
+  const moreText = more > 0 ? `…and ${more} more at your favorite trade shows.` : "";
   const subject = `${accountName}: ${parts.join(", ")} in your Favorites`;
 
   const lines = (e: DigestEntry) => [
@@ -98,6 +141,14 @@ export function digestEmail({
           `What is new in ${accountName}'s Favorites:`,
           "",
           ...entries.flatMap((e) => [`${e.exhibitor} (${e.tradeShow})${e.addedBy ? "" : ` · ${e.lists.join(", ")}`}`, ...lines(e).map((l) => `  - ${l}`), ""]),
+        ]
+      : []),
+    ...(listed.length > 0
+      ? [
+          "New exhibitors you may like (at your favorite trade shows, like the ones you have starred):",
+          "",
+          ...listed.flatMap((x) => [`${x.exhibitor} (${x.tradeShow}) · ${x.why}`, `  Star it: ${x.url}`, ""]),
+          ...(moreText ? [moreText, ""] : []),
         ]
       : []),
     `Open your Favorites: ${favoritesUrl}`,
@@ -131,6 +182,20 @@ export function digestEmail({
           `</div>`,
       )
       .join("") +
+    (listed.length > 0
+      ? `<h2 style="font-size:18px;margin:${followUps.length + entries.length > 0 ? "20px" : "0"} 0 4px">New exhibitors you may like</h2>` +
+        `<p style="color:#64748b;font-size:12px;margin:0 0 12px">New at your favorite trade shows, and like the exhibitors you have starred.</p>` +
+        listed
+          .map(
+            (x) =>
+              `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 10px">` +
+              `<div><span style="font-weight:bold">${escape(x.exhibitor)}</span> <a href="${escape(x.url)}" style="color:#287bbf;font-size:12px;font-weight:bold;text-decoration:none">&#9734; Star</a></div>` +
+              `<div style="color:#64748b;font-size:12px">${escape(x.tradeShow)} · ${escape(x.why)}</div>` +
+              `</div>`,
+          )
+          .join("") +
+        (moreText ? `<p style="color:#64748b;margin:0 0 10px">${escape(moreText)}</p>` : "")
+      : "") +
     `<p style="margin:16px 0"><a href="${escape(favoritesUrl)}" style="background:#287bbf;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:bold">Open your Favorites</a></p>` +
     `<p style="color:#64748b;font-size:12px">${escape(footer)}</p>` +
     `</div>`;
