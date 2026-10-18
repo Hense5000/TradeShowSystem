@@ -47,7 +47,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
               badge: profileMissing ? <span className="block size-2 rounded-full bg-warn" title="Details missing" /> : undefined,
             },
             { label: "Users", icon: "users", path: "members" },
-            { label: "Billing", icon: "card", path: "billing", soon: true },
+            { label: "Billing", icon: "card", path: "billing" },
           ],
         },
         // Only the platform admins in PLATFORM_ADMIN_EMAILS see this group.
