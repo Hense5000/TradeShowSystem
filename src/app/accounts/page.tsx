@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { db } from "@/lib/db";
@@ -8,13 +9,17 @@ import { requireUser } from "@/lib/tenant";
 import { logout } from "../logout-action";
 import { CreateAccountForm } from "./create-account-form";
 
-export default async function AccountsPage() {
+export default async function AccountsPage({ searchParams }: PageProps<"/accounts">) {
+  const { choose } = await searchParams;
   const user = await requireUser("/accounts");
   const memberships = await db.membership.findMany({
     where: { userId: user.id },
     include: { organization: { include: { _count: { select: { memberships: true } } } } },
     orderBy: { organization: { name: "asc" } },
   });
+  // After login, someone in a single account goes straight into it. "Switch
+  // account" in the sidebar passes ?choose=1 so this page stays reachable.
+  if (memberships.length === 1 && !choose) redirect(`/a/${memberships[0].organization.slug}`);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-12">
