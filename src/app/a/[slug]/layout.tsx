@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { currentSubscription } from "@/lib/billing";
 import { db } from "@/lib/db";
-import { visibleFeaturesWhere } from "@/lib/features";
 import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
@@ -14,9 +13,8 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const { user, membership, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const userName = user.name ?? user.email;
   const platformAdmin = isPlatformAdmin(user.email);
-  const [primaryContact, featureCount, hasAccess, subscriptions, ticketsWaiting] = await Promise.all([
+  const [primaryContact, hasAccess, subscriptions, ticketsWaiting] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
-    db.feature.count({ where: visibleFeaturesWhere(organization.id) }),
     accountHasAccess(organization.id, user.email),
     db.subscription.findMany({ where: { organizationId: organization.id } }),
     platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
@@ -42,7 +40,6 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
             { label: "Saved lists", icon: "bookmark", path: "lists" },
             { label: "Exhibition centers", icon: "pin", path: "centers" },
             { label: "Exhibition organizers", icon: "briefcase", path: "organizers" },
-            { label: "Features", icon: "grid", path: "features", soon: featureCount === 0 },
           ],
         },
         {
