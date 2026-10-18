@@ -7,7 +7,7 @@ import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
-import { isPlatformAdmin } from "@/lib/platform-admin";
+import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
 import { setListMembership } from "../../lists/actions";
@@ -20,7 +20,6 @@ const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running
 export default async function CompanyPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/company">) {
   const { slug } = await params;
   const { user, organization } = await requireMembership(slug);
-  const canEdit = isPlatformAdmin(user.email);
   const sp = await searchParams;
   const key = typeof sp.key === "string" ? sp.key : "";
   if (!key) notFound();
@@ -147,7 +146,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                           lists={ownLists.map((l) => ({ id: l.id, name: l.name, inList: savedIn.has(`${l.id}:${e.id}`) }))}
                           newListHref={`/a/${slug}/lists`}
                         />
-                        {canEdit && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
+                        {canEditExhibitor(user.email, organization.id, e) && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
                       </div>
                     </td>
                   </tr>

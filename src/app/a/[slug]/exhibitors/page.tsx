@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
 import { type ExhibitorFilters, exhibitorFilters, exhibitorQuery, exhibitorWhere, industryTerms, isFiltered } from "@/lib/exhibitor-list";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
-import { isPlatformAdmin } from "@/lib/platform-admin";
+import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
 import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
 import { addShownToList, setListMembership } from "../lists/actions";
@@ -129,15 +129,14 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
               </>
             )}
             {canEdit && (
-              <>
-                <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn-secondary py-2">
-                  <Icon name="upload" className="size-4" /> Import
-                </Link>
-                <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn">
-                  <Icon name="plus" className="size-4" /> Add exhibitor
-                </Link>
-              </>
+              <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn-secondary py-2">
+                <Icon name="upload" className="size-4" /> Import
+              </Link>
             )}
+            {/* Every account may add an exhibitor, and then edit or delete it. */}
+            <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn">
+              <Icon name="plus" className="size-4" /> Add exhibitor
+            </Link>
           </div>
         }
       />
@@ -170,13 +169,11 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           </span>
           <h2 className="mt-1 font-bold">No exhibitors yet</h2>
           <p className="text-sm text-muted">
-            {canEdit ? "Add the first exhibitor, or import a trade show's exhibitor list." : "Exhibitors will show up here once they are added."}
+            {canEdit ? "Add the first exhibitor, or import a trade show's exhibitor list." : "Add the first exhibitor."}
           </p>
-          {canEdit && (
-            <Link href={`/a/${slug}/exhibitors/new`} className="btn mt-2">
-              <Icon name="plus" className="size-4" /> Add exhibitor
-            </Link>
-          )}
+          <Link href={`/a/${slug}/exhibitors/new`} className="btn mt-2">
+            <Icon name="plus" className="size-4" /> Add exhibitor
+          </Link>
         </section>
       ) : (
         <section className="card overflow-hidden p-0">
@@ -324,7 +321,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                             lists={ownLists.map((l) => ({ id: l.id, name: l.name, inList: isIn(l.id, ids) }))}
                             newListHref={`/a/${slug}/lists`}
                           />
-                          {canEdit && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
+                          {canEditExhibitor(user.email, organization.id, e) && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
                         </div>
                       </td>
                     </tr>

@@ -98,6 +98,7 @@ model Organization {
   updatedAt DateTime @updatedAt
 
   memberships           Membership[]
+  addedExhibitors       Exhibitor[]
   invitations           Invitation[]
   contacts              Contact[]
   features              OrganizationFeature[]
@@ -347,29 +348,34 @@ model TradeShow {
 // two rows, since booth, contact and so on differ per show; rows with the same
 // companyKey are shown as one company (see src/lib/company.ts).
 model Exhibitor {
-  id               String    @id @default(cuid())
-  tradeShowId      String
-  name             String // company name
-  contactName      String?
-  contactTitle     String?
-  email            String? // often missing when fetched from a show's exhibitor directory
-  phone            String?
-  website          String?
-  country          String? // ISO 3166-1 alpha-2, e.g. "DK"
-  industry         String?
-  boothNumber      String?
-  standLocationUrl String? // link to the booth on the show's floor plan
-  companyProfile   String? // short description of the company
-  profileTriedAt   DateTime? // when the AI last tried to write companyProfile from the website
-  contactTriedAt   DateTime? // when the AI last looked for a contact person on the website
-  companyKey       String? // the same for every show's row of one company; null until worked out, e.g. after the name or website changed
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  tradeShowId           String
+  name                  String // company name
+  contactName           String?
+  contactTitle          String?
+  email                 String? // often missing when fetched from a show's exhibitor directory
+  phone                 String?
+  website               String?
+  country               String? // ISO 3166-1 alpha-2, e.g. "DK"
+  industry              String?
+  boothNumber           String?
+  standLocationUrl      String? // link to the booth on the show's floor plan
+  companyProfile        String? // short description of the company
+  profileTriedAt        DateTime? // when the AI last tried to write companyProfile from the website
+  contactTriedAt        DateTime? // when the AI last looked for a contact person on the website
+  companyKey            String? // the same for every show's row of one company; null until worked out, e.g. after the name or website changed
+  // The customer account that added it with "Add exhibitor"; that account may
+  // edit and delete it. Null for imported rows, which only platform admins edit.
+  addedByOrganizationId String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   tradeShow TradeShow       @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+  addedBy   Organization?   @relation(fields: [addedByOrganizationId], references: [id], onDelete: SetNull)
   savedIn   SavedListItem[]
 
   @@index([tradeShowId])
+  @@index([addedByOrganizationId])
   @@index([name])
   @@index([companyKey])
 }
