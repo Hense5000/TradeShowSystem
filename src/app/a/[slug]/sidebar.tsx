@@ -7,12 +7,14 @@ import { Icon, type IconName } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { logout } from "../../logout-action";
 
-type NavItem = { label: string; icon: IconName; path: string; soon?: boolean; badge?: React.ReactNode };
+type NavItem = { label: string; icon: IconName; path: string; soon?: boolean; badge?: React.ReactNode; children?: NavItem[] };
 type NavGroup = { title?: string; items: NavItem[] };
 
-/** Which navigation item a path belongs to ("" is the dashboard). */
-function currentPath(pathname: string, base: string): string {
-  return pathname.slice(base.length).split("/")[1] ?? "";
+/** Which navigation item a path belongs to ("" is the dashboard): the longest item path it starts with, e.g. "favorites/calendar". */
+function currentPath(pathname: string, base: string, paths: string[]): string {
+  const rest = pathname.slice(base.length).replace(/^\//, "");
+  const match = paths.filter((p) => p && (rest === p || rest.startsWith(`${p}/`))).sort((a, b) => b.length - a.length)[0];
+  return match ?? rest.split("/")[0];
 }
 
 export function AccountFrame({
@@ -36,8 +38,13 @@ export function AccountFrame({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const active = currentPath(pathname, base);
-  const activeItem = groups.flatMap((g) => g.items).find((i) => i.path === active);
+  const items = groups.flatMap((g) => g.items.flatMap((i) => [i, ...(i.children ?? [])]));
+  const active = currentPath(
+    pathname,
+    base,
+    items.map((i) => i.path),
+  );
+  const activeItem = items.find((i) => i.path === active);
 
   return (
     <div className="min-h-screen print:!block md:grid md:grid-cols-[250px_minmax(0,1fr)]">
@@ -76,8 +83,9 @@ export function AccountFrame({
               {group.title && (
                 <p className="px-3 pt-3 pb-1 text-[0.68rem] font-semibold tracking-widest text-faint uppercase">{group.title}</p>
               )}
-              {group.items.map((item) => {
+              {group.items.flatMap((item) => [item, ...(item.children ?? []).map((c) => ({ ...c, child: true }))]).map((item) => {
                 const isActive = item.path === active;
+                const child = "child" in item;
                 const inner = (
                   <>
                     <Icon name={item.icon} />
@@ -89,7 +97,8 @@ export function AccountFrame({
                     )}
                   </>
                 );
-                const cls = "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
+                // A sub-page, such as Calendar under Favorites, is indented under its parent.
+                const cls = `flex items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors ${child ? "ml-6 py-2" : "py-2.5"}`;
                 if (item.soon) {
                   return (
                     <span key={item.path} className={`${cls} cursor-not-allowed text-faint`} title="Coming soon">
