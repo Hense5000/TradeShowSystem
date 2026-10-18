@@ -16,7 +16,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         </Link>
         <div className="relative space-y-3">
           <h2 className="max-w-[18ch] text-2xl leading-tight font-bold text-balance md:text-4xl">
-            Everything your team needs for the next trade show.
+            Everything your team needs for the next trade show business.
           </h2>
           <p className="max-w-[40ch] text-white/80">Plan stands, capture leads and keep your exhibitor team in one place.</p>
         </div>
