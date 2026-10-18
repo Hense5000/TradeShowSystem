@@ -7,7 +7,10 @@ import { db } from "@/lib/db";
 import { ROLLOUT_LABEL } from "@/lib/features";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { cleanupCutoff, oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
-import { setCleanupEnabled } from "./actions";
+import { emailSender } from "@/lib/email";
+import { deviceCheckOffReason } from "@/lib/login-guard";
+import { sendTestEmail, setCleanupEnabled } from "./actions";
+import { TestEmailButton } from "./test-email-button";
 
 const ROLLOUT_PILL: Record<FeatureRollout, string> = {
   OFF: "pill-neutral",
@@ -35,6 +38,7 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
   ]);
   const cleanupOn = Boolean(cleanup?.enabled);
   const cutoff = updated(cleanupCutoff());
+  const codeOffReason = deviceCheckOffReason();
   const lastCheck = (groupId: string) => lastChecks.find((l) => l.showsGroupId === groupId)?._max.showsCheckedAt ?? null;
 
   return (
@@ -118,6 +122,27 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
         >
           <button className={cleanupOn ? "btn-secondary" : "btn"}>{cleanupOn ? "Switch off" : "Switch on"}</button>
         </ActionForm>
+      </section>
+
+      <section className="card flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-56 flex-1 items-start gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+            <Icon name="mail" className="size-4" />
+          </span>
+          <span>
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              Login code by email
+              <span className={`pill ${codeOffReason ? "pill-warn" : "pill-ok"}`}>{codeOffReason ? "Off" : "On"}</span>
+            </span>
+            <span className="block text-sm text-muted">
+              A browser a user hasn't logged in from must confirm a code sent by email. If the email can't be sent, the user is let in without it.
+            </span>
+            <span className="mt-1 block text-sm">
+              {codeOffReason ?? `Sent from ${emailSender()}. Use the test to see whether Resend accepts it.`}
+            </span>
+          </span>
+        </div>
+        <TestEmailButton action={sendTestEmail.bind(null, slug)} />
       </section>
 
       {features.length === 0 ? (

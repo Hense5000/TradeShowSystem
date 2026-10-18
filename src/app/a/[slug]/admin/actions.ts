@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { featureSchema } from "@/lib/features";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { requirePlatformAdmin } from "@/lib/tenant";
@@ -78,4 +79,23 @@ export async function setCleanupEnabled(slug: string, enabled: boolean): Promise
   await db.tradeShowCleanupSettings.upsert({ where: { id: 1 }, create: { id: 1, enabled }, update: { enabled } });
   revalidatePath(`/a/${slug}/admin`);
   return undefined;
+}
+
+export type TestEmailState = { sent?: string; error?: string } | undefined;
+
+/** Sends a test email to the admin, the same way login codes are sent, and shows what Resend answered. */
+export async function sendTestEmail(slug: string): Promise<TestEmailState> {
+  const { user } = await requirePlatformAdmin(slug);
+  if (!isEmailConfigured()) return { error: "RESEND_API_KEY or EMAIL_FROM is missing in Vercel." };
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: "Test email from Trade Show System",
+      text: "This is a test. Login codes are sent the same way, so they work too.",
+      html: "<p>This is a test. Login codes are sent the same way, so they work too.</p>",
+    });
+    return { sent: `Sent to ${user.email}. Check the inbox (and spam).` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }
