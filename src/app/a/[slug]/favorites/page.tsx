@@ -98,6 +98,11 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
           tab === "exhibitors" &&
           shownCount > 0 && (
             <div className="flex flex-wrap gap-2">
+              {filters.show && (
+                <Link href={`${base}/plan?show=${filters.show}`} className="btn-secondary py-2" title="The favorite exhibitors at this show in booth order, to tick off at the show">
+                  <Icon name="check" className="size-4" /> Meeting plan
+                </Link>
+              )}
               <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${shownCount} exhibitors shown, with status and notes, as an Excel file`}>
                 <Icon name="download" className="size-4" /> Excel
               </a>
@@ -330,6 +335,13 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                       </Link>
                     ) : (
                       <p className="font-bold tabular-nums">0</p>
+                    )}
+                  </div>
+                  <div className="w-28">
+                    {leads > 0 && (
+                      <Link href={`${base}/plan?show=${s.id}`} className="pill pill-soft gap-1 hover:underline" title="Your favorite exhibitors at this show in booth order, to tick off at the show">
+                        <Icon name="check" className="size-3.5" /> Meeting plan
+                      </Link>
                     )}
                   </div>
                   <div className="w-20">

@@ -143,3 +143,13 @@ export function favoriteQuery({ q, show, status, followUp, owner }: FavoriteFilt
 export function mineOrUnassigned(userId: string): Prisma.SavedListItemWhereInput {
   return { OR: [{ assigneeId: userId }, { assigneeId: null }] };
 }
+
+const booths = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+
+/** Orders exhibitors as you walk a show: by booth number ("A2" before "A10", hall 2 before hall 10), those without a booth last, then by name. */
+export function byBooth(a: { boothNumber: string | null; name: string }, b: { boothNumber: string | null; name: string }): number {
+  const aBooth = a.boothNumber?.trim() ?? "";
+  const bBooth = b.boothNumber?.trim() ?? "";
+  if (!aBooth !== !bBooth) return aBooth ? -1 : 1;
+  return booths.compare(aBooth, bBooth) || booths.compare(a.name, b.name);
+}

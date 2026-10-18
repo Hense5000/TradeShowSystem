@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFollowUp, checkLeadNote, favoriteFilters, favoriteQuery, favoriteWhere, followUpLabel, followUpState, parseLeadStatus } from "./leads";
+import { byBooth, checkFollowUp, checkLeadNote, favoriteFilters, favoriteQuery, favoriteWhere, followUpLabel, followUpState, parseLeadStatus } from "./leads";
 
 describe("lead status", () => {
   it("accepts only the known statuses", () => {
@@ -73,5 +73,23 @@ describe("follow-ups", () => {
     expect(followUpLabel(d("2026-10-18"), day)).toBe("Today");
     expect(followUpLabel(d("2026-10-19"), day)).toBe("Tomorrow");
     expect(followUpLabel(d("2026-10-21"), day)).toBe("Wed, Oct 21");
+  });
+});
+
+describe("byBooth", () => {
+  const e = (boothNumber: string | null, name = "X") => ({ boothNumber, name });
+
+  it("sorts booth numbers the way they are walked", () => {
+    const sorted = [e("A10"), e("B1"), e("A2"), e("10.120"), e("2.015")].sort(byBooth);
+    expect(sorted.map((x) => x.boothNumber)).toEqual(["2.015", "10.120", "A2", "A10", "B1"]);
+  });
+
+  it("puts exhibitors without a booth last, by name", () => {
+    const sorted = [e(null, "Beta"), e(" ", "Alpha"), e("C3", "Zed")].sort(byBooth);
+    expect(sorted.map((x) => x.name)).toEqual(["Zed", "Alpha", "Beta"]);
+  });
+
+  it("sorts the same booth by name", () => {
+    expect([e("A1", "b"), e("a1", "A")].sort(byBooth).map((x) => x.name)).toEqual(["A", "b"]);
   });
 });

@@ -40,9 +40,9 @@ export function AccountFrame({
   const activeItem = groups.flatMap((g) => g.items).find((i) => i.path === active);
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[250px_minmax(0,1fr)]">
+    <div className="min-h-screen print:!block md:grid md:grid-cols-[250px_minmax(0,1fr)]">
       {/* Mobile top bar */}
-      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 md:hidden">
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 md:hidden print:hidden">
         <button type="button" aria-label="Open menu" onClick={() => setOpen(!open)} className="p-1">
           <Icon name="menu" className="size-6" />
         </button>
@@ -51,7 +51,7 @@ export function AccountFrame({
       {open && <div className="fixed inset-0 z-30 bg-ink/40 md:hidden" onClick={() => setOpen(false)} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col gap-5 border-r border-line bg-surface px-3.5 py-5 transition-transform md:sticky md:top-0 md:h-screen md:w-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex print:!hidden w-[260px] flex-col gap-5 border-r border-line bg-surface px-3.5 py-5 transition-transform md:sticky md:top-0 md:h-screen md:w-auto md:translate-x-0 ${
           open ? "translate-x-0 shadow-xl" : "-translate-x-full"
         }`}
       >
@@ -128,7 +128,7 @@ export function AccountFrame({
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-20 hidden items-center justify-between gap-4 border-b border-line bg-surface px-8 py-3.5 md:flex">
+        <header className="sticky top-0 z-20 hidden print:!hidden items-center justify-between gap-4 border-b border-line bg-surface px-8 py-3.5 md:flex">
           <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted">
             <span className="truncate">{accountName}</span>
             <span className="text-faint">/</span>
@@ -142,7 +142,7 @@ export function AccountFrame({
             </span>
           </div>
         </header>
-        <main className="flex w-full max-w-[1514px] min-w-0 flex-col gap-5 px-4 py-5 md:px-8 md:py-7">{children}</main>
+        <main className="flex w-full max-w-[1514px] min-w-0 flex-col gap-5 px-4 py-5 md:px-8 md:py-7 print:max-w-none print:!p-0">{children}</main>
       </div>
     </div>
   );
