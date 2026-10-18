@@ -109,6 +109,14 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
               <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${shownCount} exhibitors shown, with status and notes, as a CSV file`}>
                 <Icon name="download" className="size-4" /> CSV
               </a>
+              <a
+                href={`/a/${slug}/exhibitors/export${favoriteQuery(filters, { list: listId, format: "xlsx", layout: "crm" })}`}
+                download
+                className="btn-secondary py-2"
+                title={`Download the ${shownCount} leads shown as an Excel file ready to import into a CRM such as HubSpot, Pipedrive or Salesforce`}
+              >
+                <Icon name="download" className="size-4" /> Export for CRM
+              </a>
             </div>
           )
         }

@@ -1,4 +1,5 @@
 import { countryName } from "@/lib/countries";
+import { crmTable } from "@/lib/crm-export";
 import { db } from "@/lib/db";
 import { exhibitorFilters, exhibitorWhere } from "@/lib/exhibitor-list";
 import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
@@ -14,7 +15,9 @@ export const maxDuration = 60;
  * member of the account may export. The column names match the CSV import, so
  * a file can be imported again. With ?list=<id> it downloads one of the
  * account's saved lists instead. For the Favorites list it also takes the
- * Favorites page's filters (?q, ?show, ?status) and adds the status and notes.
+ * Favorites page's filters (?q, ?show, ?status) and adds the status and notes;
+ * with ?layout=crm it has the columns a CRM such as HubSpot, Pipedrive or
+ * Salesforce imports (see src/lib/crm-export.ts).
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
@@ -46,7 +49,8 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
   });
 
   const day = (d: Date) => d.toISOString().slice(0, 10);
-  const table: Table = {
+  const crm = leads && url.searchParams.get("layout") === "crm";
+  const table: Table = crm ? crmTable(exhibitors) : {
     headers: [
       "Company Name",
       "Trade Show",
@@ -97,9 +101,9 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
   // e.g. "exhibitors-london-biotech-show-2026-10-17.xlsx".
   const showName = list ? list.name : filters.show ? exhibitors[0]?.tradeShow.name : undefined;
   const slugged = showName?.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const filename = `exhibitors${slugged ? `-${slugged}` : ""}-${day(new Date())}.${format}`;
+  const filename = `${crm ? "crm-leads" : `exhibitors${slugged ? `-${slugged}` : ""}`}-${day(new Date())}.${format}`;
 
-  const body = format === "csv" ? toCsv(table) : new Uint8Array(toXlsx(table, list ? list.name : "Exhibitors"));
+  const body = format === "csv" ? toCsv(table) : new Uint8Array(toXlsx(table, crm ? "Leads" : list ? list.name : "Exhibitors"));
   return new Response(body, {
     headers: {
       "Content-Type": format === "csv" ? "text/csv; charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
