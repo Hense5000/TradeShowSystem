@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { emailSender, sendEmail } from "@/lib/email";
 import {
   createLoginCode,
   LOGIN_CODE_MINUTES,
@@ -31,7 +31,15 @@ const cookieOptions = { httpOnly: true, sameSite: "lax" as const, secure: proces
  * can be switched off with LOGIN_DEVICE_CHECK=off if email ever stops working.
  */
 export function deviceCheckEnabled(): boolean {
-  return isEmailConfigured() && process.env.LOGIN_DEVICE_CHECK?.trim().toLowerCase() !== "off";
+  return deviceCheckOffReason() === null;
+}
+
+/** Why new devices are not asked for a code, or null when they are. Shown on Feature control. */
+export function deviceCheckOffReason(): string | null {
+  if (!process.env.RESEND_API_KEY?.trim()) return "RESEND_API_KEY is not set in Vercel.";
+  if (!emailSender()) return "EMAIL_FROM is not set in Vercel.";
+  if (process.env.LOGIN_DEVICE_CHECK?.trim().toLowerCase() === "off") return "LOGIN_DEVICE_CHECK is set to off in Vercel.";
+  return null;
 }
 
 export async function isTrustedDevice(userId: string): Promise<boolean> {
