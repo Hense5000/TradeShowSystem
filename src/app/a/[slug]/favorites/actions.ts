@@ -67,3 +67,17 @@ export async function saveFollowUp(slug: string, exhibitorId: string, _prev: Sav
   refresh(slug);
   return { saved: true };
 }
+
+/** The user in the account who is responsible for a favorite exhibitor, or no one. */
+export async function setLeadAssignee(slug: string, exhibitorId: string, formData: FormData) {
+  const { organization } = await requireMembership(slug);
+  const chosen = String(formData.get("assignee") ?? "");
+  // Only members of this account can be made responsible.
+  const member = chosen ? await db.membership.findFirst({ where: { organizationId: organization.id, userId: chosen }, select: { userId: true } }) : null;
+  if (chosen && !member) return;
+  await db.savedListItem.updateMany({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    data: { assigneeId: member?.userId ?? null, leadUpdatedAt: new Date() },
+  });
+  refresh(slug);
+}

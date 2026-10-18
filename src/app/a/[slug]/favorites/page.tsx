@@ -10,13 +10,13 @@ import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
-import { LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
+import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
 
 const PAGE_SIZE = 50;
 
 export default async function FavoritesPage({ params, searchParams }: PageProps<"/a/[slug]/favorites">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const sp = await searchParams;
   const tab = sp.tab === "shows" ? "shows" : "exhibitors";
   const filters = favoriteFilters(sp);
@@ -25,9 +25,9 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
   const list = await db.savedList.findFirst({ where: { organizationId: organization.id, favorites: true }, select: { id: true } });
   const listId = list?.id ?? "";
   const day = today();
-  const where = favoriteWhere(listId, filters, day);
+  const where = favoriteWhere(listId, filters, { today: day, userId: user.id });
 
-  const [byStatus, shownCount, items, leadShows, favoriteShows] = await Promise.all([
+  const [byStatus, shownCount, items, leadShows, favoriteShows, memberships, myCount] = await Promise.all([
     db.savedListItem.groupBy({ by: ["leadStatus"], where: { listId }, _count: true }),
     db.savedListItem.count({ where }),
     tab === "exhibitors"
@@ -46,7 +46,13 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
       where: { organizationId: organization.id },
       include: { tradeShow: { include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } } } },
     }),
+    // The users a lead can be assigned to.
+    db.membership.findMany({ where: { organizationId: organization.id }, select: { user: { select: { id: true, name: true, email: true } } } }),
+    db.savedListItem.count({ where: { listId, assigneeId: user.id } }),
   ]);
+  const members = memberships
+    .map((m) => ({ id: m.user.id, name: m.user.id === user.id ? `${m.user.name ?? m.user.email} (you)` : (m.user.name ?? m.user.email) }))
+    .sort((a, b) => (a.id === user.id ? -1 : b.id === user.id ? 1 : a.name.localeCompare(b.name)));
 
   const statusCount = (s: LeadStatus) => byStatus.find((b) => b.leadStatus === s)?._count ?? 0;
   const exhibitorTotal = byStatus.reduce((sum, b) => sum + b._count, 0);
@@ -69,7 +75,8 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
 
   const base = `/a/${slug}/favorites`;
   const pages = Math.max(1, Math.ceil(shownCount / PAGE_SIZE));
-  const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp);
+  const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp || filters.owner);
+  const mine = tab === "exhibitors" && filters.owner === "me";
   const exportHref = (format: "xlsx" | "csv") => `/a/${slug}/exhibitors/export${favoriteQuery(filters, { list: listId, format })}`;
   const tabCls = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
   const tabOn = "border-brand bg-brand text-white";
@@ -96,8 +103,11 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
       />
 
       <nav className="flex flex-wrap gap-2" aria-label="Favorites">
-        <Link href={base} aria-current={tab === "exhibitors" ? "page" : undefined} className={`${tabCls} ${tab === "exhibitors" ? tabOn : tabOff}`}>
+        <Link href={base} aria-current={tab === "exhibitors" && !mine ? "page" : undefined} className={`${tabCls} ${tab === "exhibitors" && !mine ? tabOn : tabOff}`}>
           Exhibitors · {exhibitorTotal}
+        </Link>
+        <Link href={`${base}?owner=me`} aria-current={mine ? "page" : undefined} className={`${tabCls} ${mine ? tabOn : tabOff}`}>
+          My leads · {myCount}
         </Link>
         <Link href={`${base}?tab=shows`} aria-current={tab === "shows" ? "page" : undefined} className={`${tabCls} ${tab === "shows" ? tabOn : tabOff}`}>
           Trade shows · {shows.length}
@@ -149,6 +159,16 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                     <option key={s} value={s}>{LEAD_LABEL[s]}</option>
                   ))}
                 </select>
+                <select className="input w-auto max-w-56" name="owner" defaultValue={filters.owner} aria-label="Responsible">
+                  <option value="">Everyone's leads</option>
+                  <option value="me">My leads</option>
+                  <option value="none">Unassigned</option>
+                  {members
+                    .filter((m) => m.id !== user.id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                </select>
                 <select className="input w-auto" name="followup" defaultValue={filters.followUp} aria-label="Follow-up">
                   <option value="">All follow-ups</option>
                   <option value="due">Due today or overdue</option>
@@ -171,13 +191,13 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                       <th className="px-5 py-2.5">Company</th>
                       <th className="px-5 py-2.5">Trade show</th>
                       <th className="px-5 py-2.5">Contact</th>
-                      <th className="px-5 py-2.5">Status and follow-up</th>
+                      <th className="px-5 py-2.5">Lead</th>
                       <th className="px-5 py-2.5">Notes</th>
                       <th className="px-5 py-2.5"><span className="sr-only">Remove</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote }) => (
+                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId }) => (
                       <tr key={e.id} className="align-top">
                         <td className="px-5 py-3">
                           <div className="min-w-48">
@@ -219,6 +239,7 @@ export default async function FavoritesPage({ params, searchParams }: PageProps<
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex flex-col gap-1.5">
+                            <LeadAssigneeSelect slug={slug} exhibitorId={e.id} name={e.name} assigneeId={assigneeId} members={members} />
                             <LeadStatusSelect slug={slug} exhibitorId={e.id} name={e.name} status={leadStatus} />
                             <LeadFollowUp
                               key={`${followUpAt ? isoDate(followUpAt) : ""}:${followUpNote ?? ""}`}

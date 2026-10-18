@@ -3,7 +3,7 @@
 import type { LeadStatus } from "@prisma/client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { LEAD_LABEL, LEAD_STATUSES, MAX_FOLLOW_UP_NOTE, MAX_LEAD_NOTE } from "@/lib/leads";
-import { saveFollowUp, saveLeadNote, setLeadStatus } from "./actions";
+import { saveFollowUp, saveLeadNote, setLeadAssignee, setLeadStatus } from "./actions";
 
 /** The status of a favorite exhibitor. Saves as soon as another status is picked. */
 export function LeadStatusSelect({ slug, exhibitorId, name, status }: { slug: string; exhibitorId: string; name: string; status: LeadStatus }) {
@@ -19,6 +19,39 @@ export function LeadStatusSelect({ slug, exhibitorId, name, status }: { slug: st
       >
         {LEAD_STATUSES.map((s) => (
           <option key={s} value={s}>{LEAD_LABEL[s]}</option>
+        ))}
+      </select>
+    </form>
+  );
+}
+
+/** Who in the account is responsible for a favorite exhibitor. Saves as soon as someone is picked. */
+export function LeadAssigneeSelect({
+  slug,
+  exhibitorId,
+  name,
+  assigneeId,
+  members,
+}: {
+  slug: string;
+  exhibitorId: string;
+  name: string;
+  assigneeId: string | null;
+  members: { id: string; name: string }[];
+}) {
+  return (
+    <form action={setLeadAssignee.bind(null, slug, exhibitorId)}>
+      <select
+        name="assignee"
+        defaultValue={assigneeId ?? ""}
+        key={assigneeId ?? ""}
+        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+        className={`input w-auto max-w-48 py-1.5 ${assigneeId ? "" : "text-muted"}`}
+        aria-label={`Who is responsible for ${name}`}
+      >
+        <option value="">Unassigned</option>
+        {members.map((m) => (
+          <option key={m.id} value={m.id}>{m.name}</option>
         ))}
       </select>
     </form>

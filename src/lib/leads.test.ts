@@ -23,23 +23,29 @@ describe("lead notes", () => {
 
 describe("favorite filters", () => {
   it("reads the filters and drops an unknown status", () => {
-    expect(favoriteFilters({ q: " acme ", show: "s1", status: "WON" })).toEqual({ q: "acme", show: "s1", status: "WON", followUp: "" });
-    expect(favoriteFilters(new URLSearchParams("status=nope"))).toEqual({ q: "", show: "", status: "", followUp: "" });
+    expect(favoriteFilters({ q: " acme ", show: "s1", status: "WON" })).toEqual({ q: "acme", show: "s1", status: "WON", followUp: "", owner: "" });
+    expect(favoriteFilters(new URLSearchParams("status=nope"))).toEqual({ q: "", show: "", status: "", followUp: "", owner: "" });
     expect(favoriteFilters({ followup: "due" }).followUp).toBe("due");
+    expect(favoriteFilters({ owner: "me" }).owner).toBe("me");
   });
 
   it("filters the list's items by status, trade show and search", () => {
-    expect(favoriteWhere("l1", { q: "", show: "", status: "", followUp: "" })).toEqual({ listId: "l1" });
-    const where = favoriteWhere("l1", { q: "acme", show: "s1", status: "NEW", followUp: "" });
+    expect(favoriteWhere("l1", { q: "", show: "", status: "", followUp: "", owner: "" })).toEqual({ listId: "l1" });
+    const where = favoriteWhere("l1", { q: "acme", show: "s1", status: "NEW", followUp: "", owner: "" });
     expect(where).toMatchObject({ listId: "l1", leadStatus: "NEW", exhibitor: { tradeShowId: "s1" } });
     expect(where.exhibitor).toHaveProperty("OR");
     const day = new Date("2026-10-18T00:00:00Z");
-    expect(favoriteWhere("l1", { q: "", show: "", status: "", followUp: "due" }, day)).toEqual({ listId: "l1", followUpAt: { lte: day } });
+    expect(favoriteWhere("l1", { q: "", show: "", status: "", followUp: "due", owner: "" }, { today: day })).toEqual({ listId: "l1", followUpAt: { lte: day } });
+    const empty = { q: "", show: "", status: "", followUp: "" } as const;
+    expect(favoriteWhere("l1", { ...empty, owner: "me" }, { userId: "u1" })).toEqual({ listId: "l1", assigneeId: "u1" });
+    expect(favoriteWhere("l1", { ...empty, owner: "none" }, { userId: "u1" })).toEqual({ listId: "l1", assigneeId: null });
+    expect(favoriteWhere("l1", { ...empty, owner: "u2" }, { userId: "u1" })).toEqual({ listId: "l1", assigneeId: "u2" });
   });
 
   it("builds the query string", () => {
-    expect(favoriteQuery({ q: "", show: "", status: "", followUp: "" })).toBe("");
-    expect(favoriteQuery({ q: "a b", show: "", status: "WON", followUp: "due" }, { page: "2" })).toBe("?q=a+b&status=WON&followup=due&page=2");
+    expect(favoriteQuery({ q: "", show: "", status: "", followUp: "", owner: "" })).toBe("");
+    expect(favoriteQuery({ q: "a b", show: "", status: "WON", followUp: "due", owner: "" }, { page: "2" })).toBe("?q=a+b&status=WON&followup=due&page=2");
+    expect(favoriteQuery({ q: "", show: "", status: "", followUp: "", owner: "me" })).toBe("?owner=me");
   });
 });
 

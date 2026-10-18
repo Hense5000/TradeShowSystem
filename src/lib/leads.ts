@@ -84,7 +84,8 @@ export function followUpLabel(date: Date, today: Date): string {
 const FOLLOW_UP_FILTERS = ["due", "set"] as const;
 export type FollowUpFilter = (typeof FOLLOW_UP_FILTERS)[number];
 
-export type FavoriteFilters = { q: string; show: string; status: LeadStatus | ""; followUp: FollowUpFilter | "" };
+// Whose leads: "me" (the signed-in user), "none" (unassigned) or a user id.
+export type FavoriteFilters = { q: string; show: string; status: LeadStatus | ""; followUp: FollowUpFilter | ""; owner: string };
 
 type Params = Record<string, string | string[] | undefined> | URLSearchParams;
 
@@ -95,13 +96,18 @@ export function favoriteFilters(params: Params): FavoriteFilters {
     return typeof value === "string" ? value : "";
   };
   const followUp = FOLLOW_UP_FILTERS.find((f) => f === get("followup")) ?? "";
-  return { q: get("q").trim(), show: get("show"), status: parseLeadStatus(get("status")) ?? "", followUp };
+  return { q: get("q").trim(), show: get("show"), status: parseLeadStatus(get("status")) ?? "", followUp, owner: get("owner") };
 }
 
 /** The Favorites list items those filters show, so the page and its export list the same exhibitors. */
-export function favoriteWhere(listId: string, { q, show, status, followUp }: FavoriteFilters, today = todayUtc()): Prisma.SavedListItemWhereInput {
+export function favoriteWhere(
+  listId: string,
+  { q, show, status, followUp, owner }: FavoriteFilters,
+  { today = todayUtc(), userId }: { today?: Date; userId?: string } = {},
+): Prisma.SavedListItemWhereInput {
   return {
     listId,
+    ...(owner && { assigneeId: owner === "none" ? null : owner === "me" ? (userId ?? null) : owner }),
     ...(status && { leadStatus: status }),
     ...(followUp === "due" && { followUpAt: { lte: today } }),
     ...(followUp === "set" && { followUpAt: { not: null } }),
@@ -121,7 +127,19 @@ export function favoriteWhere(listId: string, { q, show, status, followUp }: Fav
 }
 
 /** The filters as a query string ("" when none are set), with any extra parameters added. */
-export function favoriteQuery({ q, show, status, followUp }: FavoriteFilters, extra: Record<string, string> = {}): string {
-  const qs = new URLSearchParams({ ...(q && { q }), ...(show && { show }), ...(status && { status }), ...(followUp && { followup: followUp }), ...extra });
+export function favoriteQuery({ q, show, status, followUp, owner }: FavoriteFilters, extra: Record<string, string> = {}): string {
+  const qs = new URLSearchParams({
+    ...(q && { q }),
+    ...(show && { show }),
+    ...(status && { status }),
+    ...(followUp && { followup: followUp }),
+    ...(owner && { owner }),
+    ...extra,
+  });
   return qs.size ? `?${qs}` : "";
+}
+
+/** The leads one user looks after: their own and the ones no one is responsible for. */
+export function mineOrUnassigned(userId: string): Prisma.SavedListItemWhereInput {
+  return { OR: [{ assigneeId: userId }, { assigneeId: null }] };
 }
