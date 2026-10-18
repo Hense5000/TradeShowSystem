@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { countryName } from "@/lib/countries";
 import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { ACTIVE_LEAD_STATUSES } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
 
@@ -34,17 +35,20 @@ function Stat({ icon, label, value, note, href }: { icon: IconName; label: strin
 
 export default async function Dashboard({ params, searchParams }: PageProps<"/a/[slug]">) {
   const { slug } = await params;
-  await requireMembership(slug);
+  const { organization } = await requireMembership(slug);
   const sp = await searchParams;
   const range: Range = RANGES.find((r) => String(r) === sp.months) ?? RANGES[0];
   const day = today();
   const until = addMonths(day, range);
 
-  const [showCount, runningCount, exhibitorCount, centerCount, upcoming] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, upcoming] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
     db.exhibitionCenter.count(),
+    // Favorite exhibitors still being worked on (New, Contacted or Meeting booked).
+    db.savedListItem.count({ where: { list: { organizationId: organization.id, favorites: true }, leadStatus: { in: ACTIVE_LEAD_STATUSES } } }),
+    db.favoriteShow.count({ where: { organizationId: organization.id } }),
     // Shows still to come or running now, starting within the chosen range.
     db.tradeShow.findMany({
       where: { endDate: { gte: day }, startDate: { lte: until } },
@@ -63,7 +67,13 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
         <Stat icon="calendar" label="Total trade shows" value={showCount} note={`${runningCount} currently running`} href={`/a/${slug}/trade-shows`} />
         <Stat icon="store" label="Exhibitors" value={exhibitorCount} note="Total registered" href={`/a/${slug}/exhibitors`} />
         <Stat icon="pin" label="Exhibition centers" value={centerCount} note="Total venues" href={`/a/${slug}/centers`} />
-        <Stat icon="users" label="Lead retrieval active" value={0} note="Coming soon" />
+        <Stat
+          icon="users"
+          label="Lead retrieval active"
+          value={openLeads}
+          note={`Open leads · ${favoriteShows} ${favoriteShows === 1 ? "show" : "shows"}`}
+          href={`/a/${slug}/favorites`}
+        />
       </div>
 
       <section className="card">
