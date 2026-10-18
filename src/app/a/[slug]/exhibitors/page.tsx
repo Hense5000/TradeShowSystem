@@ -2,7 +2,9 @@ import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { summarizeCompany } from "@/lib/company";
 import { emptyProfileWhere, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
@@ -11,14 +13,17 @@ import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
-import { addShownToList, setListMembership, toggleFavorite } from "../lists/actions";
+import { addShownToList, setListMembership } from "../lists/actions";
 import { fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
+import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
 import { ProfileFillCard } from "./profile-fill-card";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
+// A company's trade shows listed in its row; the rest are on its company page.
+const SHOWS_IN_ROW = 3;
 
 // "Fill missing profiles" and "Find missing contacts" run on this page and may take a few minutes.
 export const maxDuration = 300;
@@ -33,31 +38,52 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   const { q, show, country } = filters;
   const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
 
+  // A company at several trade shows is one row here (see src/lib/company.ts).
+  await syncCompanyKeys();
   const where = exhibitorWhere(filters);
-  const [exhibitors, matching, total, shows, countries] = await Promise.all([
-    db.exhibitor.findMany({
-      where,
-      include: { tradeShow: { select: { id: true, name: true } } },
-      orderBy: [{ name: "asc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+  const [groups, matchingRows, total, shows, countries] = await Promise.all([
+    db.exhibitor.groupBy({
+      by: ["companyKey"],
+      where: { AND: [where, { companyKey: { not: null } }] },
+      _min: { name: true },
+      orderBy: { _min: { name: "asc" } },
     }),
     db.exhibitor.count({ where }),
-    db.exhibitor.count(),
+    db.$queryRaw<{ n: number }[]>`SELECT COUNT(DISTINCT "companyKey")::int AS n FROM "Exhibitor"`.then((r) => r[0]?.n ?? 0),
     tradeShowOptions(),
     db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
-  // This account's saved lists, and which of them each exhibitor on this page is on.
+  const matching = groups.length;
+  const pageKeys = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((g) => g.companyKey!);
+  // Every row of the companies on this page, latest trade show first, and which of them the filters match.
+  const [rows, matchedRows] = await Promise.all([
+    db.exhibitor.findMany({
+      where: { companyKey: { in: pageKeys } },
+      include: { tradeShow: { select: { id: true, name: true, startDate: true } } },
+      orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
+    }),
+    db.exhibitor.findMany({ where: { AND: [where, { companyKey: { in: pageKeys } }] }, select: { id: true } }),
+  ]);
+  const matched = new Set(matchedRows.map((r) => r.id));
+  const companies = pageKeys.map((key) => ({
+    key,
+    ...summarizeCompany(
+      rows.filter((r) => r.companyKey === key),
+      (r) => matched.has(r.id),
+    ),
+  }));
+  // This account's saved lists, and which of them each company on this page is on.
   const [lists, saved] = await Promise.all([
     db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
     db.savedListItem.findMany({
-      where: { exhibitorId: { in: exhibitors.map((e) => e.id) }, list: { organizationId: organization.id } },
+      where: { exhibitorId: { in: rows.map((e) => e.id) }, list: { organizationId: organization.id } },
       select: { listId: true, exhibitorId: true },
     }),
   ]);
   const favoritesId = lists.find((l) => l.favorites)?.id;
   const ownLists = lists.filter((l) => !l.favorites);
   const savedIn = new Set(saved.map((s) => `${s.listId}:${s.exhibitorId}`));
+  const isIn = (listId: string | undefined, ids: string[]) => ids.some((id) => savedIn.has(`${listId}:${id}`));
   const useAi = canEdit && isCompanyProfileConfigured();
   const [missingProfiles, missingContacts] = useAi
     ? await Promise.all([
@@ -83,12 +109,12 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         description="Companies exhibiting at trade shows, shared by every account."
         action={
           <div className="flex flex-wrap gap-2">
-            {matching > 0 && (
+            {matchingRows > 0 && (
               <>
-                <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${matching} exhibitors shown below as an Excel file`}>
+                <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
                   <Icon name="download" className="size-4" /> Excel
                 </a>
-                <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${matching} exhibitors shown below as a CSV file`}>
+                <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
                   <Icon name="download" className="size-4" /> CSV
                 </a>
               </>
@@ -170,14 +196,15 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
             )}
           </form>
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
-            {filtered ? `${matching} of ${total} exhibitors match` : `${total} ${total === 1 ? "exhibitor" : "exhibitors"}`}
+            {filtered ? `${matching} of ${total} companies match` : `${total} ${total === 1 ? "company" : "companies"}`}
+            {matchingRows > matching && ` · ${matchingRows} trade show entries`}
             {pages > 1 && ` · page ${page} of ${pages}`}
           </p>
           {filtered && matching > 0 && (
             <ActionForm action={addShownToList.bind(null, slug, filters)} className="flex flex-wrap items-center gap-2 border-t border-line bg-subtle px-5 py-2.5 text-sm">
               <Icon name="bookmark" className="size-4 text-brand" />
               <span className="font-semibold">
-                Save {matching > MAX_ADD_AT_ONCE ? `the first ${MAX_ADD_AT_ONCE}` : matching === 1 ? "this exhibitor" : `all ${matching}`} to
+                Save {matching > MAX_ADD_AT_ONCE ? `${MAX_ADD_AT_ONCE} of them` : matching === 1 ? "this company" : `all ${matching}`} to
               </span>
               <select className="input w-auto max-w-64 py-1.5" name="list" aria-label="List" required defaultValue="">
                 <option value="" disabled>Choose a list</option>
@@ -194,70 +221,90 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
               <thead>
                 <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
                   <th className="px-5 py-2.5">Company</th>
-                  <th className="px-5 py-2.5">Trade show</th>
+                  <th className="px-5 py-2.5">{show ? "Trade show" : "Trade shows"}</th>
                   <th className="px-5 py-2.5">Contact</th>
                   <th className="px-5 py-2.5">Country</th>
-                  <th className="px-5 py-2.5">Booth</th>
+                  {show && <th className="px-5 py-2.5">Booth</th>}
                   <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {exhibitors.map((e) => (
-                  <tr key={e.id} className="align-top">
-                    <td className="px-5 py-3">
-                      <div className="flex min-w-52 items-start gap-2.5">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-                          <Icon name="store" className="size-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-semibold">{e.name}</p>
-                          {e.industry && <p className="text-xs text-muted">{e.industry}</p>}
-                          {e.website && (
-                            <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
-                              {e.website.replace(/^https?:\/\/(www\.)?/, "")}
-                            </a>
+                {companies.map(({ key, main: e, contact, first, shows: companyShows, ids }) => {
+                  const companyHref = `/a/${slug}/exhibitors/company?key=${encodeURIComponent(key)}`;
+                  const industry = first("industry");
+                  const website = first("website");
+                  const country = first("country");
+                  const listed = show ? companyShows.filter((s) => s.id === show) : companyShows.slice(0, SHOWS_IN_ROW);
+                  const more = companyShows.length - listed.length;
+                  return (
+                    <tr key={key} className="align-top">
+                      <td className="px-5 py-3">
+                        <div className="flex min-w-52 items-start gap-2.5">
+                          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+                            <Icon name="store" className="size-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <Link href={companyHref} className="block font-semibold hover:text-brand">{e.name}</Link>
+                            {industry && <p className="text-xs text-muted">{industry}</p>}
+                            {website && (
+                              <a href={website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
+                                {website.replace(/^https?:\/\/(www\.)?/, "")}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="min-w-44 space-y-0.5">
+                          {listed.map((s) => (
+                            <Link key={s.id} href={`/a/${slug}/exhibitors?show=${s.id}`} className="block font-medium hover:text-brand">
+                              {s.name}
+                            </Link>
+                          ))}
+                          {more > 0 && (
+                            <Link href={companyHref} className="block text-xs font-semibold text-brand hover:underline">
+                              {show ? `Also at ${more} other ${more === 1 ? "show" : "shows"}` : `+${more} more ${more === 1 ? "show" : "shows"}`}
+                            </Link>
                           )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <Link href={`/a/${slug}/exhibitors?show=${e.tradeShow.id}`} className="font-medium hover:text-brand">
-                        {e.tradeShow.name}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="min-w-44">
-                        {e.contactName && <p className="font-medium">{e.contactName}</p>}
-                        {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
-                        {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
-                        {e.phone && <p className="text-xs text-muted">{e.phone}</p>}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 whitespace-nowrap">{e.country ? countryName(e.country) : <span className="text-faint">—</span>}</td>
-                    <td className="px-5 py-3 whitespace-nowrap">
-                      {e.boothNumber ?? (!e.standLocationUrl && <span className="text-faint">—</span>)}
-                      {e.standLocationUrl && (
-                        <a href={e.standLocationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-brand hover:underline">
-                          <Icon name="pin" className="size-3.5" /> Floor plan
-                        </a>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="min-w-44">
+                          {contact.contactName && <p className="font-medium">{contact.contactName}</p>}
+                          {contact.contactTitle && <p className="text-xs text-muted">{contact.contactTitle}</p>}
+                          {contact.email && <a href={`mailto:${contact.email}`} className="block text-xs font-medium text-brand hover:underline">{contact.email}</a>}
+                          {contact.phone && <p className="text-xs text-muted">{contact.phone}</p>}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">{country ? countryName(country) : <span className="text-faint">—</span>}</td>
+                      {show && (
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          {e.boothNumber ?? (!e.standLocationUrl && <span className="text-faint">—</span>)}
+                          {e.standLocationUrl && (
+                            <a href={e.standLocationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-brand hover:underline">
+                              <Icon name="pin" className="size-3.5" /> Floor plan
+                            </a>
+                          )}
+                        </td>
                       )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <FavoriteStar slug={slug} exhibitorId={e.id} name={e.name} on={savedIn.has(`${favoritesId}:${e.id}`)} />
-                        <ListMenu
-                          action={setListMembership.bind(null, slug, e.id)}
-                          lists={ownLists.map((l) => ({ id: l.id, name: l.name, inList: savedIn.has(`${l.id}:${e.id}`) }))}
-                          newListHref={`/a/${slug}/lists`}
-                        />
-                        {canEdit && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {exhibitors.length === 0 && (
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Adds the row of the company's latest (or filtered) show; taking it off removes every show's row. */}
+                          <FavoriteStar slug={slug} exhibitorIds={[e.id, ...ids.filter((id) => id !== e.id)]} name={e.name} on={isIn(favoritesId, ids)} />
+                          <ListMenu
+                            action={setListMembership.bind(null, slug, [e.id, ...ids.filter((id) => id !== e.id)])}
+                            lists={ownLists.map((l) => ({ id: l.id, name: l.name, inList: isIn(l.id, ids) }))}
+                            newListHref={`/a/${slug}/lists`}
+                          />
+                          {canEdit && <Link href={`/a/${slug}/exhibitors/${e.id}`} className="btn-secondary">Edit</Link>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {companies.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-muted">
+                    <td colSpan={show ? 6 : 5} className="px-5 py-8 text-center text-muted">
                       No exhibitors match your search.
                     </td>
                   </tr>
@@ -275,21 +322,5 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         </section>
       )}
     </>
-  );
-}
-
-/** The star that puts an exhibitor on the account's Favorites list, or takes it off. */
-function FavoriteStar({ slug, exhibitorId, name, on }: { slug: string; exhibitorId: string; name: string; on: boolean }) {
-  return (
-    <form action={toggleFavorite.bind(null, slug, exhibitorId, !on)}>
-      <button
-        className={`grid size-8 place-items-center rounded-lg hover:bg-subtle ${on ? "text-brand" : "text-faint hover:text-muted"}`}
-        title={on ? "Remove from Favorites" : "Add to Favorites"}
-        aria-label={on ? `Remove ${name} from Favorites` : `Add ${name} to Favorites`}
-        aria-pressed={on}
-      >
-        <Icon name="star" className="size-5" filled={on} />
-      </button>
-    </form>
   );
 }

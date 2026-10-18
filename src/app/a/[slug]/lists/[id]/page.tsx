@@ -101,7 +101,13 @@ export default async function SavedListPage({ params, searchParams }: PageProps<
                   <tr key={e.id} className="align-top">
                     <td className="px-5 py-3">
                       <div className="min-w-52">
-                        <p className="font-semibold">{e.name}</p>
+                        {e.companyKey ? (
+                          <Link href={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`} className="block font-semibold hover:text-brand">
+                            {e.name}
+                          </Link>
+                        ) : (
+                          <p className="font-semibold">{e.name}</p>
+                        )}
                         {e.industry && <p className="text-xs text-muted">{e.industry}</p>}
                         {e.website && (
                           <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
