@@ -55,11 +55,11 @@ export function AccountFrame({
           open ? "translate-x-0 shadow-xl" : "-translate-x-full"
         }`}
       >
-        <Link href="/accounts" className="px-2">
+        <Link href="/accounts?choose=1" className="px-2">
           <Logo className="h-9 w-auto" />
         </Link>
         <Link
-          href="/accounts"
+          href="/accounts?choose=1"
           className="flex items-center gap-2.5 rounded-lg border border-line bg-subtle p-2 hover:border-line-strong"
         >
           <span className="avatar rounded-lg">{accountInitials}</span>
