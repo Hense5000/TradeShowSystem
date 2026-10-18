@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
 import { initials } from "@/lib/initials";
 import { canAssignRole, canManageMembers, checkRemoval, checkRoleChange, ROLE_LABEL, ROLES } from "@/lib/permissions";
+import { billingConfigured } from "@/lib/stripe";
 import { requireMembership } from "@/lib/tenant";
 import { changeRole, inviteMember, removeMember, revokeInvitation } from "./actions";
 import { InviteForm } from "./invite-form";
@@ -40,7 +41,10 @@ export default async function MembersPage({ params }: PageProps<"/a/[slug]/membe
       {isAdmin && (
         <section className="card">
           <h2 className="font-bold">Invite a user</h2>
-          <p className="mb-4 text-sm text-muted">They get a link that works for 7 days.</p>
+          <p className="mb-4 text-sm text-muted">
+            They get a link that works for 7 days.
+            {billingConfigured() && " When they join, the subscription goes up by one user and the rest of this month is charged at once."}
+          </p>
           <InviteForm action={inviteMember.bind(null, slug)} roles={ROLES.filter((r) => canAssignRole(me.role, r))} />
         </section>
       )}

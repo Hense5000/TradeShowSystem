@@ -152,8 +152,8 @@ export async function syncInvoice(invoiceId: string) {
 
 /**
  * The subscription is charged per user, so its quantity follows the number of
- * users in the account. Call after a user joins or leaves. Stripe prorates the
- * difference on the next invoice. Never throws: a failure is logged and the
+ * users in the account. Call after a user joins or leaves. A new user is
+ * invoiced and charged at once for the rest of the period. Never throws: a failure is logged and the
  * next change (or the next checkout) corrects it.
  */
 export async function syncSeats(organizationId: string) {
@@ -168,7 +168,9 @@ export async function syncSeats(organizationId: string) {
     if (!item || item.quantity === users) return;
     await stripe().subscriptions.update(sub.id, {
       items: [{ id: item.id, quantity: users }],
-      proration_behavior: "create_prorations",
+      // A new user is charged right away for the rest of the period; a
+      // removed user becomes a credit on the next invoice.
+      proration_behavior: users > (item.quantity ?? 0) ? "always_invoice" : "create_prorations",
     });
   } catch (error) {
     console.error(`Could not update the number of users on the subscription of ${organizationId}`, error);
