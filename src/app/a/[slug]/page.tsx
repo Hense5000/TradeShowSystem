@@ -98,8 +98,9 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
             <div>
               <h2 className="font-bold">Follow-ups</h2>
               <p className="text-sm text-muted">
-                {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`} · yours and unassigned
+                {dueCount > 0 ? `${dueCount} due today or overdue` : `Nothing due today`}
               </p>
+              <p className="text-xs text-faint">Your leads and unassigned ones</p>
             </div>
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
               <Icon name="calendar" className="size-4.5" />
