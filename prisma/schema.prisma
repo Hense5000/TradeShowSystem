@@ -97,15 +97,16 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships   Membership[]
-  invitations   Invitation[]
-  contacts      Contact[]
-  features      OrganizationFeature[]
-  featureAccess FeatureAccess[]
-  subscriptions Subscription[]
-  invoices      Invoice[]
-  savedLists    SavedList[]
-  favoriteShows FavoriteShow[]
+  memberships           Membership[]
+  invitations           Invitation[]
+  contacts              Contact[]
+  features              OrganizationFeature[]
+  featureAccess         FeatureAccess[]
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  savedLists            SavedList[]
+  favoriteShows         FavoriteShow[]
+  hiddenRecommendations HiddenShowRecommendation[]
 }
 
 enum Role {
@@ -329,11 +330,12 @@ model TradeShow {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  center      ExhibitionCenter?    @relation(fields: [centerId], references: [id], onDelete: SetNull)
-  organizer   ExhibitionOrganizer? @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+  center      ExhibitionCenter?          @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  organizer   ExhibitionOrganizer?       @relation(fields: [organizerId], references: [id], onDelete: SetNull)
   exhibitors  Exhibitor[]
   suggestions SuggestedShow[]
   favoriteOf  FavoriteShow[]
+  hiddenFrom  HiddenShowRecommendation[]
 
   @@index([startDate])
   @@index([name])
@@ -443,7 +445,7 @@ enum LeadStatus {
 model FavoriteShow {
   organizationId String
   tradeShowId    String
-  addedAt        DateTime @default(now())
+  addedAt        DateTime  @default(now())
   addedById      String?
   // Exhibitors added to the show up to this time have been looked at for the
   // daily email's "New exhibitors you may like"; null until the first email.
@@ -517,4 +519,18 @@ model TradeShowCleanupSettings {
   lastRunAt      DateTime?
   lastRunDeleted Int? // trade shows deleted by the last run
   updatedAt      DateTime  @updatedAt
+}
+
+// A recommended trade show an account clicked "Not interested" on, so it is
+// not recommended again (see src/lib/show-recommendations.ts).
+model HiddenShowRecommendation {
+  organizationId String
+  tradeShowId    String
+  hiddenAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tradeShow    TradeShow    @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, tradeShowId])
+  @@index([tradeShowId])
 }
