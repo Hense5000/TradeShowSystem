@@ -16,8 +16,8 @@ describe("showStatus", () => {
 describe("parseTradeShowRows", () => {
   it("reads Base44-style columns and European dates", () => {
     const result = parseTradeShowRows([
-      ["Trade show name", "Start date", "End date", "City", "Country", "Website", "Status", "Exhibitor directory URL", "Exhibition center"],
-      ["InnoTrans", "22.09.2026", "25.09.2026", "Berlin", "Germany", "innotrans.de", "finished", "innotrans.de/exhibitors", "Messe Berlin"],
+      ["Trade show name", "Start date", "End date", "City", "Country", "Website", "Status", "Exhibitor directory URL", "Exhibition center", "Organizer"],
+      ["InnoTrans", "22.09.2026", "25.09.2026", "Berlin", "Germany", "innotrans.de", "finished", "innotrans.de/exhibitors", "Messe Berlin", "Messe Berlin GmbH"],
     ]);
     expect(result.problems).toEqual([]);
     expect(result.items).toEqual([
@@ -31,6 +31,8 @@ describe("parseTradeShowRows", () => {
         exhibitorDirectoryUrl: "https://innotrans.de/exhibitors",
         centerId: null,
         centerName: "Messe Berlin",
+        organizerId: null,
+        organizerName: "Messe Berlin GmbH",
       },
     ]);
   });

@@ -21,7 +21,7 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
     ...(q && { name: { contains: q, mode: "insensitive" } }),
   };
   const [organizers, total, countries] = await Promise.all([
-    db.exhibitionOrganizer.findMany({ where, orderBy: { name: "asc" } }),
+    db.exhibitionOrganizer.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { tradeShows: true } } } }),
     db.exhibitionOrganizer.count(),
     db.exhibitionOrganizer.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
@@ -93,6 +93,7 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
               <thead>
                 <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
                   <th className="px-5 py-2.5">Organizer company</th>
+                  <th className="px-5 py-2.5">Trade shows</th>
                   <th className="px-5 py-2.5">Country</th>
                   <th className="px-5 py-2.5">Website</th>
                   {canEdit && <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>}
@@ -106,8 +107,17 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
                         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
                           <Icon name="briefcase" className="size-4" />
                         </span>
-                        <span className="font-semibold">{o.name}</span>
+                        <Link href={`/a/${slug}/organizers/${o.id}`} className="font-semibold hover:text-brand">{o.name}</Link>
                       </div>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      {o._count.tradeShows > 0 ? (
+                        <Link href={`/a/${slug}/organizers/${o.id}`} className="inline-flex items-center gap-1.5 font-medium text-brand hover:underline">
+                          <Icon name="calendar" className="size-4" /> {o._count.tradeShows}
+                        </Link>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">{o.country ? countryName(o.country) : <span className="text-faint">—</span>}</td>
                     <td className="px-5 py-3">
@@ -128,7 +138,7 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
                 ))}
                 {organizers.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 4 : 3} className="px-5 py-8 text-center text-muted">
+                    <td colSpan={canEdit ? 5 : 4} className="px-5 py-8 text-center text-muted">
                       No organizers match your search.
                     </td>
                   </tr>

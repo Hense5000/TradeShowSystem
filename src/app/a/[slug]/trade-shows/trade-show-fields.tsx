@@ -1,9 +1,11 @@
 import type { TradeShow } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
+import { SearchSelect } from "@/components/search-select";
 import { isoDate } from "@/lib/dates";
+import type { TradeShowPickerOptions } from "./picker-options";
 
 /** The inputs shared by the add and edit forms. */
-export function TradeShowFields({ show, centers }: { show?: TradeShow; centers: { id: string; name: string; city: string | null }[] }) {
+export function TradeShowFields({ show, options }: { show?: TradeShow; options: TradeShowPickerOptions }) {
   return (
     <>
       <Field id="name" label="Trade show name" defaultValue={show?.name} required maxLength={150} placeholder="InnoTrans" />
@@ -11,15 +13,23 @@ export function TradeShowFields({ show, centers }: { show?: TradeShow; centers: 
         <Field id="startDate" label="Start date" type="date" defaultValue={show ? isoDate(show.startDate) : ""} required />
         <Field id="endDate" label="End date" type="date" defaultValue={show ? isoDate(show.endDate) : ""} required />
       </div>
-      <div className="min-w-0">
-        <label className="label" htmlFor="centerId">Exhibition center</label>
-        <select className="input" id="centerId" name="centerId" defaultValue={show?.centerId ?? ""}>
-          <option value="">Not chosen</option>
-          {centers.map((c) => (
-            <option key={c.id} value={c.id}>{c.city ? `${c.name} (${c.city})` : c.name}</option>
-          ))}
-        </select>
-        <p className="hint">Missing a center? Add it under Exhibition centers first.</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SearchSelect
+          id="centerId"
+          label="Exhibition center"
+          options={options.centers}
+          defaultValue={show?.centerId}
+          searchPlaceholder="Search centers…"
+          hint="Missing a center? Add it under Exhibition centers first."
+        />
+        <SearchSelect
+          id="organizerId"
+          label="Organizer"
+          options={options.organizers}
+          defaultValue={show?.organizerId}
+          searchPlaceholder="Search organizers…"
+          hint="Missing an organizer? Add it under Exhibition organizers first."
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="city" label="City" defaultValue={show?.city ?? ""} maxLength={100} />

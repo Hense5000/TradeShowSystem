@@ -66,10 +66,10 @@ export function pageToText(html: string, pageUrl: string): { text: string; cut: 
 }
 
 /** A show the AI reported, before it is checked. */
-export type FoundShow = { name: string; startDate: string; endDate: string; website: string | null };
+export type FoundShow = { name: string; startDate: string; endDate: string; website: string | null; organizer?: string | null };
 
 /** A found show that passed the checks. */
-export type CheckedShow = { name: string; startDate: Date; endDate: Date; website: string | null };
+export type CheckedShow = { name: string; startDate: Date; endDate: Date; website: string | null; organizer: string | null };
 
 function cleanUrl(value: string | null): string | null {
   if (!value) return null;
@@ -95,7 +95,8 @@ export function checkFoundShows(found: FoundShow[], now = new Date()): CheckedSh
     const endDate = parseDate(f.endDate || f.startDate);
     if (!name || !startDate || !endDate) continue;
     if (endDate < startDate || endDate < first || startDate > last) continue;
-    result.push({ name, startDate, endDate, website: cleanUrl(f.website) });
+    const organizer = f.organizer?.replace(/\s+/g, " ").trim().slice(0, 150) || null;
+    result.push({ name, startDate, endDate, website: cleanUrl(f.website), organizer });
   }
   return result;
 }

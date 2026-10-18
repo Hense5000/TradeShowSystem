@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { organizerKey, parseOrganizerRows } from "./organizers";
+import { findOrganizer, organizerKey, organizerNameKey, parseOrganizerRows } from "./organizers";
 
 describe("parseOrganizerRows", () => {
   it("maps the organizer columns and cleans up the values", () => {
@@ -27,5 +27,33 @@ describe("parseOrganizerRows", () => {
 describe("organizerKey", () => {
   it("ignores case and spaces", () => {
     expect(organizerKey({ name: " RX Global " })).toBe(organizerKey({ name: "rx global" }));
+  });
+});
+
+describe("findOrganizer", () => {
+  const list = [{ name: "Messe Frankfurt GmbH" }, { name: "RX" }, { name: "Bella Center Copenhagen A/S" }, { name: "Messe München" }];
+
+  it("ignores case, accents and company forms", () => {
+    expect(findOrganizer("messe frankfurt", list)).toBe(list[0]);
+    expect(findOrganizer("Messe Munchen GmbH", list)).toBe(list[3]);
+    expect(findOrganizer("Bella Center Copenhagen", list)).toBe(list[2]);
+    expect(findOrganizer("RX", list)).toBe(list[1]);
+  });
+
+  it("matches a longer form of the same name", () => {
+    expect(findOrganizer("Messe Frankfurt Exhibition GmbH", list)).toBe(list[0]);
+  });
+
+  it("does not match short names inside others, or unknown names", () => {
+    expect(findOrganizer("RX Global", list)).toBeUndefined();
+    expect(findOrganizer("Messe Berlin", list)).toBeUndefined();
+    expect(findOrganizer("GmbH", list)).toBeUndefined();
+  });
+});
+
+describe("organizerNameKey", () => {
+  it("drops company forms and punctuation", () => {
+    expect(organizerNameKey("Messe Düsseldorf GmbH")).toBe("messedusseldorf");
+    expect(organizerNameKey("Bella Center A/S")).toBe("bellacenter");
   });
 });

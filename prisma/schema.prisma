@@ -302,6 +302,8 @@ model ExhibitionOrganizer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tradeShows TradeShow[]
+
   @@index([name])
 }
 
@@ -317,17 +319,21 @@ model TradeShow {
   website               String?
   exhibitorDirectoryUrl String? // the show's own list of exhibitors
   centerId              String? // where it takes place, if known
+  organizerId           String? // who organizes it, if known
+  organizerTriedAt      DateTime? // when AI last looked for the organizer, so it isn't searched again
   exhibitorsTriedAt     DateTime? // when "Fetch exhibitors for all shows" last tried this show, so it is not tried again on every run
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  center      ExhibitionCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  center      ExhibitionCenter?    @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  organizer   ExhibitionOrganizer? @relation(fields: [organizerId], references: [id], onDelete: SetNull)
   exhibitors  Exhibitor[]
   suggestions SuggestedShow[]
 
   @@index([startDate])
   @@index([name])
   @@index([centerId])
+  @@index([organizerId])
 }
 
 // A company exhibiting at one trade show. The same company at two shows is

@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isoDate, today } from "@/lib/dates";
+import { organizerIdFor } from "@/lib/organizer-link";
 import {
   checkFoundShows,
   type CheckedShow,
@@ -44,6 +45,7 @@ const foundSchema = z.object({
       startDate: z.string().describe("First day, YYYY-MM-DD"),
       endDate: z.string().describe("Last day, YYYY-MM-DD; same as startDate for one-day shows"),
       website: z.string().nullable().describe("Link to the show's own page, or null"),
+      organizer: z.string().nullable().describe("The company that organizes the show, if the page names it, or null"),
     }),
   ),
 });
@@ -58,6 +60,7 @@ Only list events whose exact start date is written on the page (or in its struct
 Write dates as YYYY-MM-DD. When the year is not written, use the next occurrence on or after today's date.
 Give the name as the organizer writes it, without the year or edition number.
 For website, use the link that belongs to that event (its own website, or its page on the center's site). Use null if there is none.
+For organizer, give the company that organizes the show when the page names it (for example "Organizer: Messe Frankfurt" or "organised by RX"), as written but without the address. Use null when the page does not say; never guess, and do not give the exhibition center itself unless the page says it organizes the show.
 If the page lists no trade shows, return an empty list.`;
 
 // Many sites turn away requests that don't look like a browser, so ask like one.
@@ -77,7 +80,7 @@ const READER_SYSTEM = `You collect the event listings of an exhibition center fr
 
 Fetch the events page you are given. You need the events from today until the "look until" date you are given, about ${MONTHS_AHEAD} months ahead. If they are not all on the page (for example because they load with JavaScript, sit on a separate list page, or are split over several pages or months), follow links on the same site that lead to the event listings for that period, such as the full list, the next page or the next months. Do not leave the center's website.
 
-Then write out every upcoming event you found as plain text, one per line: name, dates exactly as written (with the year), and the link to the event if there is one. Write nothing else. If you found no events, write: NO EVENTS FOUND`;
+Then write out every upcoming event you found as plain text, one per line: name, dates exactly as written (with the year), the organizer if it is named, and the link to the event if there is one. Write nothing else. If you found no events, write: NO EVENTS FOUND`;
 
 /**
  * Lets Claude read the page with Anthropic's own web fetcher and follow links
@@ -165,11 +168,15 @@ async function findOnPage(client: Anthropic, center: Center & { eventsUrl: strin
   return { found: await askClaude(client, center.name, center.eventsUrl, listing), via: "site" };
 }
 
-/** Adds a found show to the trade show list, in the center's city and country, and records it as added. */
-async function addShow(centerId: string, sourceUrl: string, show: CheckedShow): Promise<void> {
+/**
+ * Adds a found show to the trade show list, in the center's city and country,
+ * with its organizer when the page named one, and records it as added.
+ */
+async function addShow(centerId: string, sourceUrl: string, { organizer, ...show }: CheckedShow): Promise<void> {
   const center = await db.exhibitionCenter.findUnique({ where: { id: centerId }, select: { city: true, country: true } });
+  const organizerId = organizer ? await organizerIdFor({ name: organizer }) : null;
   const tradeShow = await db.tradeShow.create({
-    data: { ...show, centerId, city: center?.city ?? null, country: center?.country ?? null },
+    data: { ...show, centerId, organizerId, city: center?.city ?? null, country: center?.country ?? null },
   });
   await db.suggestedShow.create({
     data: { ...show, centerId, sourceUrl, status: "APPROVED", decidedAt: new Date(), tradeShowId: tradeShow.id },

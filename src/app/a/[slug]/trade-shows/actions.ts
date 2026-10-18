@@ -8,6 +8,9 @@ import type { SaveState } from "@/components/save-form";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { findDirectoryUrl } from "@/lib/directory-url-run";
+import type { OrganizerFillResult } from "@/lib/organizer-finder";
+import { fillMissingOrganizers, isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
+import { findOrganizer } from "@/lib/organizers";
 import { withPhoneCountry } from "@/lib/phone-country";
 import { checkFoundExhibitors } from "@/lib/exhibitor-fetch";
 import {
@@ -37,12 +40,16 @@ async function findDuplicate(input: TradeShowInput, exceptId?: string) {
   return match?.id;
 }
 
-/** The fields to save, with the center checked against the list. */
-async function toData({ centerName: _unused, ...data }: TradeShowInput) {
+/** The fields to save, with the center and organizer checked against their lists. */
+async function toData({ centerName: _center, organizerName: _organizer, ...data }: TradeShowInput) {
   if (data.centerId && !(await db.exhibitionCenter.findUnique({ where: { id: data.centerId }, select: { id: true } }))) {
     data.centerId = null;
   }
-  return data;
+  if (data.organizerId && !(await db.exhibitionOrganizer.findUnique({ where: { id: data.organizerId }, select: { id: true } }))) {
+    data.organizerId = null;
+  }
+  // A show saved without an organizer can be looked up by AI again.
+  return { ...data, ...(!data.organizerId && { organizerTriedAt: null }) };
 }
 
 export async function createTradeShow(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
@@ -94,14 +101,21 @@ export async function importTradeShows(slug: string, _prev: ImportState, formDat
   const centers = await db.exhibitionCenter.findMany({ select: { id: true, name: true } });
   const centerIds = new Map<string, string>();
   for (const c of centers) if (!centerIds.has(c.name.toLowerCase())) centerIds.set(c.name.toLowerCase(), c.id);
+  const organizers = await db.exhibitionOrganizer.findMany({ select: { id: true, name: true } });
   const unknownCenters = new Set<string>();
-  const data = fresh.map(({ centerName, ...show }) => {
+  const unknownOrganizers = new Set<string>();
+  const data = fresh.map(({ centerName, organizerName, ...show }) => {
     const centerId = centerName ? centerIds.get(centerName.toLowerCase()) : undefined;
     if (centerName && !centerId) unknownCenters.add(centerName);
-    return { ...show, centerId: centerId ?? null };
+    const organizerId = organizerName ? findOrganizer(organizerName, organizers)?.id : undefined;
+    if (organizerName && !organizerId) unknownOrganizers.add(organizerName);
+    return { ...show, centerId: centerId ?? null, organizerId: organizerId ?? null };
   });
   for (const name of unknownCenters) {
     problems.push(`"${name}" is not in the exhibition centers list, so shows there were saved without a center.`);
+  }
+  for (const name of unknownOrganizers) {
+    problems.push(`"${name}" is not in the exhibition organizers list, so its shows were saved without an organizer.`);
   }
 
   if (data.length > 0) await db.tradeShow.createMany({ data });
@@ -196,4 +210,23 @@ export async function markExhibitorsTried(slug: string, tradeShowId: string): Pr
   await requirePlatformAdmin(slug);
   await db.tradeShow.updateMany({ where: { id: tradeShowId }, data: { exhibitorsTriedAt: new Date() } });
   revalidatePath(`/a/${slug}/trade-shows`);
+}
+
+const NO_ORGANIZER_KEY = "Add ANTHROPIC_API_KEY in Vercel before AI can look up organizers.";
+
+/** How many trade shows still wait for AI to look up their organizer. */
+export async function countMissingOrganizers(slug: string): Promise<number> {
+  await requirePlatformAdmin(slug);
+  if (!isOrganizerFinderConfigured()) return 0;
+  return db.tradeShow.count({ where: missingOrganizerWhere });
+}
+
+/** Looks up the organizers of a few trade shows, so the list page can show a progress bar. */
+export async function findOrganizerBatch(slug: string): Promise<OrganizerFillResult> {
+  await requirePlatformAdmin(slug);
+  if (!isOrganizerFinderConfigured()) return { filled: 0, notFound: 0, failed: 0, left: 0, stoppedBy: NO_ORGANIZER_KEY };
+  const result = await fillMissingOrganizers({ budgetMs: 150_000, limit: 5 });
+  revalidatePath(`/a/${slug}/trade-shows`);
+  revalidatePath(`/a/${slug}/organizers`);
+  return result;
 }
