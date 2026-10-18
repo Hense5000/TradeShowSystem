@@ -23,14 +23,17 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
   if (!user || !valid) return { error: "Wrong email or password.", email };
 
   // A browser this user hasn't logged in from: confirm with a code by email.
+  // If the email can't be sent, log in without the code rather than lock
+  // everyone out while email is broken.
   if (deviceCheckEnabled() && !(await isTrustedDevice(user.id))) {
+    let sent = false;
     try {
       await sendLoginCode(user);
+      sent = true;
     } catch (error) {
-      console.error("Could not send the login code", error);
-      return { error: "We could not send your login code. Please try again in a moment.", email };
+      console.error("Could not send the login code; logging in without it", error);
     }
-    redirect(`/login/verify?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    if (sent) redirect(`/login/verify?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
   try {
