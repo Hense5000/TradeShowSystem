@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { acceptInvitation, findInvitation } from "@/lib/invitations";
+import { syncSeats } from "@/lib/stripe";
 import { requireUser } from "@/lib/tenant";
 
 export async function accept(token: string): Promise<{ error?: string } | undefined> {
@@ -17,5 +18,6 @@ export async function accept(token: string): Promise<{ error?: string } | undefi
   } catch {
     return { error: "This invitation is no longer valid." };
   }
+  await syncSeats(found.invitation.organizationId);
   redirect(`/a/${found.invitation.organization.slug}`);
 }

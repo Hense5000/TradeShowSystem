@@ -5,6 +5,7 @@ import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import { acceptInvitation, findInvitation } from "@/lib/invitations";
 import { createOrganization } from "@/lib/organizations";
+import { syncSeats } from "@/lib/stripe";
 import { firstError, signupSchema } from "@/lib/validation";
 
 // Entered values (except the password) are sent back so the form keeps them after an error.
@@ -39,6 +40,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
       const user = await tx.user.create({ data: { name, email, passwordHash } });
       await acceptInvitation(tx, found.invitation, user.id);
     });
+    await syncSeats(found.invitation.organizationId);
     destination = `/a/${found.invitation.organization.slug}`;
   } else {
     // Creating a brand new customer account.

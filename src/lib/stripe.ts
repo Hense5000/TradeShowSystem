@@ -1,6 +1,7 @@
 import "server-only";
 import type { Organization } from "@prisma/client";
 import Stripe from "stripe";
+import { currentSubscription, isLive } from "@/lib/billing";
 import { db } from "@/lib/db";
 
 // Stripe holds the truth about subscriptions and invoices; the Subscription
@@ -147,6 +148,31 @@ export async function syncInvoice(invoiceId: string) {
     create: { organizationId: org.id, stripeInvoiceId: inv.id, ...data },
     update: data,
   });
+}
+
+/**
+ * The subscription is charged per user, so its quantity follows the number of
+ * users in the account. Call after a user joins or leaves. Stripe prorates the
+ * difference on the next invoice. Never throws: a failure is logged and the
+ * next change (or the next checkout) corrects it.
+ */
+export async function syncSeats(organizationId: string) {
+  if (!billingConfigured()) return;
+  try {
+    const subs = await db.subscription.findMany({ where: { organizationId } });
+    const current = currentSubscription(subs);
+    if (!current || !isLive(current.status)) return;
+    const sub = await stripe().subscriptions.retrieve(current.stripeSubscriptionId);
+    const item = sub.items.data.find((i) => i.price.id === planPriceId()) ?? sub.items.data[0];
+    const users = Math.max(1, await db.membership.count({ where: { organizationId } }));
+    if (!item || item.quantity === users) return;
+    await stripe().subscriptions.update(sub.id, {
+      items: [{ id: item.id, quantity: users }],
+      proration_behavior: "create_prorations",
+    });
+  } catch (error) {
+    console.error(`Could not update the number of users on the subscription of ${organizationId}`, error);
+  }
 }
 
 /**
