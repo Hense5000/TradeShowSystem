@@ -16,6 +16,8 @@ import { requireMembership } from "@/lib/tenant";
 function refresh(slug: string) {
   revalidatePath(`/a/${slug}/exhibitors`, "layout"); // the Exhibitors page and the company pages
   revalidatePath(`/a/${slug}/lists`, "layout");
+  revalidatePath(`/a/${slug}/favorites`);
+  revalidatePath(`/a/${slug}`); // the dashboard counts the open leads
 }
 
 async function takenNames(organizationId: string, exceptId?: string) {
@@ -33,7 +35,7 @@ async function ownListId(organizationId: string, listId: string) {
 }
 
 /** The account's Favorites list, created the first time it is needed. */
-async function favoritesListId(organizationId: string) {
+export async function favoritesListId(organizationId: string) {
   const existing = await db.savedList.findFirst({ where: { organizationId, favorites: true }, select: { id: true } });
   if (existing) return existing.id;
   try {

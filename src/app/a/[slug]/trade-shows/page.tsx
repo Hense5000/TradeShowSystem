@@ -10,6 +10,7 @@ import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
+import { FavoriteShowStar } from "./favorite-show-star";
 import { FetchAllCard } from "./fetch-all-card";
 import { OrganizerCard } from "./organizer-card";
 
@@ -51,7 +52,7 @@ function LinkOut({ href, icon, children }: { href: string; icon: "globe" | "stor
 
 export default async function TradeShowsPage({ params, searchParams }: PageProps<"/a/[slug]/trade-shows">) {
   const { slug } = await params;
-  const { user } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const canEdit = isPlatformAdmin(user.email);
 
   const sp = await searchParams;
@@ -72,7 +73,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     }),
   };
   const useAi = canEdit && isExhibitorFetchConfigured();
-  const [shows, total, countries, withoutExhibitors, withoutOrganizer] = await Promise.all([
+  const [shows, total, countries, withoutExhibitors, withoutOrganizer, favorites] = await Promise.all([
     db.tradeShow.findMany({
       where,
       include: { center: { select: { name: true } }, organizer: { select: { id: true, name: true } }, _count: { select: { exhibitors: true } } },
@@ -83,7 +84,9 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     db.tradeShow.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
     useAi ? db.tradeShow.count({ where: withoutExhibitorsWhere(day) }) : 0,
     canEdit && isOrganizerFinderConfigured() ? db.tradeShow.count({ where: missingOrganizerWhere }) : 0,
+    db.favoriteShow.findMany({ where: { organizationId: organization.id }, select: { tradeShowId: true } }),
   ]);
+  const favoriteIds = new Set(favorites.map((f) => f.tradeShowId));
   const countryOptions = countries
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
@@ -166,7 +169,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
                   <th className="px-5 py-2.5">Where</th>
                   <th className="px-5 py-2.5">Status</th>
                   <th className="px-5 py-2.5">Links</th>
-                  {canEdit && <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>}
+                  <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -210,17 +213,18 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
                           {!s.website && !s.exhibitorDirectoryUrl && s._count.exhibitors === 0 && <span className="text-faint">—</span>}
                         </div>
                       </td>
-                      {canEdit && (
-                        <td className="px-5 py-3 text-right">
-                          <Link href={`/a/${slug}/trade-shows/${s.id}`} className="btn-secondary">Edit</Link>
-                        </td>
-                      )}
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <FavoriteShowStar slug={slug} tradeShowId={s.id} name={s.name} on={favoriteIds.has(s.id)} />
+                          {canEdit && <Link href={`/a/${slug}/trade-shows/${s.id}`} className="btn-secondary">Edit</Link>}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
                 {shows.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 6 : 5} className="px-5 py-8 text-center text-muted">
+                    <td colSpan={6} className="px-5 py-8 text-center text-muted">
                       No trade shows match. <Link href={`/a/${slug}/trade-shows?view=all`} className="font-semibold text-brand">Show all</Link>
                     </td>
                   </tr>

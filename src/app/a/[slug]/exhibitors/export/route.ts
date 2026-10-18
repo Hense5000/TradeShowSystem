@@ -1,6 +1,7 @@
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { exhibitorFilters, exhibitorWhere } from "@/lib/exhibitor-list";
+import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
 import { type Table, toCsv, toXlsx } from "@/lib/spreadsheet";
 import { requireMembership } from "@/lib/tenant";
 
@@ -12,7 +13,8 @@ export const maxDuration = 60;
  * filters, as Excel (?format=xlsx, the default) or CSV (?format=csv). Every
  * member of the account may export. The column names match the CSV import, so
  * a file can be imported again. With ?list=<id> it downloads one of the
- * account's saved lists instead.
+ * account's saved lists instead. For the Favorites list it also takes the
+ * Favorites page's filters (?q, ?show, ?status) and adds the status and notes.
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
@@ -25,9 +27,17 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
   const list = listId ? await db.savedList.findFirst({ where: { id: listId, organizationId: organization.id } }) : null;
   if (listId && !list) return new Response("Not found", { status: 404 });
 
+  const leads = list?.favorites;
   const exhibitors = await db.exhibitor.findMany({
-    where: list ? { savedIn: { some: { listId: list.id } } } : exhibitorWhere(filters),
-    include: { tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } } },
+    where: leads
+      ? { savedIn: { some: favoriteWhere(list.id, favoriteFilters(url.searchParams)) } }
+      : list
+        ? { savedIn: { some: { listId: list.id } } }
+        : exhibitorWhere(filters),
+    include: {
+      tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } },
+      ...(leads && { savedIn: { where: { listId: list.id }, select: { leadStatus: true, leadNote: true } } }),
+    },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
 
@@ -49,6 +59,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Booth No.",
       "Stand Location URL",
       "Company Profile",
+      ...(leads ? ["Lead Status", "Notes"] : []),
     ],
     rows: exhibitors.map((e) => [
       e.name,
@@ -66,6 +77,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       e.boothNumber,
       e.standLocationUrl,
       e.companyProfile,
+      ...(leads ? [e.savedIn[0] && LEAD_LABEL[e.savedIn[0].leadStatus], e.savedIn[0]?.leadNote] : []),
     ]),
   };
 

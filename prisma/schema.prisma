@@ -35,6 +35,7 @@ model User {
   memberships     Membership[]
   invitationsSent Invitation[]    @relation("InvitedBy")
   savedListItems  SavedListItem[]
+  favoriteShows   FavoriteShow[]
   trustedDevices  TrustedDevice[]
   loginCodes      LoginCode[]
 }
@@ -102,6 +103,7 @@ model Organization {
   subscriptions Subscription[]
   invoices      Invoice[]
   savedLists    SavedList[]
+  favoriteShows FavoriteShow[]
 }
 
 enum Role {
@@ -329,6 +331,7 @@ model TradeShow {
   organizer   ExhibitionOrganizer? @relation(fields: [organizerId], references: [id], onDelete: SetNull)
   exhibitors  Exhibitor[]
   suggestions SuggestedShow[]
+  favoriteOf  FavoriteShow[]
 
   @@index([startDate])
   @@index([name])
@@ -390,14 +393,19 @@ model SavedList {
 }
 
 model SavedListItem {
-  listId      String
-  exhibitorId String
-  addedAt     DateTime @default(now())
-  addedById   String?
+  listId        String
+  exhibitorId   String
+  addedAt       DateTime   @default(now())
+  addedById     String?
   // The exhibitor's details as the daily list email last reported them, so
   // the next email can tell what changed. Null until the first email has
   // reported the exhibitor as added.
-  snapshot    Json?
+  snapshot      Json?
+  // Lead work on the Favorites page: how far the account has come with the
+  // exhibitor, and its own notes. Only used on the Favorites list.
+  leadStatus    LeadStatus @default(NEW)
+  leadNote      String?
+  leadUpdatedAt DateTime?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
@@ -405,6 +413,31 @@ model SavedListItem {
 
   @@id([listId, exhibitorId])
   @@index([exhibitorId])
+}
+
+// How far an account has come with a favorite exhibitor (see src/lib/leads.ts).
+enum LeadStatus {
+  NEW
+  CONTACTED
+  MEETING
+  WON
+  LOST
+}
+
+// A trade show an account has starred on the Trade shows page. Every member of
+// the account sees the same favorites; other accounts never do.
+model FavoriteShow {
+  organizationId String
+  tradeShowId    String
+  addedAt        DateTime @default(now())
+  addedById      String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tradeShow    TradeShow    @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+  addedBy      User?        @relation(fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@id([organizationId, tradeShowId])
+  @@index([tradeShowId])
 }
 
 // ---------------------------------------------------------------------------
