@@ -36,7 +36,7 @@ export default async function BillingPage({ params, searchParams }: PageProps<"/
   const configured = billingConfigured();
 
   const justPaid = configured && typeof checkout === "string" && (await syncCheckout(checkout, organization.stripeCustomerId));
-  const [subscriptions, invoices, price] = await Promise.all([
+  const [subscriptions, invoices, price, users] = await Promise.all([
     db.subscription.findMany({ where: { organizationId: organization.id } }),
     db.invoice.findMany({
       where: { organizationId: organization.id, status: { not: "draft" } },
@@ -44,6 +44,7 @@ export default async function BillingPage({ params, searchParams }: PageProps<"/
       take: 24,
     }),
     configured ? planPrice() : null,
+    db.membership.count({ where: { organizationId: organization.id } }),
   ]);
   const sub = currentSubscription(subscriptions);
   const live = sub ? isLive(sub.status) : false;
@@ -71,11 +72,20 @@ export default async function BillingPage({ params, searchParams }: PageProps<"/
                 <>
                   {" · "}
                   <span className="font-semibold text-ink">{formatMoney(price.amount, price.currency)}</span>
+                  {" per user"}
                   {price.interval && ` ${intervalLabel(price.interval, price.intervalCount)}`}
-                  {" excl. VAT"}
                 </>
               )}
             </p>
+            {price?.amount != null && (
+              <p className="mt-1 text-sm text-muted">
+                {users} {users === 1 ? "user" : "users"}
+                {" · "}
+                <span className="font-semibold text-ink">{formatMoney(price.amount * users, price.currency)}</span>
+                {price.interval && ` ${intervalLabel(price.interval, price.intervalCount)}`}
+                {" excl. VAT. Adding or removing users changes the amount."}
+              </p>
+            )}
           </div>
           {sub && <span className={`pill ${statusPill(sub.status)}`}>{statusLabel(sub.status)}</span>}
         </div>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { canAssignRole, checkRemoval, checkRoleChange } from "@/lib/permissions";
+import { syncSeats } from "@/lib/stripe";
 import { requireMembership } from "@/lib/tenant";
 import { createToken, invitationExpiry } from "@/lib/tokens";
 import { firstError, inviteSchema, roleSchema } from "@/lib/validation";
@@ -90,6 +91,7 @@ export async function removeMember(slug: string, membershipId: string): Promise<
   if (!check.ok) return { error: check.error };
 
   await db.membership.delete({ where: { id: target.id } });
+  await syncSeats(organization.id);
   if (isSelf) redirect("/accounts");
   revalidatePath(`/a/${slug}`, "layout");
 }

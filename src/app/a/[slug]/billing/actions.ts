@@ -18,6 +18,7 @@ export async function startCheckout(slug: string, _prev: ActionState): Promise<A
   const current = currentSubscription(subscriptions);
   if (current && isLive(current.status)) return { error: "This account already has a subscription." };
 
+  const users = Math.max(1, await db.membership.count({ where: { organizationId: organization.id } }));
   let url: string | null;
   try {
     const customer = await ensureCustomer(organization, user.email);
@@ -26,7 +27,8 @@ export async function startCheckout(slug: string, _prev: ActionState): Promise<A
       mode: "subscription",
       customer,
       client_reference_id: organization.id,
-      line_items: [{ price, quantity: 1 }],
+      // Charged per user: one unit for each user in the account.
+      line_items: [{ price, quantity: users }],
       subscription_data: { metadata: { organizationId: organization.id } },
       allow_promotion_codes: true,
       billing_address_collection: "required",
