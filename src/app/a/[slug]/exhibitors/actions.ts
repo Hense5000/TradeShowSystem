@@ -65,7 +65,8 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
     ...(!parsed.data.companyProfile && { profileTriedAt: null }),
     ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null }),
   };
-  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...withPhoneCountry(parsed.data), ...retry } });
+  // companyKey is worked out again, since the name or website may have changed.
+  const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...withPhoneCountry(parsed.data), ...retry, companyKey: null } });
   if (count === 0) return { error: "This exhibitor no longer exists." };
   revalidatePath(`/a/${slug}/exhibitors`);
   return { saved: true };

@@ -298,7 +298,8 @@ export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
       // Only fill fields that are still empty, in case someone typed them meanwhile.
       if (profile) await db.exhibitor.updateMany({ where: { id: row.id, ...emptyProfileWhere() }, data: { companyProfile: profile } });
       if (website) {
-        const saved = await db.exhibitor.updateMany({ where: { id: row.id, website: null }, data: { website } });
+        // A new website can join the exhibitor to the same company at other shows.
+        const saved = await db.exhibitor.updateMany({ where: { id: row.id, website: null }, data: { website, companyKey: null } });
         totals.websitesFound += saved.count;
       }
     }),

@@ -292,7 +292,8 @@ model TradeShow {
 }
 
 // A company exhibiting at one trade show. The same company at two shows is
-// two rows, since booth, contact and so on differ per show.
+// two rows, since booth, contact and so on differ per show; rows with the same
+// companyKey are shown as one company (see src/lib/company.ts).
 model Exhibitor {
   id               String    @id @default(cuid())
   tradeShowId      String
@@ -309,6 +310,7 @@ model Exhibitor {
   companyProfile   String? // short description of the company
   profileTriedAt   DateTime? // when the AI last tried to write companyProfile from the website
   contactTriedAt   DateTime? // when the AI last looked for a contact person on the website
+  companyKey       String? // the same for every show's row of one company; null until worked out, e.g. after the name or website changed
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -317,6 +319,7 @@ model Exhibitor {
 
   @@index([tradeShowId])
   @@index([name])
+  @@index([companyKey])
 }
 
 // ---------------------------------------------------------------------------

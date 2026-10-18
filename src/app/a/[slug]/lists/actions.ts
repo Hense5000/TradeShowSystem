@@ -14,7 +14,7 @@ import { requireMembership } from "@/lib/tenant";
 // the list belongs to the account in the URL, so no account can touch another's.
 
 function refresh(slug: string) {
-  revalidatePath(`/a/${slug}/exhibitors`);
+  revalidatePath(`/a/${slug}/exhibitors`, "layout"); // the Exhibitors page and the company pages
   revalidatePath(`/a/${slug}/lists`, "layout");
 }
 
@@ -49,11 +49,18 @@ async function favoritesListId(organizationId: string) {
   }
 }
 
-async function setInList(listId: string, exhibitorId: string, add: boolean, addedById: string) {
+/**
+ * Adds the first exhibitor to the list, or takes all of them off. A company at
+ * several trade shows is one row on the Exhibitors page: it adds the row of its
+ * latest show and takes every show's row off.
+ */
+async function setInList(listId: string, exhibitorIds: string | string[], add: boolean, addedById: string) {
+  const ids = typeof exhibitorIds === "string" ? [exhibitorIds] : exhibitorIds;
+  if (ids.length === 0) return;
   if (add) {
-    await db.savedListItem.createMany({ data: [{ listId, exhibitorId, addedById }], skipDuplicates: true });
+    await db.savedListItem.createMany({ data: [{ listId, exhibitorId: ids[0], addedById }], skipDuplicates: true });
   } else {
-    await db.savedListItem.deleteMany({ where: { listId, exhibitorId } });
+    await db.savedListItem.deleteMany({ where: { listId, exhibitorId: { in: ids } } });
   }
   await db.savedList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
 }
@@ -90,9 +97,9 @@ export async function deleteList(slug: string, listId: string): Promise<ActionSt
 }
 
 /** The star on the Exhibitors page: adds the exhibitor to Favorites, or takes it off. */
-export async function toggleFavorite(slug: string, exhibitorId: string, add: boolean) {
+export async function toggleFavorite(slug: string, exhibitorIds: string | string[], add: boolean) {
   const { user, organization } = await requireMembership(slug);
-  await setInList(await favoritesListId(organization.id), exhibitorId, add, user.id);
+  await setInList(await favoritesListId(organization.id), exhibitorIds, add, user.id);
   refresh(slug);
 }
 
@@ -100,29 +107,35 @@ export async function toggleFavorite(slug: string, exhibitorId: string, add: boo
  * The list menu on the Exhibitors page. The pressed button sends "add:<list id>"
  * or "remove:<list id>", so one action serves every list in the menu.
  */
-export async function setListMembership(slug: string, exhibitorId: string, formData: FormData) {
+export async function setListMembership(slug: string, exhibitorIds: string | string[], formData: FormData) {
   const { user, organization } = await requireMembership(slug);
   const [change, listId] = String(formData.get("change") ?? "").split(":");
   const id = listId && (await ownListId(organization.id, listId));
   if (!id || (change !== "add" && change !== "remove")) return;
-  await setInList(id, exhibitorId, change === "add", user.id);
+  await setInList(id, exhibitorIds, change === "add", user.id);
   refresh(slug);
 }
 
-/** Adds every exhibitor the Exhibitors page shows with these filters to the chosen list. */
+/** Adds every company the Exhibitors page shows with these filters to the chosen list. */
 export async function addShownToList(slug: string, filters: ExhibitorFilters, _prev: ActionState, formData: FormData): Promise<ActionState> {
   const { user, organization } = await requireMembership(slug);
   const chosen = String(formData.get("list") ?? "");
   const listId = chosen === "favorites" ? await favoritesListId(organization.id) : await ownListId(organization.id, chosen);
   if (!listId) return { error: "Choose a list." };
 
-  const exhibitors = await db.exhibitor.findMany({
+  // One row per company, as on the Exhibitors page: the one of its latest trade show.
+  const rows = await db.exhibitor.findMany({
     where: exhibitorWhere(filters),
-    select: { id: true },
-    orderBy: [{ name: "asc" }],
-    take: MAX_ADD_AT_ONCE,
+    select: { id: true, companyKey: true },
+    orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
   });
-  await db.savedListItem.createMany({ data: exhibitors.map((e) => ({ listId, exhibitorId: e.id, addedById: user.id })), skipDuplicates: true });
+  const companies = new Map<string, string>();
+  for (const r of rows) {
+    const key = r.companyKey ?? r.id;
+    if (!companies.has(key)) companies.set(key, r.id);
+    if (companies.size >= MAX_ADD_AT_ONCE) break;
+  }
+  await db.savedListItem.createMany({ data: [...companies.values()].map((exhibitorId) => ({ listId, exhibitorId, addedById: user.id })), skipDuplicates: true });
   await db.savedList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
   refresh(slug);
   redirect(`/a/${slug}/lists/${listId}`);
