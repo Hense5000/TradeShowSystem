@@ -8,7 +8,7 @@ import { contactSchema, firstError, profileSchema } from "@/lib/validation";
 
 
 export async function updateProfile(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  const { organization } = await requireMembership(slug, "ADMIN");
+  const { organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
   const parsed = profileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
 
@@ -18,7 +18,7 @@ export async function updateProfile(slug: string, _prev: SaveState, formData: Fo
 }
 
 export async function updatePrimaryContact(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  const { organization } = await requireMembership(slug, "ADMIN");
+  const { organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
   const parsed = contactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
 

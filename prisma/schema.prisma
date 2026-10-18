@@ -19,19 +19,58 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  passwordHash  String?
-  emailVerified DateTime?
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  passwordHash   String?
+  emailVerified  DateTime?
   // Gets the daily email about what is new on the saved lists of their accounts.
-  listEmails    Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  listEmails     Boolean   @default(true)
+  // Goes up by one on every login. A session made before the latest login no
+  // longer matches and is logged out, so one login can't be used in two places.
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   memberships     Membership[]
   invitationsSent Invitation[]    @relation("InvitedBy")
   savedListItems  SavedListItem[]
+  trustedDevices  TrustedDevice[]
+  loginCodes      LoginCode[]
+}
+
+// A browser that has confirmed a login code from the user's email. It can log
+// in with just the password until expiresAt. The raw token is in a cookie;
+// only its SHA-256 hash is stored.
+model TrustedDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A 6-digit code emailed when someone logs in from a new device. Once the code
+// (or, at sign-up, the password alone) is accepted, a one-time ticket is issued
+// that Auth.js exchanges for the session.
+model LoginCode {
+  id           String    @id @default(cuid())
+  userId       String
+  codeHash     String?
+  attempts     Int       @default(0)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  ticketHash   String?   @unique
+  ticketUsedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Organization {
@@ -269,18 +308,18 @@ model ExhibitionOrganizer {
 // A trade show. Its status (upcoming, running, finished) is worked out from
 // the dates when shown, so it is not stored.
 model TradeShow {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   name                  String
-  startDate             DateTime @db.Date
-  endDate               DateTime @db.Date
+  startDate             DateTime  @db.Date
+  endDate               DateTime  @db.Date
   city                  String?
   country               String? // ISO 3166-1 alpha-2, e.g. "DE"
   website               String?
   exhibitorDirectoryUrl String? // the show's own list of exhibitors
   centerId              String? // where it takes place, if known
   exhibitorsTriedAt     DateTime? // when "Fetch exhibitors for all shows" last tried this show, so it is not tried again on every run
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   center      ExhibitionCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
   exhibitors  Exhibitor[]

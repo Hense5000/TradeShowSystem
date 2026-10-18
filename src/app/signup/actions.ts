@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import { acceptInvitation, findInvitation } from "@/lib/invitations";
+import { issueTicket } from "@/lib/login-guard";
 import { createOrganization } from "@/lib/organizations";
 import { syncSeats } from "@/lib/stripe";
 import { firstError, signupSchema } from "@/lib/validation";
@@ -29,6 +30,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
 
   const passwordHash = await bcrypt.hash(password, 12);
   let destination: string;
+  let userId: string;
 
   if (invite) {
     // Joining someone else's account through an invite link.
@@ -36,21 +38,25 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     if (!found || found.state !== "pending") return fail("This invitation is no longer valid.");
     if (found.invitation.email !== email)
       return fail(`This invitation was sent to ${found.invitation.email}. Sign up with that email.`);
-    await db.$transaction(async (tx) => {
+    userId = await db.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { name, email, passwordHash } });
       await acceptInvitation(tx, found.invitation, user.id);
+      return user.id;
     });
     await syncSeats(found.invitation.organizationId);
     destination = `/a/${found.invitation.organization.slug}`;
   } else {
     // Creating a brand new customer account.
     if (!companyName) return fail("Enter a company name.");
-    const organization = await db.$transaction(async (tx) => {
+    const { user, organization } = await db.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { name, email, passwordHash } });
-      return createOrganization(tx, user.id, companyName);
+      return { user, organization: await createOrganization(tx, user.id, companyName) };
     });
+    userId = user.id;
     destination = `/a/${organization.slug}`;
   }
 
-  await signIn("credentials", { email, password, redirectTo: destination });
+  // The browser used to sign up is trusted, so no login code is needed here.
+  const ticket = await issueTicket(userId, { trustDevice: true });
+  await signIn("credentials", { ticket, redirectTo: destination });
 }

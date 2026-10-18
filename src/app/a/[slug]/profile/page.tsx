@@ -8,7 +8,7 @@ import { updatePrimaryContact, updateProfile } from "./actions";
 
 export default async function ProfilePage({ params }: PageProps<"/a/[slug]/profile">) {
   const { slug } = await params;
-  const { membership, organization: org } = await requireMembership(slug);
+  const { membership, organization: org } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const canEdit = canManageMembers(membership.role);
   const contact = await db.contact.findFirst({ where: { organizationId: org.id, isPrimary: true } });
 
