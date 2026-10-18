@@ -110,3 +110,13 @@ export async function draftLeadEmail(slug: string, exhibitorId: string, _prev: D
     return { error: err instanceof Error ? err.message : "The AI could not write the email. Try again." };
   }
 }
+
+/** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */
+export async function setVisited(slug: string, exhibitorId: string, visited: boolean) {
+  const { user, organization } = await requireMembership(slug);
+  await db.savedListItem.updateMany({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    data: visited ? { visitedAt: new Date(), visitedById: user.id } : { visitedAt: null, visitedById: null },
+  });
+  revalidatePath(`/a/${slug}/favorites/plan`);
+}

@@ -36,6 +36,7 @@ model User {
   invitationsSent Invitation[]    @relation("InvitedBy")
   savedListItems  SavedListItem[]
   assignedLeads   SavedListItem[] @relation("LeadAssignee")
+  visitedLeads    SavedListItem[] @relation("LeadVisitor")
   favoriteShows   FavoriteShow[]
   trustedDevices  TrustedDevice[]
   loginCodes      LoginCode[]
@@ -413,11 +414,15 @@ model SavedListItem {
   followUpNote  String?
   // The user in the account who is responsible for the lead; null when no one is.
   assigneeId    String?
+  // Ticked off on the trade show's meeting plan: the booth has been visited.
+  visitedAt     DateTime?
+  visitedById   String?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
   addedBy   User?     @relation(fields: [addedById], references: [id], onDelete: SetNull)
   assignee  User?     @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  visitedBy User?     @relation("LeadVisitor", fields: [visitedById], references: [id], onDelete: SetNull)
 
   @@id([listId, exhibitorId])
   @@index([exhibitorId])
