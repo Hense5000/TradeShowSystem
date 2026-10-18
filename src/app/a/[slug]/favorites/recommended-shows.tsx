@@ -58,7 +58,7 @@ export function RecommendedShows({ slug, items, compact = false }: { slug: strin
         </ul>
       )}
       {compact && items.length > 0 && (
-        <Link href={`/a/${slug}/favorites?tab=shows`} className="text-sm font-semibold text-brand hover:underline">
+        <Link href={`/a/${slug}/favorites/trade-shows`} className="text-sm font-semibold text-brand hover:underline">
           Your favorite trade shows
         </Link>
       )}

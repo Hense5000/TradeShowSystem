@@ -90,7 +90,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           label="Lead retrieval active"
           value={openLeads}
           note={`Open leads · ${favoriteShows} ${favoriteShows === 1 ? "show" : "shows"}`}
-          href={`/a/${slug}/favorites`}
+          href={`/a/${slug}/favorites/exhibitors`}
         />
       </div>
 
@@ -113,14 +113,14 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
             {followUps.length === 0 ? (
               <p className="text-sm text-muted">
                 No follow-ups in the next {FOLLOW_UP_SOON_DAYS} days. Set a follow-up date on a lead on the{" "}
-                <Link href={`/a/${slug}/favorites`} className="font-semibold text-brand hover:underline">Favorites page</Link>.
+                <Link href={`/a/${slug}/favorites/exhibitors`} className="font-semibold text-brand hover:underline">Favorites page</Link>.
               </p>
             ) : (
               <ul className="-mx-2 flex flex-col">
                 {followUps.map((f, i) => (
                   <li key={i}>
                     <Link
-                      href={`/a/${slug}/favorites?q=${encodeURIComponent(f.exhibitor.name)}`}
+                      href={`/a/${slug}/favorites/exhibitors?q=${encodeURIComponent(f.exhibitor.name)}`}
                       className="flex flex-col gap-0.5 rounded-lg px-2 py-2 hover:bg-subtle"
                     >
                       <span className="flex items-center justify-between gap-2">
@@ -134,7 +134,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
               </ul>
             )}
             {followUpCount > 0 && (
-              <Link href={`/a/${slug}/favorites?followup=set`} className="text-sm font-semibold text-brand hover:underline">
+              <Link href={`/a/${slug}/favorites/exhibitors?followup=set`} className="text-sm font-semibold text-brand hover:underline">
                 {followUpCount > followUps.length ? `See all ${followUpCount} follow-ups` : "Open in Favorites"}
               </Link>
             )}

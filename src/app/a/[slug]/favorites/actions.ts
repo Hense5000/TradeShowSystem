@@ -13,7 +13,7 @@ import { requireMembership } from "@/lib/tenant";
 // touches the account in the URL, so no account can change another's.
 
 function refresh(slug: string) {
-  revalidatePath(`/a/${slug}/favorites`);
+  revalidatePath(`/a/${slug}/favorites`, "layout");
   revalidatePath(`/a/${slug}`); // the dashboard counts the open leads
 }
 

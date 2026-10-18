@@ -124,7 +124,7 @@ export async function runListDigest() {
       try {
         await sendEmail({
           to: user.email,
-          ...digestEmail({ accountName: org.name, entries: [...entries.values()], followUps, suggestions, listsUrl: `${base}/lists`, favoritesUrl: `${base}/favorites` }),
+          ...digestEmail({ accountName: org.name, entries: [...entries.values()], followUps, suggestions, listsUrl: `${base}/lists`, favoritesUrl: `${base}/favorites/exhibitors` }),
         });
         sent++;
       } catch (e) {

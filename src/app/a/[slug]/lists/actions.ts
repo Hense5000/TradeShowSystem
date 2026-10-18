@@ -16,7 +16,7 @@ import { requireMembership } from "@/lib/tenant";
 function refresh(slug: string) {
   revalidatePath(`/a/${slug}/exhibitors`, "layout"); // the Exhibitors page and the company pages
   revalidatePath(`/a/${slug}/lists`, "layout");
-  revalidatePath(`/a/${slug}/favorites`);
+  revalidatePath(`/a/${slug}/favorites`, "layout");
   revalidatePath(`/a/${slug}`); // the dashboard counts the open leads
 }
 
