@@ -41,15 +41,16 @@ export function ContactFields({
       for (const field of Object.keys(LABELS) as (keyof FoundContact)[]) {
         const found = result.contact[field];
         const el = input(field);
-        if (!found || !el || el.value.trim()) continue;
+        if (!found || !el || (el.value.trim() && !result.replace?.includes(field))) continue;
         if (field === "contactTitle" && !(nameEmpty && result.contact.contactName)) continue;
         el.value = found;
         filled.push(LABELS[field]);
       }
+      const note = result.hunterNote ? ` ${result.hunterNote}` : "";
       setMessage(
         filled.length > 0
-          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} ${result.viaHunter ? "from the website and Hunter.io" : "from the website"}. Check it before you save.` }
-          : { ok: false, text: "AI found nothing new: the fields it found on the website are already filled in." },
+          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} ${result.viaHunter ? "from the website and Hunter.io" : "from the website"}. Check it before you save.${note}` }
+          : { ok: false, text: `AI found nothing new: the fields it found on the website are already filled in.${note}` },
       );
     });
   }

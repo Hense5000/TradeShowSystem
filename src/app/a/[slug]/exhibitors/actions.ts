@@ -16,7 +16,8 @@ import {
 } from "@/lib/company-profile-run";
 import { type ContactFields, type ContactFillResult, contactSummary, contactUpdate, type FoundContact } from "@/lib/contact-finder";
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere, needsHunter, withHunter } from "@/lib/contact-finder-run";
-import { HunterStopError } from "@/lib/hunter-run";
+import { hunterDomain, hunterUpdate } from "@/lib/hunter";
+import { isHunterConfigured } from "@/lib/hunter-run";
 import { db } from "@/lib/db";
 import { MAX_QUESTION } from "@/lib/exhibitor-ai-search";
 import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
@@ -196,7 +197,15 @@ export async function findContactBatch(slug: string, tradeShowId: string): Promi
   return result;
 }
 
-export type ContactState = { contact?: FoundContact; error?: string; viaHunter?: boolean };
+export type ContactState = {
+  contact?: FoundContact;
+  error?: string;
+  viaHunter?: boolean;
+  /** Fields to overwrite although they are filled, e.g. info@ that gives way to the person's own email. */
+  replace?: (keyof FoundContact)[];
+  /** What Hunter.io did, when it added nothing, so the page can say why. */
+  hunterNote?: string;
+};
 
 /**
  * Finds the contact person on the website typed in the form, and with Hunter.io
@@ -225,19 +234,25 @@ export async function findExhibitorContact(slug: string, name: string, site: str
   };
   const merged: FoundContact = { ...current, ...(contact && contactUpdate(current, contact)) };
   let viaHunter = false;
-  if (needsHunter(merged)) {
+  let replace: (keyof FoundContact)[] = [];
+  let hunterNote: string | undefined;
+  if (!isHunterConfigured()) hunterNote = "Hunter.io is not set up (HUNTER_API_KEY is missing in Vercel).";
+  else if (needsHunter(merged)) {
     try {
       const withHunterFound = await withHunter(url.data, merged);
-      if (withHunterFound && Object.keys(contactUpdate(merged, withHunterFound)).length > 0) {
+      const added = withHunterFound ? hunterUpdate(merged, withHunterFound) : {};
+      if (Object.keys(added).length > 0) {
         viaHunter = true;
-        contact = { ...(contact ?? { contactName: null, contactTitle: null, email: null, phone: null }), ...contactUpdate(merged, withHunterFound) };
+        contact = { ...(contact ?? { contactName: null, contactTitle: null, email: null, phone: null }), ...added };
+        if (added.email && current.email) replace = ["email"];
       }
+      if (!added.contactName && !merged.contactName) hunterNote = `Hunter.io knows no named person at ${hunterDomain(url.data) ?? url.data}.`;
     } catch (e) {
-      if (!contact) error = e instanceof HunterStopError || e instanceof Error ? e.message : "Hunter.io could not be reached.";
+      hunterNote = e instanceof Error ? e.message : "Hunter.io could not be reached.";
     }
   }
-  if (contact) return { contact, viaHunter };
-  return { error: error ?? "The website lists no contact person, email or phone number." };
+  if (contact) return { contact, viaHunter, replace, hunterNote };
+  return { error: [error ?? "The website lists no contact person, email or phone number.", hunterNote].filter(Boolean).join(" ") };
 }
 
 /** Looks up the missing contacts of one trade show (or all), as many as fit in the time. */

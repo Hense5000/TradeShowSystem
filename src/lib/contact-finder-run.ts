@@ -14,7 +14,7 @@ import {
   MAX_CONTACT_PAGE_CHARS,
 } from "@/lib/contact-finder";
 import { db } from "@/lib/db";
-import { addHunterContact, hunterDomain } from "@/lib/hunter";
+import { addHunterContact, hunterDomain, hunterUpdate } from "@/lib/hunter";
 import { HunterStopError, hunterDomainSearch, isHunterConfigured } from "@/lib/hunter-run";
 import { countryFromPhone } from "@/lib/phone-country";
 import { pageToText } from "@/lib/show-finder";
@@ -237,7 +237,7 @@ export async function fillMissingContacts({
         try {
           const before = contact;
           contact = await withHunter(e.website!, contact);
-          hunterAdded = Boolean(contact && Object.keys(contactUpdate(before, contact)).length > 0);
+          hunterAdded = Boolean(contact && Object.keys(hunterUpdate(before, contact)).length > 0);
           await db.exhibitor.updateMany({ where: { id: e.id }, data: { hunterTriedAt: new Date() } });
         } catch (error) {
           if (error instanceof HunterStopError) {
@@ -249,7 +249,7 @@ export async function fillMissingContacts({
           }
         }
       }
-      const data = contact ? contactUpdate(current, contact) : {};
+      const data = contact ? hunterUpdate(current, contact) : {};
       if (Object.keys(data).length > 0) {
         // A newly found phone number also tells the country, when that is empty.
         const country = !current.country && data.phone ? countryFromPhone(data.phone) : null;

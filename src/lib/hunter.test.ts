@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addHunterContact, bestHunterGeneric, bestHunterPerson, type HunterEmail, hunterDomain } from "./hunter";
+import { addHunterContact, bestHunterGeneric, bestHunterPerson, type HunterEmail, hunterDomain, hunterUpdate } from "./hunter";
 
 const email = (value: string, more: Partial<HunterEmail> = {}): HunterEmail => ({
   value,
@@ -66,5 +66,23 @@ describe("addHunterContact", () => {
 
   it("returns null when Hunter has nothing and nothing was there", () => {
     expect(addHunterContact(null, [])).toBeNull();
+  });
+});
+
+describe("hunterUpdate", () => {
+  const current = { contactName: null, contactTitle: null, email: "info@acme.com", phone: null };
+
+  it("swaps a general address for the own email of the person Hunter adds", () => {
+    const found = addHunterContact(current, [sales, info])!;
+    expect(hunterUpdate(current, found)).toEqual({ contactName: "Bo Holm", contactTitle: "Export Manager", email: "bo@acme.com" });
+  });
+
+  it("keeps a personal address that is already there", () => {
+    const mine = { ...current, email: "anna@acme.com" };
+    expect(hunterUpdate(mine, addHunterContact(mine, [ceo, sales])!)).toEqual({ contactName: "Anna Berg", contactTitle: "CEO" });
+  });
+
+  it("does not touch the email when no person is added", () => {
+    expect(hunterUpdate(current, addHunterContact(current, [info])!)).toEqual({});
   });
 });
