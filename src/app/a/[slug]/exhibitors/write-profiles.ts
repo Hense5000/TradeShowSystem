@@ -73,6 +73,8 @@ export async function findMissingContacts(
       t.filled += b.filled;
       t.noInfo += b.noInfo;
       t.failed += b.failed;
+      t.fromHunter = (t.fromHunter ?? 0) + (b.fromHunter ?? 0);
+      t.hunterStoppedBy = b.hunterStoppedBy ?? t.hunterStoppedBy;
     },
     { filled: 0, noInfo: 0, failed: 0, left: missing },
     onProgress,

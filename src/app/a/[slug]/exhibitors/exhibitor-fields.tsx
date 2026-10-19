@@ -1,5 +1,6 @@
 import type { Exhibitor } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
+import type { ContactFields as ContactValues } from "@/lib/contact-finder";
 import type { ContactState, ProfileState } from "./actions";
 import { ContactFields } from "./contact-fields";
 import { CompanyProfileField } from "./profile-field";
@@ -19,7 +20,7 @@ export function ExhibitorFields({
   /** Writes the company profile with AI; left out when no AI key is set. */
   generateProfile?: (name: string, website: string) => Promise<ProfileState>;
   /** Looks up the contact person with AI; left out when no AI key is set. */
-  findContact?: (name: string, website: string) => Promise<ContactState>;
+  findContact?: (name: string, website: string, typed: ContactValues) => Promise<ContactState>;
 }) {
   const e = exhibitor;
   return (

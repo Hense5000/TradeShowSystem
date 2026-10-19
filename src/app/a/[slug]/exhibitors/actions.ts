@@ -14,8 +14,9 @@ import {
   writeCompanyProfile,
   writeProfiles,
 } from "@/lib/company-profile-run";
-import { type ContactFillResult, contactSummary, type FoundContact } from "@/lib/contact-finder";
-import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere } from "@/lib/contact-finder-run";
+import { type ContactFields, type ContactFillResult, contactSummary, contactUpdate, type FoundContact } from "@/lib/contact-finder";
+import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere, needsHunter, withHunter } from "@/lib/contact-finder-run";
+import { HunterStopError } from "@/lib/hunter-run";
 import { db } from "@/lib/db";
 import { MAX_QUESTION } from "@/lib/exhibitor-ai-search";
 import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
@@ -75,7 +76,7 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
   // An empty profile or contact may be looked up by AI again, e.g. after the website was corrected.
   const retry = {
     ...(!parsed.data.companyProfile && { profileTriedAt: null }),
-    ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null }),
+    ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null, hunterTriedAt: null }),
   };
   // companyKey is worked out again, since the name or website may have changed.
   const { count } = await db.exhibitor.updateMany({ where: { id }, data: { ...withPhoneCountry(parsed.data), ...retry, companyKey: null } });
@@ -195,21 +196,48 @@ export async function findContactBatch(slug: string, tradeShowId: string): Promi
   return result;
 }
 
-export type ContactState = { contact?: FoundContact; error?: string };
+export type ContactState = { contact?: FoundContact; error?: string; viaHunter?: boolean };
 
-/** Finds the contact person on the website typed in the form. Nothing is saved until the form is. */
-export async function findExhibitorContact(slug: string, name: string, site: string): Promise<ContactState> {
+/**
+ * Finds the contact person on the website typed in the form, and with Hunter.io
+ * fills what the website did not show. `typed` is what the form's contact
+ * fields hold now, so Hunter never puts an email next to someone else's name.
+ * Nothing is saved until the form is.
+ */
+export async function findExhibitorContact(slug: string, name: string, site: string, typed?: ContactFields): Promise<ContactState> {
   await requirePlatformAdmin(slug);
   if (!isContactFinderConfigured()) return { error: "Add ANTHROPIC_API_KEY in Vercel before AI can look up contacts." };
   const url = website.safeParse(site);
   if (!url.success) return { error: firstError(url.error) };
   if (!url.data) return { error: "Enter the company's website first." };
+  let contact: FoundContact | null = null;
+  let error: string | undefined;
   try {
-    const contact = await findContact({ name: name.trim() || url.data, website: url.data });
-    return contact ? { contact } : { error: "The website lists no contact person, email or phone number." };
-  } catch (error) {
-    return { error: describeContactError(error) };
+    contact = await findContact({ name: name.trim() || url.data, website: url.data });
+  } catch (e) {
+    error = describeContactError(e);
   }
+  const current: ContactFields = {
+    contactName: typed?.contactName?.trim() || null,
+    contactTitle: typed?.contactTitle?.trim() || null,
+    email: typed?.email?.trim() || null,
+    phone: typed?.phone?.trim() || null,
+  };
+  const merged: FoundContact = { ...current, ...(contact && contactUpdate(current, contact)) };
+  let viaHunter = false;
+  if (needsHunter(merged)) {
+    try {
+      const withHunterFound = await withHunter(url.data, merged);
+      if (withHunterFound && Object.keys(contactUpdate(merged, withHunterFound)).length > 0) {
+        viaHunter = true;
+        contact = { ...(contact ?? { contactName: null, contactTitle: null, email: null, phone: null }), ...contactUpdate(merged, withHunterFound) };
+      }
+    } catch (e) {
+      if (!contact) error = e instanceof HunterStopError || e instanceof Error ? e.message : "Hunter.io could not be reached.";
+    }
+  }
+  if (contact) return { contact, viaHunter };
+  return { error: error ?? "The website lists no contact person, email or phone number." };
 }
 
 /** Looks up the missing contacts of one trade show (or all), as many as fit in the time. */

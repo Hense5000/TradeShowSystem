@@ -10,6 +10,7 @@ import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
 import { type ExhibitorFilters, exhibitorFilters, exhibitorQuery, exhibitorWhere, industryTerms, isFiltered } from "@/lib/exhibitor-list";
+import { isHunterConfigured } from "@/lib/hunter-run";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
 import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
@@ -145,7 +146,11 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
       {missingContacts > 0 && (
         <AiFillCard
           title={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email`}
-          text="AI looks for a contact person, position, email and phone on each company's own website and fills in only the empty fields. This also happens automatically during the night."
+          text={
+            isHunterConfigured()
+              ? "AI looks for a contact person, position, email and phone on each company's own website, and Hunter.io fills in names and emails the website does not show (one Hunter credit per company it finds addresses for). Only empty fields are filled. The websites are also read automatically during the night; Hunter.io is only asked when you press the button."
+              : "AI looks for a contact person, position, email and phone on each company's own website and fills in only the empty fields. This also happens automatically during the night."
+          }
           button="Find missing contacts"
           pendingButton="Finding contacts…"
           action={fillContacts.bind(null, slug, show || undefined)}
