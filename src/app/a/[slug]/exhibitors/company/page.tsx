@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { summarizeCompany } from "@/lib/company";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
@@ -11,8 +12,13 @@ import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
 import { setListMembership } from "../../lists/actions";
+import { writeCompanyProfileWithAi } from "../actions";
 import { FavoriteStar } from "../favorite-star";
 import { ListMenu } from "../list-menu";
+import { ProfileButton } from "./profile-button";
+
+// "Write company profile with AI" waits for the AI on this page.
+export const maxDuration = 300;
 
 const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running: "pill-ok", finished: "pill-neutral" };
 
@@ -88,6 +94,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
           )}
         </div>
         {profile && <p className="text-sm whitespace-pre-line text-muted">{profile}</p>}
+        {!profile && isCompanyProfileConfigured() && <ProfileButton action={writeCompanyProfileWithAi.bind(null, slug, key)} />}
       </section>
 
       <section className="card overflow-hidden p-0">

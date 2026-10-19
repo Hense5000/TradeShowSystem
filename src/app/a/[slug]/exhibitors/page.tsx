@@ -3,7 +3,7 @@ import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { summarizeCompany } from "@/lib/company";
-import { emptyProfileWhere, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName } from "@/lib/countries";
@@ -21,7 +21,6 @@ import { AiFillCard } from "./ai-fill-card";
 import { AiSearch } from "./ai-search";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
-import { ProfileFillCard } from "./profile-fill-card";
 import { tradeShowOptions } from "./show-select";
 
 const PAGE_SIZE = 50;
@@ -30,7 +29,7 @@ const AI_ONLY = ["industry", "showCountry", "showCity", "from", "to", "ai"] as c
 // A company's trade shows listed in its row; the rest are on its company page.
 const SHOWS_IN_ROW = 3;
 
-// "Fill missing profiles" and "Find missing contacts" run on this page and may take a few minutes.
+// "Find missing contacts" runs on this page and may take a few minutes.
 export const maxDuration = 300;
 
 export default async function ExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors">) {
@@ -90,12 +89,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   const savedIn = new Set(saved.map((s) => `${s.listId}:${s.exhibitorId}`));
   const isIn = (listId: string | undefined, ids: string[]) => ids.some((id) => savedIn.has(`${listId}:${id}`));
   const useAi = canEdit && isCompanyProfileConfigured();
-  const [missingProfiles, missingContacts] = useAi
-    ? await Promise.all([
-        db.exhibitor.count({ where: emptyProfileWhere(show || undefined) }),
-        db.exhibitor.count({ where: missingContactWhere(show || undefined) }),
-      ])
-    : [0, 0];
+  const missingContacts = useAi ? await db.exhibitor.count({ where: missingContactWhere(show || undefined) }) : 0;
   const missingCountries = canEdit ? await countCountriesFromPhones() : 0;
   const countryOptions = countries
     .map((c) => c.country!)
@@ -142,7 +136,6 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         }
       />
 
-      {missingProfiles > 0 && <ProfileFillCard slug={slug} tradeShowId={show || undefined} missing={missingProfiles} />}
       {missingContacts > 0 && (
         <AiFillCard
           title={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email`}

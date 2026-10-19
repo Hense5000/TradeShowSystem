@@ -1,12 +1,12 @@
-import { fillSummary } from "@/lib/company-profile";
-import { fillMissingProfiles, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { contactSummary } from "@/lib/contact-finder";
 import { fillMissingContacts } from "@/lib/contact-finder-run";
 import { fillCountriesFromPhones } from "@/lib/phone-country-run";
 
-// Called by Vercel Cron every night (see vercel.json). Writes the company
-// profiles and looks up the contact persons that an import did not finish,
-// and fills empty countries from phone numbers. Hunter.io is not asked here,
+// Called by Vercel Cron every night (see vercel.json). Looks up the contact
+// persons that an import did not finish, and fills empty countries from phone
+// numbers. Company profiles are not written here, to keep the AI cost down;
+// a user asks for one on the company's page. Hunter.io is not asked here,
 // so its paid credits are only spent when someone presses a button.
 
 export const maxDuration = 300;
@@ -23,8 +23,6 @@ export async function GET(request: Request) {
   }
   const countries = await fillCountriesFromPhones();
   if (!isCompanyProfileConfigured()) return Response.json({ skipped: "ANTHROPIC_API_KEY is not set." });
-  const started = Date.now();
-  const profiles = fillSummary(await fillMissingProfiles({ budgetMs: 90_000 }));
-  const contacts = contactSummary(await fillMissingContacts({ budgetMs: Math.max(0, BUDGET_MS - (Date.now() - started)), useHunter: false }));
-  return Response.json({ summary: `${profiles} ${contacts} Filled ${countries} countries from phone numbers.` });
+  const contacts = contactSummary(await fillMissingContacts({ budgetMs: BUDGET_MS, useHunter: false }));
+  return Response.json({ summary: `${contacts} Filled ${countries} countries from phone numbers.` });
 }

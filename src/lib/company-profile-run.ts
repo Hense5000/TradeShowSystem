@@ -1,15 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
-import {
-  cleanProfile,
-  type FillResult,
-  MAX_PROFILE_CHARS,
-  MAX_SITE_CHARS,
-  NO_INFORMATION,
-  profileLine,
-  type ProfileRunResult,
-} from "@/lib/company-profile";
+import { cleanProfile, MAX_PROFILE_CHARS, MAX_SITE_CHARS, NO_INFORMATION, profileLine } from "@/lib/company-profile";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { answerLine } from "@/lib/events-page";
@@ -19,15 +11,16 @@ import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
 
 // Writes an exhibitor's company profile with Claude from the company's
-// website: once from the "Generate with AI" button on the exhibitor form, and
-// for every imported exhibitor that has a website but no profile.
+// website, only when someone asks for it: the "Generate with AI" button on
+// the exhibitor form, or "Write company profile with AI" on a company's page.
+// Profiles are not written automatically on import or at night, to keep the
+// AI cost down.
 
 /** Which Claude model writes the profiles. Can be changed with COMPANY_PROFILE_MODEL. */
 const MODEL = process.env.COMPANY_PROFILE_MODEL || "claude-opus-5-5";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const AI_TIMEOUT_MS = 60_000;
-const PARALLEL = 5;
 
 export function isCompanyProfileConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
@@ -139,70 +132,6 @@ export function describeProfileError(error: unknown): string {
   return "Something went wrong.";
 }
 
-/** Exhibitors the AI has not tried yet that have a website but no profile. */
-export function missingProfileWhere(tradeShowId?: string): Prisma.ExhibitorWhereInput {
-  return { ...(tradeShowId && { tradeShowId }), website: { not: null }, companyProfile: null, profileTriedAt: null };
-}
-
-/**
- * Writes the missing company profiles, a few at a time, until they are all
- * done or the time budget is used up. Each exhibitor is tried once, so a
- * website that says nothing is not tried again on the next run.
- */
-export async function fillMissingProfiles({
-  tradeShowId,
-  budgetMs,
-  limit = 500,
-}: {
-  tradeShowId?: string;
-  budgetMs: number;
-  /** At most this many exhibitors, e.g. a small batch so the import page can show progress. */
-  limit?: number;
-}): Promise<FillResult> {
-  const started = Date.now();
-  const totals: FillResult = { written: 0, noInfo: 0, failed: 0, left: 0 };
-  if (!isCompanyProfileConfigured()) {
-    totals.left = await db.exhibitor.count({ where: missingProfileWhere(tradeShowId) });
-    return totals;
-  }
-
-  const queue = await db.exhibitor.findMany({
-    where: missingProfileWhere(tradeShowId),
-    orderBy: [{ createdAt: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, website: true },
-    take: limit,
-  });
-  const client = new Anthropic();
-  let next = 0;
-  let stopped = false;
-  async function worker() {
-    while (!stopped && next < queue.length && Date.now() - started < budgetMs) {
-      const e = queue[next++];
-      let profile: string | null = null;
-      try {
-        profile = await writeCompanyProfile({ name: e.name, website: e.website! }, client);
-        if (profile) totals.written++;
-        else totals.noInfo++;
-      } catch (error) {
-        // A busy or broken AI service fails every row; stop and leave them for the next run.
-        if (stopsEveryRow(error)) {
-          stopped = true;
-          totals.stoppedBy = describeProfileError(error);
-          return;
-        }
-        console.error(`Company profile for ${e.name} failed`, error);
-        totals.failed++;
-      }
-      // Only fill a profile that is still empty, in case someone typed one meanwhile.
-      await db.exhibitor.updateMany({ where: { id: e.id }, data: { profileTriedAt: new Date() } });
-      if (profile) await db.exhibitor.updateMany({ where: { id: e.id, companyProfile: null }, data: { companyProfile: profile } });
-    }
-  }
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
-  totals.left = await db.exhibitor.count({ where: missingProfileWhere(tradeShowId) });
-  return totals;
-}
-
 const SEARCH_SYSTEM = `You write the company profile of a trade show exhibitor for a directory of exhibitors. You are given the company's name and the trade show it exhibits at, and sometimes its website.
 
 Search the web for the company and find its own website (not a directory, a trade show page or social media). Read what the company does there.
@@ -254,73 +183,58 @@ async function searchCompanyProfile(client: Anthropic, e: Exhibitor, deadline: n
   return { profile: null, website: null };
 }
 
-/** Exhibitors with an empty company profile, whether or not the AI has tried before. */
-export function emptyProfileWhere(tradeShowId?: string): Prisma.ExhibitorWhereInput {
-  return { ...(tradeShowId && { tradeShowId }), OR: [{ companyProfile: null }, { companyProfile: "" }] };
-}
+const emptyProfile: Prisma.ExhibitorWhereInput = { OR: [{ companyProfile: null }, { companyProfile: "" }] };
+
+export type CompanyProfileResult = { profile?: string; error?: string };
 
 /**
- * Writes the profiles of the given exhibitors, side by side, for the
- * "Fill missing profiles" button. Unlike the nightly run it also tries
- * exhibitors the AI tried before, and finds those without a website (or with
- * a website that says nothing) by searching the web; a website found that
- * way is saved when the field is empty.
+ * Writes the profile of one company, when a user presses "Write company
+ * profile with AI" on its page: from its website, or by searching the web
+ * when it has none or the website says nothing. The profile is saved on
+ * every exhibitor row of the company (one per trade show), so it is only
+ * written once and everyone sees it; a website the search found is saved too.
  */
-export async function writeProfiles(ids: string[]): Promise<ProfileRunResult> {
-  const totals: ProfileRunResult = { written: 0, noInfo: 0, failed: 0, websitesFound: 0, problems: [] };
+export async function writeProfileForCompany(companyKey: string): Promise<CompanyProfileResult> {
   const rows = await db.exhibitor.findMany({
-    where: { id: { in: ids }, ...emptyProfileWhere() },
-    select: { id: true, name: true, website: true, country: true, tradeShow: { select: { name: true } } },
+    where: { companyKey },
+    select: { id: true, name: true, website: true, country: true, companyProfile: true, tradeShow: { select: { name: true } } },
+    orderBy: [{ tradeShow: { startDate: "desc" } }],
   });
+  const done = rows.find((r) => r.companyProfile);
+  if (done) return { profile: done.companyProfile! };
+  const row = rows.find((r) => r.website) ?? rows[0];
+  if (!row) return { error: "This company no longer exists." };
+
+  const e: Exhibitor = { name: row.name, website: row.website, country: row.country, showName: row.tradeShow.name };
   const client = new Anthropic();
-  // The page may run for 300 seconds; stop starting web searches well before.
-  const deadline = Date.now() + 240_000;
-  let stopped = false;
-  await Promise.all(
-    rows.map(async (row) => {
-      const e: Exhibitor = { name: row.name, website: row.website, country: row.country, showName: row.tradeShow.name };
-      let profile: string | null = null;
-      let website: string | null = null;
+  const deadline = Date.now() + 200_000;
+  let profile: string | null = null;
+  let website: string | null = null;
+  try {
+    if (e.website) {
       try {
-        if (e.website) {
-          try {
-            profile = await writeCompanyProfile({ name: e.name, website: e.website }, client);
-          } catch (error) {
-            if (error instanceof Anthropic.APIError) throw error;
-            console.warn(`Website of ${e.name} could not be used`, error);
-            // The website could not be used; search the web instead.
-          }
-        }
-        if (!profile && !stopped) {
-          const found = await searchCompanyProfile(client, e, deadline);
-          profile = found.profile;
-          if (!e.website) website = found.website;
-        }
-        if (profile) totals.written++;
-        else {
-          totals.noInfo++;
-          totals.problems.push({ name: e.name, reason: "AI found nothing about what the company does." });
-        }
+        profile = await writeCompanyProfile({ name: e.name, website: e.website }, client);
       } catch (error) {
-        // A busy or broken AI service fails every row; stop and leave them for the next press.
-        if (stopsEveryRow(error)) {
-          stopped = true;
-          totals.stoppedBy = describeProfileError(error);
-          return;
-        }
-        console.error(`Company profile for ${e.name} failed`, error);
-        totals.failed++;
-        totals.problems.push({ name: e.name, reason: describeProfileError(error) });
+        if (error instanceof Anthropic.APIError) throw error;
+        console.warn(`Website of ${e.name} could not be used`, error);
       }
-      await db.exhibitor.updateMany({ where: { id: row.id }, data: { profileTriedAt: new Date() } });
-      // Only fill fields that are still empty, in case someone typed them meanwhile.
-      if (profile) await db.exhibitor.updateMany({ where: { id: row.id, ...emptyProfileWhere() }, data: { companyProfile: profile } });
-      if (website) {
-        // A new website can join the exhibitor to the same company at other shows.
-        const saved = await db.exhibitor.updateMany({ where: { id: row.id, website: null }, data: { website, companyKey: null } });
-        totals.websitesFound += saved.count;
-      }
-    }),
-  );
-  return totals;
+    }
+    if (!profile) {
+      const found = await searchCompanyProfile(client, e, deadline);
+      profile = found.profile;
+      if (!e.website) website = found.website;
+    }
+  } catch (error) {
+    console.error(`Company profile for ${e.name} failed`, error);
+    return { error: describeProfileError(error) };
+  }
+  if (!profile) return { error: "AI could not find out what this company does, so no profile was written." };
+
+  // Only fill fields that are still empty, in case someone typed them meanwhile.
+  await db.exhibitor.updateMany({ where: { companyKey, ...emptyProfile }, data: { companyProfile: profile, profileTriedAt: new Date() } });
+  if (website) {
+    // A new website can join the exhibitor to the same company at other shows.
+    await db.exhibitor.updateMany({ where: { id: row.id, website: null }, data: { website, companyKey: null } });
+  }
+  return { profile };
 }

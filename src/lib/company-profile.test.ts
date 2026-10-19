@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanProfile, fillSummary, profileLine, profileRunSummary } from "./company-profile";
+import { cleanProfile, profileLine } from "./company-profile";
 
 describe("cleanProfile", () => {
   it("makes a short profile one plain paragraph", () => {
@@ -35,23 +35,5 @@ describe("profileLine", () => {
     );
     expect(profileLine("WEBSITE: NONE\nPROFILE: NO INFORMATION")).toBeNull();
     expect(profileLine("nothing here")).toBeNull();
-  });
-});
-
-describe("profileRunSummary", () => {
-  it("says what was written and what is left", () => {
-    expect(profileRunSummary({ written: 2, noInfo: 1, failed: 0, websitesFound: 1, problems: [] }, 0)).toBe(
-      "AI wrote 2 company profiles. 1 exhibitor also got a website. For 1 company AI found nothing about what they do.",
-    );
-    expect(profileRunSummary({ written: 0, noInfo: 0, failed: 1, websitesFound: 0, problems: [] }, 3)).toContain("3 still without a profile");
-  });
-});
-
-describe("fillSummary", () => {
-  it("says what was written and what is left", () => {
-    expect(fillSummary({ written: 1, noInfo: 2, failed: 0, left: 0 })).toBe(
-      "AI wrote 1 company profile. 2 websites did not say what the company does.",
-    );
-    expect(fillSummary({ written: 3, noInfo: 0, failed: 1, left: 5 })).toContain("5 still to write");
   });
 });
