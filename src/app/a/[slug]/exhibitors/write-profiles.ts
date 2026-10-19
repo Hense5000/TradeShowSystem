@@ -1,6 +1,5 @@
-import { type FillResult, fillSummary } from "@/lib/company-profile";
 import { type ContactFillResult, contactSummary } from "@/lib/contact-finder";
-import { countMissingContacts, countMissingProfiles, findContactBatch, writeProfileBatch } from "./actions";
+import { countMissingContacts, findContactBatch } from "./actions";
 
 type Batch = { left: number; stoppedBy?: string };
 
@@ -34,28 +33,6 @@ async function runInBatches<T extends Batch>(
     if (batchDone === 0) break;
   }
   return totals;
-}
-
-/** Lets AI write the trade show's missing company profiles. Returns a summary, or undefined when none were missing. */
-export async function writeMissingProfiles(
-  slug: string,
-  tradeShowId: string,
-  onProgress: (done: number, total: number) => void,
-): Promise<string | undefined> {
-  const missing = await countMissingProfiles(slug, tradeShowId);
-  const totals = await runInBatches<FillResult>(
-    missing,
-    () => writeProfileBatch(slug, tradeShowId),
-    (b) => b.written + b.noInfo + b.failed,
-    (t, b) => {
-      t.written += b.written;
-      t.noInfo += b.noInfo;
-      t.failed += b.failed;
-    },
-    { written: 0, noInfo: 0, failed: 0, left: missing },
-    onProgress,
-  );
-  return totals && fillSummary(totals);
 }
 
 /** Lets AI look up the trade show's missing contact persons on their websites. Returns a summary, or undefined when none were missing. */

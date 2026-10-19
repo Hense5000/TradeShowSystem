@@ -4,15 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
-import type { FillResult, ProfileRunResult } from "@/lib/company-profile";
 import {
+  type CompanyProfileResult,
   describeProfileError,
-  emptyProfileWhere,
-  fillMissingProfiles,
   isCompanyProfileConfigured,
-  missingProfileWhere,
   writeCompanyProfile,
-  writeProfiles,
+  writeProfileForCompany,
 } from "@/lib/company-profile-run";
 import { type ContactFields, type ContactFillResult, contactSummary, contactUpdate, type FoundContact } from "@/lib/contact-finder";
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere, needsHunter, withHunter } from "@/lib/contact-finder-run";
@@ -127,23 +124,8 @@ export async function importExhibitorRows(
   return { imported: fresh.length, alreadyThere: items.length - fresh.length, problems };
 }
 
-/** How many exhibitors at the show still wait for an AI company profile. */
-export async function countMissingProfiles(slug: string, tradeShowId: string): Promise<number> {
-  await requirePlatformAdmin(slug);
-  if (!isCompanyProfileConfigured()) return 0;
-  return db.exhibitor.count({ where: missingProfileWhere(tradeShowId) });
-}
-
-/** How many profiles one call of writeProfileBatch writes, side by side; a few at a time keeps the progress bar moving. */
-const PROFILES_PER_CALL = 5;
-
-/** Writes a few of the show's missing company profiles, for the import page's progress bar. */
-export async function writeProfileBatch(slug: string, tradeShowId: string): Promise<FillResult> {
-  await requirePlatformAdmin(slug);
-  const result = await fillMissingProfiles({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: PROFILES_PER_CALL });
-  revalidatePath(`/a/${slug}/exhibitors`);
-  return result;
-}
+/** How many contacts one call of findContactBatch looks up, side by side; a few at a time keeps the progress bar moving. */
+const CONTACTS_PER_CALL = 5;
 
 export type ProfileState = { profile?: string; error?: string };
 
@@ -164,21 +146,15 @@ export async function generateExhibitorProfile(slug: string, name: string, site:
 
 export type FillState = { message?: string } | undefined;
 
-/** The exhibitors of one trade show (or all) with an empty company profile, for "Fill missing profiles". */
-export async function listEmptyProfiles(slug: string, tradeShowId: string | undefined): Promise<string[]> {
-  await requirePlatformAdmin(slug);
-  const rows = await db.exhibitor.findMany({ where: emptyProfileWhere(tradeShowId), orderBy: [{ name: "asc" }], select: { id: true } });
-  return rows.map((r) => r.id);
-}
-
-/** Writes the profiles of a few exhibitors, for the progress bar of "Fill missing profiles". */
-export async function writeProfilesFor(slug: string, ids: string[]): Promise<ProfileRunResult> {
-  await requirePlatformAdmin(slug);
-  if (!isCompanyProfileConfigured()) {
-    return { written: 0, noInfo: 0, failed: 0, websitesFound: 0, problems: [], stoppedBy: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
-  }
-  const result = await writeProfiles(ids.slice(0, PROFILES_PER_CALL));
-  revalidatePath(`/a/${slug}/exhibitors`);
+/**
+ * "Write company profile with AI" on a company's page. Every member may press
+ * it; the profile is saved for everyone, so each company is written only once.
+ */
+export async function writeCompanyProfileWithAi(slug: string, companyKey: string): Promise<CompanyProfileResult> {
+  await requireMembership(slug);
+  if (!isCompanyProfileConfigured()) return { error: "AI is not set up yet." };
+  const result = await writeProfileForCompany(companyKey);
+  if (result.profile) revalidatePath(`/a/${slug}/exhibitors`, "layout");
   return result;
 }
 
@@ -192,7 +168,7 @@ export async function countMissingContacts(slug: string, tradeShowId: string): P
 /** Looks up a few of the show's missing contacts, for the import page's progress bar. */
 export async function findContactBatch(slug: string, tradeShowId: string): Promise<ContactFillResult> {
   await requirePlatformAdmin(slug);
-  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: PROFILES_PER_CALL });
+  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: CONTACTS_PER_CALL });
   revalidatePath(`/a/${slug}/exhibitors`);
   return result;
 }
