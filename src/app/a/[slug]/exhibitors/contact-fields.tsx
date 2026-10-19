@@ -49,7 +49,7 @@ export function ContactFields({
       const note = result.hunterNote ? ` ${result.hunterNote}` : "";
       setMessage(
         filled.length > 0
-          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} ${result.viaHunter ? "from the website and Hunter.io" : "from the website"}. Check it before you save.${note}` }
+          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} ${result.viaHunter ? "from the website and Hunter.io" : "from the website"}. ${result.saved ? "It is saved." : "Check it before you save."}${note}` }
           : { ok: false, text: `AI found nothing new: the fields it found on the website are already filled in.${note}` },
       );
     });

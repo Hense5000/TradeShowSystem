@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { deleteExhibitor, findExhibitorContact, generateExhibitorProfile, updateExhibitor } from "../actions";
+import { deleteExhibitor, findAndSaveExhibitorContact, generateExhibitorProfile, updateExhibitor } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
 import { tradeShowOptions } from "../show-select";
 
@@ -30,7 +30,7 @@ export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]
         action={<Link href={`/a/${slug}/exhibitors?show=${exhibitor.tradeShowId}`} className="btn-secondary">Back to list</Link>}
       />
       <SaveForm action={updateExhibitor.bind(null, slug, id)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Save changes" readOnly={false}>
-        <ExhibitorFields findContact={useAi ? findExhibitorContact.bind(null, slug) : undefined} generateProfile={useAi ? generateExhibitorProfile.bind(null, slug) : undefined} exhibitor={exhibitor} shows={shows} />
+        <ExhibitorFields findContact={useAi ? findAndSaveExhibitorContact.bind(null, slug, id) : undefined} generateProfile={useAi ? generateExhibitorProfile.bind(null, slug) : undefined} exhibitor={exhibitor} shows={shows} />
       </SaveForm>
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>

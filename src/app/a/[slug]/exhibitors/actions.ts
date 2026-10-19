@@ -24,7 +24,7 @@ import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
 import { exhibitorQuery } from "@/lib/exhibitor-list";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { fillCountriesFromPhones } from "@/lib/phone-country-run";
-import { withPhoneCountry } from "@/lib/phone-country";
+import { countryFromPhone, withPhoneCountry } from "@/lib/phone-country";
 import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership, requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
@@ -205,6 +205,8 @@ export type ContactState = {
   replace?: (keyof FoundContact)[];
   /** What Hunter.io did, when it added nothing, so the page can say why. */
   hunterNote?: string;
+  /** The found fields were saved to the exhibitor straight away. */
+  saved?: boolean;
 };
 
 /**
@@ -253,6 +255,31 @@ export async function findExhibitorContact(slug: string, name: string, site: str
   }
   if (contact) return { contact, viaHunter, replace, hunterNote };
   return { error: [error ?? "The website lists no contact person, email or phone number.", hunterNote].filter(Boolean).join(" ") };
+}
+
+/**
+ * "Find contact with AI" on an exhibitor that already exists: finds the contact
+ * and saves what it found straight away, without pressing Save. The same fields
+ * are saved that the form shows as filled: empty ones, and an info@ address that
+ * gives way to the found person's own email.
+ */
+export async function findAndSaveExhibitorContact(slug: string, id: string, name: string, site: string, typed?: ContactFields): Promise<ContactState> {
+  const result = await findExhibitorContact(slug, name, site, typed);
+  const found = result.contact;
+  if (!found || !(await editableExhibitor(slug, id))) return result;
+  const isEmpty = (field: keyof FoundContact) => !typed?.[field]?.trim();
+  const data: Partial<FoundContact> = {};
+  for (const field of ["contactName", "email", "phone"] as const) {
+    if (found[field] && (isEmpty(field) || result.replace?.includes(field))) data[field] = found[field];
+  }
+  // The position belongs to the person, so it is only saved together with the name.
+  if (data.contactName && found.contactTitle && isEmpty("contactTitle")) data.contactTitle = found.contactTitle;
+  if (Object.keys(data).length === 0) return result;
+  const current = await db.exhibitor.findUnique({ where: { id }, select: { country: true } });
+  const country = !current?.country && data.phone ? countryFromPhone(data.phone) : null;
+  await db.exhibitor.updateMany({ where: { id }, data: { ...data, ...(country && { country }) } });
+  revalidatePath(`/a/${slug}/exhibitors`);
+  return { ...result, saved: true };
 }
 
 /** Looks up the missing contacts of one trade show (or all), as many as fit in the time. */
