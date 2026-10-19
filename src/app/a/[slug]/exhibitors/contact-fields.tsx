@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Field } from "@/components/field";
 import { Icon } from "@/components/icons";
-import type { FoundContact } from "@/lib/contact-finder";
+import type { ContactFields as ContactValues, FoundContact } from "@/lib/contact-finder";
 import type { ContactState } from "./actions";
 
 const LABELS: Record<keyof FoundContact, string> = { contactName: "contact person", contactTitle: "position", email: "email", phone: "phone" };
@@ -19,7 +19,7 @@ export function ContactFields({
 }: {
   values: { [K in keyof FoundContact]: string };
   /** Leave out when no AI key is set; the button is then hidden. */
-  find?: (name: string, website: string) => Promise<ContactState>;
+  find?: (name: string, website: string, typed: ContactValues) => Promise<ContactState>;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
@@ -31,7 +31,8 @@ export function ContactFields({
     const value = (field: string) => String(new FormData(form).get(field) ?? "");
     setMessage(undefined);
     startTransition(async () => {
-      const result = await find(value("name"), value("website"));
+      const typed = { contactName: value("contactName"), contactTitle: value("contactTitle"), email: value("email"), phone: value("phone") };
+      const result = await find(value("name"), value("website"), typed);
       if (!result.contact) return setMessage({ ok: false, text: result.error ?? "No contact was found." });
       const input = (field: string) => form.elements.namedItem(field) as HTMLInputElement | null;
       // The position belongs to the person, so it is only filled together with the name.
@@ -47,7 +48,7 @@ export function ContactFields({
       }
       setMessage(
         filled.length > 0
-          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} from the website. Check it before you save.` }
+          ? { ok: true, text: `AI filled in ${filled.length > 1 ? `${filled.slice(0, -1).join(", ")} and ${filled.at(-1)}` : filled[0]} ${result.viaHunter ? "from the website and Hunter.io" : "from the website"}. Check it before you save.` }
           : { ok: false, text: "AI found nothing new: the fields it found on the website are already filled in." },
       );
     });

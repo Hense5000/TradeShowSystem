@@ -14,14 +14,17 @@ import {
   MAX_CONTACT_PAGE_CHARS,
 } from "@/lib/contact-finder";
 import { db } from "@/lib/db";
+import { addHunterContact, hunterDomain } from "@/lib/hunter";
+import { HunterStopError, hunterDomainSearch, isHunterConfigured } from "@/lib/hunter-run";
 import { countryFromPhone } from "@/lib/phone-country";
 import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
 
 // Finds an exhibitor's contact person (name, position, email, phone) on the
 // company's own website with Claude: the homepage plus its "Contact", "Team"
-// or "About us" pages. Only what the website itself lists is used; nothing is
-// bought from data providers and no email address is guessed.
+// or "About us" pages. Only what the website itself lists is used and no email
+// address is guessed. When HUNTER_API_KEY is set, Hunter.io fills what the
+// website did not show (a named person or an email address).
 
 /** Which Claude model reads the pages. Can be changed with CONTACT_FINDER_MODEL. */
 const MODEL = process.env.CONTACT_FINDER_MODEL || "claude-opus-5-5";
@@ -141,42 +144,63 @@ export async function findContact(company: Company, client = new Anthropic()): P
 
 export const describeContactError = describeProfileError;
 
-/** Exhibitors the AI has not tried yet that have a website but no contact person or no email. */
-export function missingContactWhere(tradeShowId?: string): Prisma.ExhibitorWhereInput {
+/**
+ * Exhibitors with a website but no contact person or no email that are still
+ * to be looked up: the website is not read yet, or (with Hunter) Hunter.io has
+ * not been asked yet.
+ */
+export function missingContactWhere(tradeShowId?: string, withHunter = isHunterConfigured()): Prisma.ExhibitorWhereInput {
   return {
     ...(tradeShowId && { tradeShowId }),
     website: { not: null },
-    contactTriedAt: null,
-    OR: [{ contactName: null }, { email: null }],
+    AND: [
+      { OR: [{ contactName: null }, { email: null }] },
+      { OR: [{ contactTriedAt: null }, ...(withHunter ? [{ hunterTriedAt: null }] : [])] },
+    ],
   };
+}
+
+/** Whether Hunter.io should be asked: it is set up and the contact still lacks a person or an email. */
+export const needsHunter = (c: FoundContact | null) => isHunterConfigured() && (!c?.contactName || !c.email);
+
+/** Fills the contact's gaps with Hunter.io's addresses for the company's domain. */
+export async function withHunter(website: string, contact: FoundContact | null): Promise<FoundContact | null> {
+  const domain = hunterDomain(website);
+  if (!domain) return contact;
+  return addHunterContact(contact, await hunterDomainSearch(domain));
 }
 
 /**
  * Looks up the missing contacts, a few at a time, until they are all done or
- * the time budget is used up. Only empty fields are filled. Each exhibitor is
- * tried once, so a website that lists no one is not read again on the next run.
+ * the time budget is used up. Only empty fields are filled. Each exhibitor's
+ * website is read once and Hunter.io is asked once, so a company that lists
+ * no one is not looked up again on the next run.
  */
 export async function fillMissingContacts({
   tradeShowId,
   budgetMs,
   limit = 500,
+  useHunter = isHunterConfigured(),
 }: {
   tradeShowId?: string;
   budgetMs: number;
   /** At most this many exhibitors, e.g. a small batch so the import page can show progress. */
   limit?: number;
+  /** Ask Hunter.io too; off for the nightly run, so Hunter credits are only spent when someone presses a button. */
+  useHunter?: boolean;
 }): Promise<ContactFillResult> {
   const started = Date.now();
-  const totals: ContactFillResult = { filled: 0, noInfo: 0, failed: 0, left: 0 };
+  let hunterOn = useHunter && isHunterConfigured();
+  const totals: ContactFillResult = { filled: 0, noInfo: 0, failed: 0, left: 0, fromHunter: 0 };
   if (!isContactFinderConfigured()) {
-    totals.left = await db.exhibitor.count({ where: missingContactWhere(tradeShowId) });
+    totals.left = await db.exhibitor.count({ where: missingContactWhere(tradeShowId, hunterOn) });
     return totals;
   }
 
   const queue = await db.exhibitor.findMany({
-    where: missingContactWhere(tradeShowId),
+    where: missingContactWhere(tradeShowId, hunterOn),
     orderBy: [{ createdAt: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, website: true },
+    select: { id: true, name: true, website: true, contactTriedAt: true, hunterTriedAt: true },
     take: limit,
   });
   const client = new Anthropic();
@@ -185,37 +209,58 @@ export async function fillMissingContacts({
   async function worker() {
     while (!stopped && next < queue.length && Date.now() - started < budgetMs) {
       const e = queue[next++];
+      const readSite = !e.contactTriedAt;
+      // Read before, but Hunter was stopped meanwhile (e.g. its credits ran out).
+      if (!readSite && !hunterOn) continue;
       let found: FoundContact | null = null;
       let failed = false;
-      try {
-        found = await findContact({ name: e.name, website: e.website! }, client);
-      } catch (error) {
-        // A busy or broken AI service fails every row; stop and leave them for the next run.
-        if (stopsEveryRow(error)) {
-          stopped = true;
-          totals.stoppedBy = describeContactError(error);
-          return;
+      if (readSite) {
+        try {
+          found = await findContact({ name: e.name, website: e.website! }, client);
+        } catch (error) {
+          // A busy or broken AI service fails every row; stop and leave them for the next run.
+          if (stopsEveryRow(error)) {
+            stopped = true;
+            totals.stoppedBy = describeContactError(error);
+            return;
+          }
+          failed = true;
         }
-        failed = true;
-        totals.failed++;
-      }
-      await db.exhibitor.updateMany({ where: { id: e.id }, data: { contactTriedAt: new Date() } });
-      if (!found) {
-        if (!failed) totals.noInfo++;
-        continue;
+        await db.exhibitor.updateMany({ where: { id: e.id }, data: { contactTriedAt: new Date() } });
       }
       // Read the fields just before saving, in case someone typed them in meanwhile.
       const current = await db.exhibitor.findUnique({ where: { id: e.id }, select: { contactName: true, contactTitle: true, email: true, phone: true, country: true } });
-      const data = current ? contactUpdate(current, found) : {};
+      if (!current) continue;
+      let contact: FoundContact | null = { ...current, ...(found && contactUpdate(current, found)) };
+      let hunterAdded = false;
+      if (hunterOn && !e.hunterTriedAt && (!contact.contactName || !contact.email)) {
+        try {
+          const before = contact;
+          contact = await withHunter(e.website!, contact);
+          hunterAdded = Boolean(contact && Object.keys(contactUpdate(before, contact)).length > 0);
+          await db.exhibitor.updateMany({ where: { id: e.id }, data: { hunterTriedAt: new Date() } });
+        } catch (error) {
+          if (error instanceof HunterStopError) {
+            hunterOn = false;
+            totals.hunterStoppedBy = error.message;
+          } else {
+            console.error(`Hunter.io for ${e.name} failed`, error);
+            await db.exhibitor.updateMany({ where: { id: e.id }, data: { hunterTriedAt: new Date() } });
+          }
+        }
+      }
+      const data = contact ? contactUpdate(current, contact) : {};
       if (Object.keys(data).length > 0) {
         // A newly found phone number also tells the country, when that is empty.
-        const country = !current?.country && data.phone ? countryFromPhone(data.phone) : null;
+        const country = !current.country && data.phone ? countryFromPhone(data.phone) : null;
         await db.exhibitor.updateMany({ where: { id: e.id }, data: { ...data, ...(country && { country }) } });
         totals.filled++;
-      } else totals.noInfo++;
+        if (hunterAdded) totals.fromHunter = (totals.fromHunter ?? 0) + 1;
+      } else if (failed) totals.failed++;
+      else totals.noInfo++;
     }
   }
   await Promise.all(Array.from({ length: PARALLEL }, worker));
-  totals.left = await db.exhibitor.count({ where: missingContactWhere(tradeShowId) });
+  totals.left = await db.exhibitor.count({ where: missingContactWhere(tradeShowId, hunterOn) });
   return totals;
 }

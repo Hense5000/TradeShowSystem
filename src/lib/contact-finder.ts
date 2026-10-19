@@ -154,14 +154,20 @@ export type ContactFillResult = {
   left: number;
   /** Why the run stopped early, e.g. an invalid AI key. */
   stoppedBy?: string;
+  /** Of the filled exhibitors, how many got something from Hunter.io. */
+  fromHunter?: number;
+  /** Why Hunter.io stopped being asked, e.g. its credits are used up. */
+  hunterStoppedBy?: string;
 };
 
 /** A short sentence on what a run did, for the page. */
 export function contactSummary(r: ContactFillResult): string {
   const parts = [`AI found contact details for ${r.filled} ${r.filled === 1 ? "exhibitor" : "exhibitors"}.`];
+  if (r.fromHunter) parts.push(`Hunter.io added details for ${r.fromHunter} of them.`);
   if (r.noInfo) parts.push(`${r.noInfo} ${r.noInfo === 1 ? "website" : "websites"} listed no contact person or email.`);
   if (r.failed) parts.push(`${r.failed} ${r.failed === 1 ? "website" : "websites"} could not be read.`);
   if (r.stoppedBy) parts.push(`Stopped: ${r.stoppedBy}`);
+  if (r.hunterStoppedBy) parts.push(r.hunterStoppedBy);
   if (r.left) parts.push(`${r.left} still to look up; this happens automatically during the night, or press "Find missing contacts" on the Exhibitors list.`);
   return parts.join(" ");
 }

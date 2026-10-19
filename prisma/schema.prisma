@@ -366,6 +366,7 @@ model Exhibitor {
   companyProfile        String? // short description of the company
   profileTriedAt        DateTime? // when the AI last tried to write companyProfile from the website
   contactTriedAt        DateTime? // when the AI last looked for a contact person on the website
+  hunterTriedAt         DateTime? // when Hunter.io was last asked for the company's contacts
   companyKey            String? // the same for every show's row of one company; null until worked out, e.g. after the name or website changed
   // The customer account that added it with "Add exhibitor"; that account may
   // edit and delete it. Null for imported rows, which only platform admins edit.
