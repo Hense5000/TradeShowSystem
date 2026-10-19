@@ -1,4 +1,4 @@
-import type { FoundContact } from "@/lib/contact-finder";
+import { type ContactFields, contactUpdate, type FoundContact } from "@/lib/contact-finder";
 
 // Pure helpers for Hunter.io's Domain Search, which lists the email addresses
 // Hunter has found on the web for a company's domain, with the person's name
@@ -74,6 +74,9 @@ const loose = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
 
 const GENERIC_EMAIL = /^(info|sales|export|salg|vertrieb|contact|kontakt|mail|office|hello|hej|post|service|support|marketing|admin|reception|enquiries|inquiries)@/i;
 
+/** A company's general address such as info@ or sales@, not a person's own. */
+export const isGenericEmail = (email: string) => GENERIC_EMAIL.test(email.trim());
+
 /**
  * Fills the gaps in a contact with what Hunter found. What is already there
  * wins. A person from Hunter is only added when no one is named yet and the
@@ -87,7 +90,7 @@ export function addHunterContact(base: FoundContact | null, emails: HunterEmail[
   if (!have.contactName) {
     const known = have.email?.toLowerCase();
     const owner = known ? emails.find((e) => usable(e) && e.value.toLowerCase() === known && fullName(e)) : undefined;
-    const generic = known && (GENERIC_EMAIL.test(known) || emails.some((e) => e.value.toLowerCase() === known && e.type === "generic"));
+    const generic = known && (isGenericEmail(known) || emails.some((e) => e.value.toLowerCase() === known && e.type === "generic"));
     const person = owner ?? (!known || generic ? bestHunterPerson(emails) : null);
     if (person) {
       out.contactName = fullName(person).slice(0, 100);
@@ -102,4 +105,18 @@ export function addHunterContact(base: FoundContact | null, emails: HunterEmail[
   }
   if (!out.email) out.email = bestHunterGeneric(emails);
   return out.contactName || out.email || out.phone ? out : null;
+}
+
+/**
+ * The fields to save after Hunter: like contactUpdate, only empty fields,
+ * except that a general address (info@, sales@ …) gives way to the own address
+ * of the person Hunter adds, so the named person comes with their email.
+ */
+export function hunterUpdate(current: ContactFields, found: FoundContact): Partial<FoundContact> {
+  const data = contactUpdate(current, found);
+  const email = found.email?.toLowerCase();
+  if (data.contactName && current.email && isGenericEmail(current.email) && email && !isGenericEmail(email) && email !== current.email.toLowerCase()) {
+    data.email = email;
+  }
+  return data;
 }
