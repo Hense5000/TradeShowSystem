@@ -5,7 +5,7 @@ import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
-import { accountHasAccess, requireMembership } from "@/lib/tenant";
+import { accountHasAccess, requireMembership, subscriptionsOf } from "@/lib/tenant";
 import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
@@ -16,7 +16,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const [primaryContact, hasAccess, subscriptions, ticketsWaiting] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
     accountHasAccess(organization.id, user.email),
-    db.subscription.findMany({ where: { organizationId: organization.id } }),
+    subscriptionsOf(organization.id),
     platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
   ]);
   const paymentFailed = currentSubscription(subscriptions)?.status === "past_due";

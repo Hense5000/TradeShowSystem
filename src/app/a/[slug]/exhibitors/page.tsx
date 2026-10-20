@@ -45,7 +45,9 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   // A company at several trade shows is one row here (see src/lib/company.ts).
   await syncCompanyKeys();
   const where = exhibitorWhere(filters);
-  const [groups, matchingRows, total, shows, countries] = await Promise.all([
+  const useAi = canEdit && isCompanyProfileConfigured();
+  // Everything that doesn't depend on the companies on this page is read at once.
+  const [groups, matchingRows, total, shows, countries, lists, missingContacts, missingCountries] = await Promise.all([
     db.exhibitor.groupBy({
       by: ["companyKey"],
       where: { AND: [where, { companyKey: { not: null } }] },
@@ -56,17 +58,26 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     db.$queryRaw<{ n: number }[]>`SELECT COUNT(DISTINCT "companyKey")::int AS n FROM "Exhibitor"`.then((r) => r[0]?.n ?? 0),
     tradeShowOptions(),
     db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
+    db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
+    useAi ? db.exhibitor.count({ where: missingContactWhere(show || undefined) }) : 0,
+    canEdit ? countCountriesFromPhones() : 0,
   ]);
   const matching = groups.length;
   const pageKeys = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((g) => g.companyKey!);
-  // Every row of the companies on this page, latest trade show first, and which of them the filters match.
-  const [rows, matchedRows] = await Promise.all([
+  // Every row of the companies on this page, latest trade show first, which of them the
+  // filters match, and which of this account's saved lists each company is on.
+  const pageRows = { companyKey: { in: pageKeys } };
+  const [rows, matchedRows, saved] = await Promise.all([
     db.exhibitor.findMany({
-      where: { companyKey: { in: pageKeys } },
+      where: pageRows,
       include: { tradeShow: { select: { id: true, name: true, startDate: true } } },
       orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
     }),
-    db.exhibitor.findMany({ where: { AND: [where, { companyKey: { in: pageKeys } }] }, select: { id: true } }),
+    db.exhibitor.findMany({ where: { AND: [where, pageRows] }, select: { id: true } }),
+    db.savedListItem.findMany({
+      where: { exhibitor: pageRows, list: { organizationId: organization.id } },
+      select: { listId: true, exhibitorId: true },
+    }),
   ]);
   const matched = new Set(matchedRows.map((r) => r.id));
   const companies = pageKeys.map((key) => ({
@@ -76,21 +87,10 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
       (r) => matched.has(r.id),
     ),
   }));
-  // This account's saved lists, and which of them each company on this page is on.
-  const [lists, saved] = await Promise.all([
-    db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
-    db.savedListItem.findMany({
-      where: { exhibitorId: { in: rows.map((e) => e.id) }, list: { organizationId: organization.id } },
-      select: { listId: true, exhibitorId: true },
-    }),
-  ]);
   const favoritesId = lists.find((l) => l.favorites)?.id;
   const ownLists = lists.filter((l) => !l.favorites);
   const savedIn = new Set(saved.map((s) => `${s.listId}:${s.exhibitorId}`));
   const isIn = (listId: string | undefined, ids: string[]) => ids.some((id) => savedIn.has(`${listId}:${id}`));
-  const useAi = canEdit && isCompanyProfileConfigured();
-  const missingContacts = useAi ? await db.exhibitor.count({ where: missingContactWhere(show || undefined) }) : 0;
-  const missingCountries = canEdit ? await countCountriesFromPhones() : 0;
   const countryOptions = countries
     .map((c) => c.country!)
     .map((code) => ({ code, name: countryName(code) }))
