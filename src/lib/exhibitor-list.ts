@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { isCountryCode } from "@/lib/countries";
 import { parseDate } from "@/lib/dates";
 
@@ -90,6 +90,30 @@ export function exhibitorWhere({ q, show, country, industry, showCountry, showCi
     ...(Object.keys(tradeShow).length && { tradeShow }),
     ...(and.length && { AND: and }),
   };
+}
+
+/** `contains` with any case, written as Prisma writes it (which leaves % and _ in the text as wildcards). */
+const ilike = (column: Prisma.Sql, text: string) => Prisma.sql`${column} ILIKE ${`%${text}%`}`;
+
+/**
+ * The same filter as exhibitorWhere, as SQL on "Exhibitor" e joined with its
+ * "TradeShow" t. The Exhibitors page groups and pages companies in the
+ * database with it, so it never loads every company to show 50.
+ */
+export function exhibitorSql({ q, show, country, industry, showCountry, showCity, from, to }: ExhibitorFilters): Prisma.Sql {
+  const and: Prisma.Sql[] = [];
+  if (q) and.push(Prisma.sql`(${Prisma.join([ilike(Prisma.sql`e."name"`, q), ilike(Prisma.sql`e."contactName"`, q), ilike(Prisma.sql`e."industry"`, q)], " OR ")})`);
+  const terms = industryTerms(industry);
+  if (terms.length) {
+    and.push(Prisma.sql`(${Prisma.join(terms.flatMap((t) => [ilike(Prisma.sql`e."industry"`, t), ilike(Prisma.sql`e."companyProfile"`, t)]), " OR ")})`);
+  }
+  if (show) and.push(Prisma.sql`e."tradeShowId" = ${show}`);
+  if (country) and.push(Prisma.sql`e."country" = ${country}`);
+  if (showCountry) and.push(Prisma.sql`t."country" = ${showCountry}`);
+  if (showCity) and.push(ilike(Prisma.sql`t."city"`, showCity));
+  if (from) and.push(Prisma.sql`t."endDate" >= ${new Date(from)}`);
+  if (to) and.push(Prisma.sql`t."startDate" <= ${new Date(to)}`);
+  return and.length ? Prisma.join(and, " AND ") : Prisma.sql`TRUE`;
 }
 
 /** The filters as a query string ("" when none are set), with any extra parameters added. */

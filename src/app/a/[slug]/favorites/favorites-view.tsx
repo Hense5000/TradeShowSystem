@@ -16,6 +16,7 @@ import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
 import { RecommendedShows } from "./recommended-shows";
+import { SearchButton, SearchForm } from "@/components/search-form";
 
 const PAGE_SIZE = 50;
 
@@ -163,7 +164,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
             </div>
 
             <section className="card overflow-hidden p-0">
-              <form className="flex flex-wrap items-center gap-2 p-4" role="search">
+              <SearchForm className="flex flex-wrap items-center gap-2 p-4">
                 <div className="relative min-w-56 flex-1">
                   <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
                   <input className="input pl-9" name="q" defaultValue={filters.q} placeholder="Search by company, contact or industry" aria-label="Search favorites" />
@@ -195,13 +196,13 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                   <option value="due">Due today or overdue</option>
                   <option value="set">With a follow-up date</option>
                 </select>
-                <button className="btn-secondary py-2">Search</button>
+                <SearchButton />
                 {narrowed && (
                   <Link href={base} className="px-2 text-sm font-semibold text-muted hover:text-ink">
                     Show all
                   </Link>
                 )}
-              </form>
+              </SearchForm>
               <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
                 {narrowed ? `Showing ${shownCount} of ${exhibitorTotal} favorite exhibitors` : `${exhibitorTotal} favorite ${exhibitorTotal === 1 ? "exhibitor" : "exhibitors"}`}
               </p>

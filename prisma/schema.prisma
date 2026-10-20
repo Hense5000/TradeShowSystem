@@ -5,13 +5,16 @@
 // table if social login is added later. The UI calls it "account".
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL") // pooled connection, used by the app
   directUrl = env("DATABASE_URL_UNPOOLED") // direct connection, used for migrations
+  // Trigram indexes, so searching for any part of a name stays fast with many rows.
+  extensions = [pg_trgm]
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +385,10 @@ model Exhibitor {
   @@index([addedByOrganizationId])
   @@index([name])
   @@index([companyKey])
+  // The search box looks for its text anywhere in these.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Exhibitor_name_trgm_idx")
+  @@index([contactName(ops: raw("gin_trgm_ops"))], type: Gin, map: "Exhibitor_contactName_trgm_idx")
+  @@index([industry(ops: raw("gin_trgm_ops"))], type: Gin, map: "Exhibitor_industry_trgm_idx")
 }
 
 // ---------------------------------------------------------------------------

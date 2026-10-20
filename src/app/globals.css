@@ -103,3 +103,16 @@
     @apply text-2xl font-bold tracking-tight;
   }
 }
+
+/* The bar along the top of the window while search results load (src/components/search-form.tsx). */
+@keyframes search-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.search-progress {
+  animation: search-progress 1.1s ease-in-out infinite;
+}

@@ -10,6 +10,7 @@ import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
 import { type ExhibitorFilters, exhibitorFilters, exhibitorQuery, exhibitorWhere, industryTerms, isFiltered } from "@/lib/exhibitor-list";
+import { companyPage } from "@/lib/exhibitor-list-run";
 import { isHunterConfigured } from "@/lib/hunter-run";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
@@ -22,6 +23,7 @@ import { AiSearch } from "./ai-search";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
 import { tradeShowOptions } from "./show-select";
+import { SearchButton, SearchForm } from "@/components/search-form";
 
 const PAGE_SIZE = 50;
 // Filters set only by Ask AI (and the question itself); the search form keeps them as hidden fields.
@@ -47,23 +49,16 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   const where = exhibitorWhere(filters);
   const useAi = canEdit && isCompanyProfileConfigured();
   // Everything that doesn't depend on the companies on this page is read at once.
-  const [groups, matchingRows, total, shows, countries, lists, missingContacts, missingCountries] = await Promise.all([
-    db.exhibitor.groupBy({
-      by: ["companyKey"],
-      where: { AND: [where, { companyKey: { not: null } }] },
-      _min: { name: true },
-      orderBy: { _min: { name: "asc" } },
-    }),
-    db.exhibitor.count({ where }),
+  const [{ keys: pageKeys, companies: matching, rows: matchingRows }, total, shows, countries, lists, missingContacts, missingCountries] = await Promise.all([
+    companyPage(filters, page, PAGE_SIZE),
     db.$queryRaw<{ n: number }[]>`SELECT COUNT(DISTINCT "companyKey")::int AS n FROM "Exhibitor"`.then((r) => r[0]?.n ?? 0),
     tradeShowOptions(),
-    db.exhibitor.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
+    // groupBy runs in the database; findMany's distinct would load every exhibitor's country first.
+    db.exhibitor.groupBy({ by: ["country"], where: { country: { not: null } } }),
     db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
     useAi ? db.exhibitor.count({ where: missingContactWhere(show || undefined) }) : 0,
     canEdit ? countCountriesFromPhones() : 0,
   ]);
-  const matching = groups.length;
-  const pageKeys = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((g) => g.companyKey!);
   // Every row of the companies on this page, latest trade show first, which of them the
   // filters match, and which of this account's saved lists each company is on.
   const pageRows = { companyKey: { in: pageKeys } };
@@ -176,7 +171,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
       ) : (
         <section className="card overflow-hidden p-0">
           {isCompanyProfileConfigured() && <AiSearch action={askAiSearch.bind(null, slug)} question={filters.ai} />}
-          <form className="flex flex-wrap items-center gap-2 p-4" role="search">
+          <SearchForm className="flex flex-wrap items-center gap-2 p-4">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
               <input className="input pl-9" name="q" defaultValue={q} placeholder="Search by company, contact person or industry" aria-label="Search exhibitors" />
@@ -197,13 +192,13 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
             {AI_ONLY.map((k) =>
               filters[k] ? <input key={k} type="hidden" name={k} value={filters[k]} /> : null,
             )}
-            <button className="btn-secondary py-2">Search</button>
+            <SearchButton />
             {filtered && (
               <Link href={`/a/${slug}/exhibitors`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
                 Clear
               </Link>
             )}
-          </form>
+          </SearchForm>
           {/* What the AI understood, or filters only it can set; the drop-downs above show the rest. */}
           {chips.length > 0 && AI_ONLY.some((k) => filters[k]) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-2.5 text-sm">
