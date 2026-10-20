@@ -1,6 +1,7 @@
 import "server-only";
 import type { Role } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { currentSubscription, hasPaidAccess } from "@/lib/billing";
@@ -8,10 +9,23 @@ import { hasRole } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { billingConfigured } from "@/lib/stripe";
 
+// The lookups below are cached for one request: the account layout and the
+// page under it both check the user, and every database round trip is felt.
+const signedInUser = cache(async () => {
+  const session = await auth();
+  return session?.user?.id ? db.user.findUnique({ where: { id: session.user.id } }) : null;
+});
+
+const membershipOf = cache((userId: string, slug: string) =>
+  db.membership.findFirst({ where: { userId, organization: { slug } }, include: { organization: true } }),
+);
+
+/** The account's subscriptions, read once per request. */
+export const subscriptionsOf = cache((organizationId: string) => db.subscription.findMany({ where: { organizationId } }));
+
 /** The signed-in user, or a redirect to the login page. */
 export async function requireUser(callbackUrl?: string) {
-  const session = await auth();
-  const user = session?.user?.id ? await db.user.findUnique({ where: { id: session.user.id } }) : null;
+  const user = await signedInUser();
   if (!user) {
     redirect(callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login");
   }
@@ -26,10 +40,7 @@ export async function requireUser(callbackUrl?: string) {
  */
 export async function requireMembership(slug: string, minRole: Role = "MEMBER", { allowUnpaid = false } = {}) {
   const user = await requireUser(`/a/${slug}`);
-  const membership = await db.membership.findFirst({
-    where: { userId: user.id, organization: { slug } },
-    include: { organization: true },
-  });
+  const membership = await membershipOf(user.id, slug);
   if (!membership) notFound();
   if (!hasRole(membership.role, minRole)) notFound();
   // Accounts without a paid subscription only reach Billing, Users and
@@ -46,7 +57,7 @@ export async function requireMembership(slug: string, minRole: Role = "MEMBER", 
  */
 export async function accountHasAccess(organizationId: string, email: string): Promise<boolean> {
   if (!billingConfigured() || isPlatformAdmin(email)) return true;
-  const subscriptions = await db.subscription.findMany({ where: { organizationId } });
+  const subscriptions = await subscriptionsOf(organizationId);
   return hasPaidAccess(currentSubscription(subscriptions));
 }
 
