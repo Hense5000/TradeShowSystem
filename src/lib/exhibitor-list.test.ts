@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exhibitorFilters, exhibitorQuery, exhibitorWhere, isFiltered, NO_FILTERS } from "./exhibitor-list";
+import { exhibitorFilters, exhibitorQuery, exhibitorSql, exhibitorWhere, isFiltered, NO_FILTERS } from "./exhibitor-list";
 
 describe("exhibitor filters", () => {
   it("reads the page URL and drops an unknown country or a bad date", () => {
@@ -29,5 +29,13 @@ describe("exhibitor filters", () => {
   it("does not count the question alone as a filter", () => {
     expect(isFiltered({ ...NO_FILTERS, ai: "anything" })).toBe(false);
     expect(isFiltered({ ...NO_FILTERS, showCity: "Munich" })).toBe(true);
+  });
+
+  it("writes the same filters as SQL for the paged company list", () => {
+    expect(exhibitorSql(NO_FILTERS).sql).toBe("TRUE");
+    const sql = exhibitorSql({ ...NO_FILTERS, q: "acme", country: "DK", showCountry: "DE", from: "2027-03-01" });
+    expect(sql.sql).toContain('e."name" ILIKE ?');
+    expect(sql.sql).toContain('t."endDate" >= ?');
+    expect(sql.values).toEqual(["%acme%", "%acme%", "%acme%", "DK", "DE", new Date("2027-03-01")]);
   });
 });

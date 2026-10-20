@@ -22,6 +22,7 @@ import {
 import { CenterRow } from "./center-row";
 import { GroupRow } from "./group-row";
 import { RunButton } from "./run-button";
+import { SearchButton, SearchForm } from "@/components/search-form";
 
 // "Check now" reads several pages with the AI, which takes a while.
 export const maxDuration = 300;
@@ -206,12 +207,12 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
               center right away, ticked or not.
             </p>
           </div>
-          <form className="flex flex-wrap items-center gap-2" role="search">
+          <SearchForm className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
               <input className="input pl-9" name="q" defaultValue={q} placeholder="Find a center by name or city" aria-label="Search centers" />
             </div>
-            <button className="btn-secondary py-2">Search</button>
+            <SearchButton />
             {groupFilter && <input type="hidden" name="group" value={groupFilter.id} />}
             {(q || showAll) && chosen > 0 && (
               <Link href={`/a/${slug}/admin/show-finder`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
@@ -223,7 +224,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
                 Show all centers
               </Link>
             )}
-          </form>
+          </SearchForm>
         </div>
         <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
           {matching > centers.length

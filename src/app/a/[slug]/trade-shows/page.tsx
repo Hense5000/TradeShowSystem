@@ -13,6 +13,7 @@ import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organi
 import { FavoriteShowStar } from "./favorite-show-star";
 import { FetchAllCard } from "./fetch-all-card";
 import { OrganizerCard } from "./organizer-card";
+import { SearchButton, SearchForm } from "@/components/search-form";
 
 // "Fetch exhibitors for all" reads one page of an exhibitor directory per call to this page.
 export const maxDuration = 300;
@@ -132,7 +133,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
         </section>
       ) : (
         <section className="card overflow-hidden p-0">
-          <form className="flex flex-wrap items-center gap-2 p-4" role="search">
+          <SearchForm className="flex flex-wrap items-center gap-2 p-4">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
               <input className="input pl-9" name="q" defaultValue={q} placeholder="Search by name, city or organizer" aria-label="Search trade shows" />
@@ -148,13 +149,13 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
                 <option key={c.code} value={c.code}>{c.name}</option>
               ))}
             </select>
-            <button className="btn-secondary py-2">Search</button>
+            <SearchButton />
             {narrowed && (
               <Link href={`/a/${slug}/trade-shows?view=all`} className="px-2 text-sm font-semibold text-muted hover:text-ink">
                 Show all
               </Link>
             )}
-          </form>
+          </SearchForm>
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
             {view === "all" && !q && !country
               ? `${total} ${total === 1 ? "trade show" : "trade shows"}`
