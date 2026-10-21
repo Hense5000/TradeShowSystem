@@ -41,7 +41,11 @@ export const NEON_REGIONS: Record<string, { place: string; vercel: string }> = {
   "azure-gwc": { place: "Frankfurt, Germany (Azure)", vercel: "fra1" },
 };
 
-/** The Neon region in a database address, e.g. "eu-central-1" from ep-x-pooler.eu-central-1.aws.neon.tech, or null. */
+/**
+ * The Neon region in a database address, or null: the label before aws.neon.tech
+ * or azure.neon.tech, e.g. "eu-central-1" from ep-x-pooler.eu-central-1.aws.neon.tech
+ * or from newer addresses with a cell in between, like ep-x-pooler.c-2.eu-central-1.aws.neon.tech.
+ */
 export function neonRegion(databaseUrl: string | undefined): string | null {
   if (!databaseUrl) return null;
   let host: string;
@@ -50,7 +54,7 @@ export function neonRegion(databaseUrl: string | undefined): string | null {
   } catch {
     return null;
   }
-  const match = /^[^.]+\.([a-z0-9-]+)\.(?:aws|azure)\.neon\.tech$/.exec(host);
+  const match = /\.([a-z0-9-]+)\.(?:aws|azure)\.neon\.tech$/.exec(host);
   return match ? match[1] : null;
 }
 

@@ -5,6 +5,7 @@ describe("speed check", () => {
   it("reads the Neon region from the database address", () => {
     expect(neonRegion("postgresql://u:p@ep-cool-name-a1b2c3-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require")).toBe("eu-central-1");
     expect(neonRegion("postgresql://u:p@ep-x.azure-gwc.azure.neon.tech/db")).toBe("azure-gwc");
+    expect(neonRegion("postgres://u:p@ep-cool-name-a1b2c3-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require")).toBe("eu-central-1");
     expect(neonRegion("postgresql://app:app@localhost:5432/tradeshow")).toBeNull();
     expect(neonRegion(undefined)).toBeNull();
     expect(neonRegion("not a url")).toBeNull();
