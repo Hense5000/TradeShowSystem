@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { countryName } from "@/lib/countries";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { formatDateRange } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { favoriteRowsAt } from "@/lib/favorite-companies";
 import { byBooth, LEAD_LABEL, LEAD_PILL } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
@@ -19,15 +21,38 @@ export default async function MeetingPlanPage({ params, searchParams }: PageProp
   const show = showId ? await db.tradeShow.findUnique({ where: { id: showId }, include: { center: { select: { name: true } } } }) : null;
   if (!show) notFound();
 
-  const items = await db.savedListItem.findMany({
-    where: { list: { organizationId: organization.id, favorites: true }, exhibitor: { tradeShowId: show.id } },
-    include: {
-      exhibitor: true,
-      assignee: { select: { name: true, email: true } },
-      visitedBy: { select: { name: true, email: true } },
-    },
-  });
-  const rows = items.sort((a, b) => byBooth(a.exhibitor, b.exhibitor));
+  // A favorite company is on the plan of every show it exhibits at, with its
+  // booth at this show, though the favorite itself is its latest show's row.
+  await syncCompanyKeys();
+  const atShow = await favoriteRowsAt(organization.id, [show.id]);
+  const ids = atShow.map((r) => r.id);
+  const keys = [...new Set(atShow.flatMap((r) => (r.companyKey ? [r.companyKey] : [])))];
+  const [exhibitors, items, visits] = await Promise.all([
+    db.exhibitor.findMany({ where: { id: { in: ids } } }),
+    db.savedListItem.findMany({
+      where: { list: { organizationId: organization.id, favorites: true }, exhibitor: { OR: [{ id: { in: ids } }, { companyKey: { in: keys } }] } },
+      include: { exhibitor: { select: { id: true, companyKey: true } }, assignee: { select: { name: true, email: true } } },
+    }),
+    db.boothVisit.findMany({
+      where: { organizationId: organization.id, exhibitorId: { in: ids } },
+      include: { visitedBy: { select: { name: true, email: true } } },
+    }),
+  ]);
+  const company = (e: { id: string; companyKey: string | null }) => e.companyKey ?? e.id;
+  const itemOf = new Map(items.map((i) => [company(i.exhibitor), i]));
+  const visitOf = new Map(visits.map((v) => [v.exhibitorId, v]));
+  // One row per company, also if it was imported twice for the show.
+  const seen = new Set<string>();
+  const rows = exhibitors
+    .sort((a, b) => Number(itemOf.get(company(b))?.exhibitorId === b.id) - Number(itemOf.get(company(a))?.exhibitorId === a.id))
+    .flatMap((e) => {
+      const item = itemOf.get(company(e));
+      if (!item || seen.has(company(e))) return [];
+      seen.add(company(e));
+      const visit = visitOf.get(e.id);
+      return [{ ...item, exhibitor: e, visitedAt: visit?.visitedAt ?? null, visitedBy: visit?.visitedBy ?? null }];
+    })
+    .sort((a, b) => byBooth(a.exhibitor, b.exhibitor));
   const visitedCount = rows.filter((r) => r.visitedAt).length;
   const place = [show.center?.name, show.city, show.country && countryName(show.country)].filter(Boolean).join(" · ");
   const status = showStatus(show);

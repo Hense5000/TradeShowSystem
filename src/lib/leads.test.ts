@@ -34,6 +34,9 @@ describe("favorite filters", () => {
     const where = favoriteWhere("l1", { q: "acme", show: "s1", status: "NEW", followUp: "", owner: "" });
     expect(where).toMatchObject({ listId: "l1", leadStatus: "NEW", exhibitor: { tradeShowId: "s1" } });
     expect(where.exhibitor).toHaveProperty("OR");
+    // A favorite company counts at every show it exhibits at.
+    const atShow = favoriteWhere("l1", { q: "", show: "s1", status: "", followUp: "", owner: "" }, { showCompanies: ["acme.com"] });
+    expect(atShow.exhibitor).toEqual({ AND: [{ OR: [{ tradeShowId: "s1" }, { companyKey: { in: ["acme.com"] } }] }] });
     const day = new Date("2026-10-18T00:00:00Z");
     expect(favoriteWhere("l1", { q: "", show: "", status: "", followUp: "due", owner: "" }, { today: day })).toEqual({ listId: "l1", followUpAt: { lte: day } });
     const empty = { q: "", show: "", status: "", followUp: "" } as const;

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { appUrl } from "@/lib/app-url";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
@@ -29,6 +30,8 @@ import {
  */
 export async function runListDigest() {
   if (!isEmailConfigured()) return { skipped: "No email service is set up (RESEND_API_KEY and EMAIL_FROM)." };
+  // Favorites follow their company to its latest trade show first.
+  await syncCompanyKeys();
 
   const organizations = await db.organization.findMany({
     where: { savedLists: { some: { favorites: true, items: { some: {} } } } },

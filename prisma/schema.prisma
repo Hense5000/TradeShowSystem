@@ -10,9 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL") // pooled connection, used by the app
-  directUrl = env("DATABASE_URL_UNPOOLED") // direct connection, used for migrations
+  provider   = "postgresql"
+  url        = env("DATABASE_URL") // pooled connection, used by the app
+  directUrl  = env("DATABASE_URL_UNPOOLED") // direct connection, used for migrations
   // Trigram indexes, so searching for any part of a name stays fast with many rows.
   extensions = [pg_trgm]
 }
@@ -39,7 +39,7 @@ model User {
   invitationsSent Invitation[]     @relation("InvitedBy")
   savedListItems  SavedListItem[]
   assignedLeads   SavedListItem[]  @relation("LeadAssignee")
-  visitedLeads    SavedListItem[]  @relation("LeadVisitor")
+  boothVisits     BoothVisit[]
   favoriteShows   FavoriteShow[]
   trustedDevices  TrustedDevice[]
   loginCodes      LoginCode[]
@@ -112,6 +112,7 @@ model Organization {
   invoices              Invoice[]
   savedLists            SavedList[]
   favoriteShows         FavoriteShow[]
+  boothVisits           BoothVisit[]
   hiddenRecommendations HiddenShowRecommendation[]
   supportTickets        SupportTicket[]
 }
@@ -380,6 +381,7 @@ model Exhibitor {
   tradeShow TradeShow       @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
   addedBy   Organization?   @relation(fields: [addedByOrganizationId], references: [id], onDelete: SetNull)
   savedIn   SavedListItem[]
+  visits    BoothVisit[]
 
   @@index([tradeShowId])
   @@index([addedByOrganizationId])
@@ -433,19 +435,32 @@ model SavedListItem {
   followUpNote  String?
   // The user in the account who is responsible for the lead; null when no one is.
   assigneeId    String?
-  // Ticked off on the trade show's meeting plan: the booth has been visited.
-  visitedAt     DateTime?
-  visitedById   String?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
   addedBy   User?     @relation(fields: [addedById], references: [id], onDelete: SetNull)
   assignee  User?     @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  visitedBy User?     @relation("LeadVisitor", fields: [visitedById], references: [id], onDelete: SetNull)
 
   @@id([listId, exhibitorId])
   @@index([exhibitorId])
   @@index([assigneeId])
+}
+
+// Ticked off on a trade show's meeting plan: the account has visited the
+// booth. One per show, since a favorite company is on the plan of every show
+// it exhibits at; exhibitorId is the company's row at that show.
+model BoothVisit {
+  organizationId String
+  exhibitorId    String
+  visitedAt      DateTime @default(now())
+  visitedById    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exhibitor    Exhibitor    @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  visitedBy    User?        @relation(fields: [visitedById], references: [id], onDelete: SetNull)
+
+  @@id([organizationId, exhibitorId])
+  @@index([exhibitorId])
 }
 
 // How far an account has come with a favorite exhibitor (see src/lib/leads.ts).
