@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
+import { moveFavoritesToLatestShow } from "@/lib/company-run";
 import { db } from "@/lib/db";
 import { type ExhibitorFilters, exhibitorWhere } from "@/lib/exhibitor-list";
 import { checkListName, FAVORITES_NAME, MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
@@ -32,6 +33,11 @@ async function takenNames(organizationId: string, exceptId?: string) {
 async function ownListId(organizationId: string, listId: string) {
   const list = await db.savedList.findFirst({ where: { id: listId, organizationId }, select: { id: true } });
   return list?.id;
+}
+
+async function companyKeysOf(exhibitorIds: string[]): Promise<string[]> {
+  const rows = await db.exhibitor.findMany({ where: { id: { in: exhibitorIds }, companyKey: { not: null } }, select: { companyKey: true } });
+  return [...new Set(rows.map((r) => r.companyKey!))];
 }
 
 /** The account's Favorites list, created the first time it is needed. */
@@ -102,6 +108,8 @@ export async function deleteList(slug: string, listId: string): Promise<ActionSt
 export async function toggleFavorite(slug: string, exhibitorIds: string | string[], add: boolean) {
   const { user, organization } = await requireMembership(slug);
   await setInList(await favoritesListId(organization.id), exhibitorIds, add, user.id);
+  // A star given while the list was filtered on an earlier show still lands on the company's latest show.
+  if (add) await moveFavoritesToLatestShow(await companyKeysOf(typeof exhibitorIds === "string" ? [exhibitorIds] : exhibitorIds.slice(0, 1)));
   refresh(slug);
 }
 
@@ -138,6 +146,7 @@ export async function addShownToList(slug: string, filters: ExhibitorFilters, _p
     if (companies.size >= MAX_ADD_AT_ONCE) break;
   }
   await db.savedListItem.createMany({ data: [...companies.values()].map((exhibitorId) => ({ listId, exhibitorId, addedById: user.id })), skipDuplicates: true });
+  if (chosen === "favorites") await moveFavoritesToLatestShow(await companyKeysOf([...companies.values()]));
   await db.savedList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
   refresh(slug);
   redirect(`/a/${slug}/lists/${listId}`);

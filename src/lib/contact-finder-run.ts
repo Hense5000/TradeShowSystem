@@ -13,6 +13,7 @@ import {
   linkedContacts,
   MAX_CONTACT_PAGE_CHARS,
 } from "@/lib/contact-finder";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { db } from "@/lib/db";
 import { addHunterContact, hunterDomain, hunterUpdate } from "@/lib/hunter";
 import { HunterStopError, hunterDomainSearch, isHunterConfigured } from "@/lib/hunter-run";
@@ -190,6 +191,8 @@ export async function fillMissingContacts({
   useHunter?: boolean;
 }): Promise<ContactFillResult> {
   const started = Date.now();
+  // New rows of a company known from other shows get its contact from there first.
+  await syncCompanyKeys();
   let hunterOn = useHunter && isHunterConfigured();
   const totals: ContactFillResult = { filled: 0, noInfo: 0, failed: 0, left: 0, fromHunter: 0 };
   if (!isContactFinderConfigured()) {

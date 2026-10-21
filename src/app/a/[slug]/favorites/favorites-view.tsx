@@ -3,10 +3,12 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { defaultDraftLanguage } from "@/lib/email-draft";
+import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
@@ -28,12 +30,19 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
   const filters = favoriteFilters(sp);
   const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
 
-  const list = await db.savedList.findFirst({ where: { organizationId: organization.id, favorites: true }, select: { id: true } });
+  // A favorite company follows the company to its latest trade show (see src/lib/company-run.ts).
+  await syncCompanyKeys();
+  const [list, favoriteRows] = await Promise.all([
+    db.savedList.findFirst({ where: { organizationId: organization.id, favorites: true }, select: { id: true } }),
+    // Every show the favorite companies exhibit at, for the trade show filter and the counts on the Trade shows tab.
+    favoriteRowsAt(organization.id),
+  ]);
   const listId = list?.id ?? "";
   const day = today();
-  const where = favoriteWhere(listId, filters, { today: day, userId: user.id });
+  const showCompanies = filters.show ? favoriteRows.filter((r) => r.tradeShowId === filters.show && r.companyKey).map((r) => r.companyKey!) : [];
+  const where = favoriteWhere(listId, filters, { today: day, userId: user.id, showCompanies });
 
-  const [byStatus, shownCount, items, leadShows, favoriteShows, memberships, myCount, recommended] = await Promise.all([
+  const [byStatus, shownCount, items, favoriteShows, memberships, myCount, recommended] = await Promise.all([
     db.savedListItem.groupBy({ by: ["leadStatus"], where: { listId }, _count: true }),
     db.savedListItem.count({ where }),
     tab === "exhibitors"
@@ -46,8 +55,6 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
           take: PAGE_SIZE,
         })
       : [],
-    // The trade shows of the favorite exhibitors, for the trade show filter and the counts on the Trade shows tab.
-    db.exhibitor.groupBy({ by: ["tradeShowId"], where: { savedIn: { some: { listId } } }, _count: true }),
     db.favoriteShow.findMany({
       where: { organizationId: organization.id },
       include: { tradeShow: { include: { center: { select: { name: true } }, _count: { select: { exhibitors: true } } } } },
@@ -63,7 +70,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
 
   const statusCount = (s: LeadStatus) => byStatus.find((b) => b.leadStatus === s)?._count ?? 0;
   const exhibitorTotal = byStatus.reduce((sum, b) => sum + b._count, 0);
-  const leadsAtShow = new Map(leadShows.map((s) => [s.tradeShowId, s._count]));
+  const leadsAtShow = countByShow(favoriteRows);
   const filterShows = await db.tradeShow.findMany({
     where: { id: { in: [...leadsAtShow.keys()] } },
     select: { id: true, name: true },

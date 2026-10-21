@@ -114,10 +114,17 @@ export async function draftLeadEmail(slug: string, exhibitorId: string, _prev: D
 /** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */
 export async function setVisited(slug: string, exhibitorId: string, visited: boolean) {
   const { user, organization } = await requireMembership(slug);
-  await db.savedListItem.updateMany({
-    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
-    data: visited ? { visitedAt: new Date(), visitedById: user.id } : { visitedAt: null, visitedById: null },
-  });
+  // exhibitorId is the company's row at the show; each show keeps its own tick.
+  if (visited) {
+    if (!(await db.exhibitor.findUnique({ where: { id: exhibitorId }, select: { id: true } }))) return;
+    await db.boothVisit.upsert({
+      where: { organizationId_exhibitorId: { organizationId: organization.id, exhibitorId } },
+      create: { organizationId: organization.id, exhibitorId, visitedById: user.id },
+      update: {},
+    });
+  } else {
+    await db.boothVisit.deleteMany({ where: { organizationId: organization.id, exhibitorId } });
+  }
   revalidatePath(`/a/${slug}/favorites/plan`);
 }
 

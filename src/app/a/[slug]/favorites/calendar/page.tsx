@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { isOn, monthParam, monthWeeks, parseMonth, shiftMonth } from "@/lib/calendar";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 
@@ -22,19 +24,13 @@ export default async function FavoritesCalendarPage({ params, searchParams }: Pa
   const weeks = monthWeeks(month);
   const monthEnd = new Date(shiftMonth(month, 1).getTime() - 1);
 
-  const [favorites, list] = await Promise.all([
-    db.favoriteShow.findMany({
-      where: { organizationId: organization.id },
-      include: { tradeShow: { include: { center: { select: { name: true } } } } },
-    }),
-    db.savedList.findFirst({ where: { organizationId: organization.id, favorites: true }, select: { id: true } }),
-  ]);
-  const leads = await db.exhibitor.groupBy({
-    by: ["tradeShowId"],
-    where: { tradeShowId: { in: favorites.map((f) => f.tradeShowId) }, savedIn: { some: { listId: list?.id ?? "" } } },
-    _count: true,
+  await syncCompanyKeys();
+  const favorites = await db.favoriteShow.findMany({
+    where: { organizationId: organization.id },
+    include: { tradeShow: { include: { center: { select: { name: true } } } } },
   });
-  const leadsAt = new Map(leads.map((l) => [l.tradeShowId, l._count]));
+  // A favorite company counts at every one of these shows it exhibits at.
+  const leadsAt = countByShow(await favoriteRowsAt(organization.id, favorites.map((f) => f.tradeShowId)));
   const shows = favorites
     .map((f) => ({ ...f.tradeShow, status: showStatus(f.tradeShow) }))
     .sort((a, b) => a.startDate.getTime() - b.startDate.getTime() || a.name.localeCompare(b.name));

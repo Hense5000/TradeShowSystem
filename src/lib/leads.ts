@@ -103,7 +103,16 @@ export function favoriteFilters(params: Params): FavoriteFilters {
 export function favoriteWhere(
   listId: string,
   { q, show, status, followUp, owner }: FavoriteFilters,
-  { today = todayUtc(), userId }: { today?: Date; userId?: string } = {},
+  {
+    today = todayUtc(),
+    userId,
+    showCompanies = [],
+  }: {
+    today?: Date;
+    userId?: string;
+    /** The company keys of the favorite companies that exhibit at the show filtered on, also when the favorite is their row at another show. */
+    showCompanies?: string[];
+  } = {},
 ): Prisma.SavedListItemWhereInput {
   return {
     listId,
@@ -113,7 +122,8 @@ export function favoriteWhere(
     ...(followUp === "set" && { followUpAt: { not: null } }),
     ...((show || q) && {
       exhibitor: {
-        ...(show && { tradeShowId: show }),
+        ...(show &&
+          (showCompanies.length > 0 ? { AND: [{ OR: [{ tradeShowId: show }, { companyKey: { in: showCompanies } }] }] } : { tradeShowId: show })),
         ...(q && {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
