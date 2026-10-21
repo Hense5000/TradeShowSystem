@@ -1,5 +1,5 @@
 import "server-only";
-import type { Role } from "@prisma/client";
+import type { Role, Subscription } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "@/auth";
@@ -11,17 +11,20 @@ import { billingConfigured } from "@/lib/stripe";
 
 // The lookups below are cached for one request: the account layout and the
 // page under it both check the user, and every database round trip is felt.
+const sessionUserId = cache(async () => (await auth())?.user?.id ?? null);
+
 const signedInUser = cache(async () => {
-  const session = await auth();
-  return session?.user?.id ? db.user.findUnique({ where: { id: session.user.id } }) : null;
+  const id = await sessionUserId();
+  return id ? db.user.findUnique({ where: { id } }) : null;
 });
 
-const membershipOf = cache((userId: string, slug: string) =>
-  db.membership.findFirst({ where: { userId, organization: { slug } }, include: { organization: true } }),
+/** The user with their membership in the account with this slug, its account and subscriptions, in one query. */
+const userInAccount = cache((userId: string, slug: string) =>
+  db.user.findUnique({
+    where: { id: userId },
+    include: { memberships: { where: { organization: { slug } }, include: { organization: { include: { subscriptions: true } } } } },
+  }),
 );
-
-/** The account's subscriptions, read once per request. */
-export const subscriptionsOf = cache((organizationId: string) => db.subscription.findMany({ where: { organizationId } }));
 
 /** The signed-in user, or a redirect to the login page. */
 export async function requireUser(callbackUrl?: string) {
@@ -39,25 +42,28 @@ export async function requireUser(callbackUrl?: string) {
  * slugs can't be probed.
  */
 export async function requireMembership(slug: string, minRole: Role = "MEMBER", { allowUnpaid = false } = {}) {
-  const user = await requireUser(`/a/${slug}`);
-  const membership = await membershipOf(user.id, slug);
+  const userId = await sessionUserId();
+  const found = userId ? await userInAccount(userId, slug) : null;
+  if (!found) redirect(`/login?callbackUrl=${encodeURIComponent(`/a/${slug}`)}`);
+  const { memberships, ...user } = found;
+  const membership = memberships[0];
   if (!membership) notFound();
   if (!hasRole(membership.role, minRole)) notFound();
   // Accounts without a paid subscription only reach Billing, Users and
   // Company profile (the pages that pass allowUnpaid).
-  if (!allowUnpaid && !(await accountHasAccess(membership.organizationId, user.email))) {
+  if (!allowUnpaid && !accountHasAccess(membership.organization.subscriptions, user.email)) {
     redirect(`/a/${slug}/billing`);
   }
   return { user, membership, organization: membership.organization };
 }
 
 /**
- * Whether the account may use the app. Always true while payments aren't set
- * up, and for platform admins, so they can look into any account.
+ * Whether the account with these subscriptions may use the app. Always true
+ * while payments aren't set up, and for platform admins, so they can look
+ * into any account.
  */
-export async function accountHasAccess(organizationId: string, email: string): Promise<boolean> {
+export function accountHasAccess(subscriptions: Subscription[], email: string): boolean {
   if (!billingConfigured() || isPlatformAdmin(email)) return true;
-  const subscriptions = await subscriptionsOf(organizationId);
   return hasPaidAccess(currentSubscription(subscriptions));
 }
 

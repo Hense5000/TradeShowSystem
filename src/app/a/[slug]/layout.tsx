@@ -5,7 +5,7 @@ import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
-import { accountHasAccess, requireMembership, subscriptionsOf } from "@/lib/tenant";
+import { accountHasAccess, requireMembership } from "@/lib/tenant";
 import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
@@ -13,10 +13,10 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const { user, membership, organization } = await requireMembership(slug, "MEMBER", { allowUnpaid: true });
   const userName = user.name ?? user.email;
   const platformAdmin = isPlatformAdmin(user.email);
-  const [primaryContact, hasAccess, subscriptions, ticketsWaiting] = await Promise.all([
+  const { subscriptions } = organization;
+  const hasAccess = accountHasAccess(subscriptions, user.email);
+  const [primaryContact, ticketsWaiting] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
-    accountHasAccess(organization.id, user.email),
-    subscriptionsOf(organization.id),
     platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
   ]);
   const paymentFailed = currentSubscription(subscriptions)?.status === "past_due";
@@ -68,6 +68,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
                 title: "Super admin",
                 items: [
                   { label: "Feature control", icon: "shield" as const, path: "admin" },
+                  { label: "Speed check", icon: "dashboard" as const, path: "admin/speed" },
                   {
                     label: "Support requests",
                     icon: "help" as const,
