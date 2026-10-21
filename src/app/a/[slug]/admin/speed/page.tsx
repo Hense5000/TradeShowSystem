@@ -36,7 +36,8 @@ export default async function SpeedCheckPage({ params }: PageProps<"/a/[slug]/ad
   const total = Math.round(performance.now() - requestStart);
 
   const serverCode = process.env.VERCEL_REGION ?? "";
-  const dbCode = neonRegion(process.env.DATABASE_URL);
+  // The Neon integration also sets the bare host name (PGHOST); either one names the region.
+  const dbCode = neonRegion(process.env.DATABASE_URL) ?? neonRegion(process.env.PGHOST && `postgresql://${process.env.PGHOST}`);
   const dbRegion = dbCode ? NEON_REGIONS[dbCode] : undefined;
   const sameRegion = dbRegion && serverCode ? dbRegion.vercel === serverCode : undefined;
   const best = dbRegion ? `${VERCEL_REGIONS[dbRegion.vercel]} (${dbRegion.vercel})` : "";
