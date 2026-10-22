@@ -8,11 +8,15 @@ import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { followUpLabel } from "@/lib/leads";
 import {
   changedFields,
+  changedShowFields,
   type DigestEntry,
   type DigestFollowUp,
+  type DigestShow,
   type DigestSuggestion,
   digestEmail,
   exhibitorSnapshot,
+  showSnapshot,
+  type ShowSnapshot,
   similarExhibitors,
   type Snapshot,
 } from "@/lib/list-digest";
@@ -23,8 +27,9 @@ import {
  * starred exhibitors whose details changed, and follow-ups due today or
  * overdue on the user's own and unassigned leads, and new exhibitors at the
  * account's favorite trade shows that share an industry or a country with
- * the starred ones. Afterwards every reported
- * exhibitor's details are remembered, so nothing is told twice; a due
+ * the starred ones, and favorite trade shows whose details changed or that
+ * got new exhibitors. Each user chooses which of these parts they get.
+ * Afterwards every reported exhibitor's and show's details are remembered, so nothing is told twice; a due
  * follow-up is told every day until it is moved or cleared on the Favorites
  * page.
  */
@@ -34,7 +39,7 @@ export async function runListDigest() {
   await syncCompanyKeys();
 
   const organizations = await db.organization.findMany({
-    where: { savedLists: { some: { favorites: true, items: { some: {} } } } },
+    where: { OR: [{ savedLists: { some: { favorites: true, items: { some: {} } } } }, { favoriteShows: { some: {} } }] },
     select: { id: true, name: true, slug: true },
   });
   const day = today();
@@ -69,7 +74,13 @@ export async function runListDigest() {
     // the show was starred) that look like the starred exhibitors.
     const favoriteShows = await db.favoriteShow.findMany({
       where: { organizationId: org.id },
-      select: { tradeShowId: true, addedAt: true, suggestedUntil: true },
+      select: {
+        tradeShowId: true,
+        addedAt: true,
+        suggestedUntil: true,
+        snapshot: true,
+        tradeShow: { select: { name: true, startDate: true, endDate: true, city: true, country: true, website: true, exhibitorDirectoryUrl: true, center: { select: { name: true } } } },
+      },
     });
     const candidates =
       favoriteShows.length > 0
@@ -91,19 +102,51 @@ export async function runListDigest() {
       why,
       url: `${base}/exhibitors?show=${e.tradeShow.id}&q=${encodeURIComponent(e.name)}`,
     }));
-    // Each new exhibitor is only suggested once, also when a send fails.
-    if (favoriteShows.length > 0) await db.favoriteShow.updateMany({ where: { organizationId: org.id }, data: { suggestedUntil: runAt } });
 
-    if (news.length === 0 && due.length === 0 && suggestions.length === 0) continue;
+    // Favorite trade shows whose details changed, or that got new exhibitors,
+    // since the last email. A show seen for the first time is only remembered.
+    const newCounts =
+      favoriteShows.length > 0
+        ? await db.exhibitor.groupBy({
+            by: ["tradeShowId"],
+            where: { OR: favoriteShows.map((f) => ({ tradeShowId: f.tradeShowId, createdAt: { gt: f.suggestedUntil ?? f.addedAt, lte: runAt } })) },
+            _count: { _all: true },
+          })
+        : [];
+    const newByShow = new Map(newCounts.map((c) => [c.tradeShowId, c._count._all]));
+    const showNews = favoriteShows.map((f) => {
+      const now = showSnapshot(f.tradeShow);
+      const changes = f.snapshot === null ? [] : changedShowFields(f.snapshot as Partial<ShowSnapshot>, now);
+      return { f, now, changes, newExhibitors: newByShow.get(f.tradeShowId) ?? 0 };
+    });
+    const shows: DigestShow[] = showNews
+      .filter((n) => n.changes.length > 0 || n.newExhibitors > 0)
+      .sort((a, b) => a.f.tradeShow.startDate.getTime() - b.f.tradeShow.startDate.getTime())
+      .map((n) => ({ tradeShow: n.f.tradeShow.name, changes: n.changes, newExhibitors: n.newExhibitors, url: `${base}/exhibitors?show=${n.f.tradeShowId}` }));
+
+    // Each new exhibitor is only suggested once and each show change only told
+    // once, also when a send fails.
+    if (favoriteShows.length > 0) {
+      await db.$transaction(
+        showNews.map((n) =>
+          db.favoriteShow.update({
+            where: { organizationId_tradeShowId: { organizationId: org.id, tradeShowId: n.f.tradeShowId } },
+            data: { suggestedUntil: runAt, snapshot: n.now as Prisma.InputJsonObject },
+          }),
+        ),
+      );
+    }
+
+    if (news.length === 0 && due.length === 0 && suggestions.length === 0 && shows.length === 0) continue;
 
     const members = await db.membership.findMany({
       where: { organizationId: org.id, user: { listEmails: true } },
-      select: { user: { select: { id: true, email: true } } },
+      select: { user: { select: { id: true, email: true, emailExhibitorChanges: true, emailShowChanges: true, emailFollowUps: true, emailSuggestions: true } } },
     });
     for (const { user } of members) {
       // One entry per exhibitor; one per list it was added to by someone else.
       const entries = new Map<string, DigestEntry>();
-      for (const n of news) {
+      for (const n of user.emailExhibitorChanges ? news : []) {
         const e = n.item.exhibitor;
         if (n.added) {
           if (n.item.addedById === user.id) continue;
@@ -120,14 +163,16 @@ export async function runListDigest() {
         }
       }
       // Each user is reminded about their own leads and the ones no one is responsible for.
-      const followUps: DigestFollowUp[] = due
+      const followUps: DigestFollowUp[] = (user.emailFollowUps ? due : [])
         .filter((i) => i.assigneeId === null || i.assigneeId === user.id)
         .map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, due: followUpLabel(i.followUpAt!, day), note: i.followUpNote }));
-      if (entries.size === 0 && followUps.length === 0 && suggestions.length === 0) continue;
+      const mySuggestions = user.emailSuggestions ? suggestions : [];
+      const myShows = user.emailShowChanges ? shows : [];
+      if (entries.size === 0 && followUps.length === 0 && mySuggestions.length === 0 && myShows.length === 0) continue;
       try {
         await sendEmail({
           to: user.email,
-          ...digestEmail({ accountName: org.name, entries: [...entries.values()], followUps, suggestions, listsUrl: `${base}/lists`, favoritesUrl: `${base}/favorites/exhibitors` }),
+          ...digestEmail({ accountName: org.name, entries: [...entries.values()], followUps, suggestions: mySuggestions, shows: myShows, listsUrl: `${base}/lists`, favoritesUrl: `${base}/favorites/exhibitors` }),
         });
         sent++;
       } catch (e) {

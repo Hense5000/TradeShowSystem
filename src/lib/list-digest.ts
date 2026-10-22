@@ -1,4 +1,5 @@
 import { countryName } from "@/lib/countries";
+import { formatDateRange } from "@/lib/dates";
 
 // The daily email about what is new in an account's Favorites list. This file
 // holds the parts that need no database, so they can be tested on their own.
@@ -32,6 +33,56 @@ export function changedFields(before: Partial<Snapshot>, now: Snapshot): Change[
     .filter((k) => (before[k] ?? null) !== (now[k] ?? null))
     .map((k) => ({ label: DIGEST_FIELDS[k], value: k === "country" && now[k] ? countryName(now[k]) : now[k] }));
 }
+
+/** The trade show details the email watches, with the label it uses for each. */
+export const SHOW_FIELDS = {
+  name: "Name",
+  dates: "Dates",
+  city: "City",
+  country: "Country",
+  website: "Website",
+  exhibitorDirectoryUrl: "Exhibitor list",
+  center: "Exhibition center",
+} as const;
+
+type ShowField = keyof typeof SHOW_FIELDS;
+export type ShowSnapshot = Record<ShowField, string | null>;
+
+export function showSnapshot(s: {
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  city: string | null;
+  country: string | null;
+  website: string | null;
+  exhibitorDirectoryUrl: string | null;
+  center: { name: string } | null;
+}): ShowSnapshot {
+  return {
+    name: s.name,
+    dates: formatDateRange(s.startDate, s.endDate),
+    city: s.city,
+    country: s.country,
+    website: s.website,
+    exhibitorDirectoryUrl: s.exhibitorDirectoryUrl,
+    center: s.center?.name ?? null,
+  };
+}
+
+/** What differs between the last reported trade show details and the details now. */
+export function changedShowFields(before: Partial<ShowSnapshot>, now: ShowSnapshot): Change[] {
+  return (Object.keys(SHOW_FIELDS) as ShowField[])
+    .filter((k) => (before[k] ?? null) !== (now[k] ?? null))
+    .map((k) => ({ label: SHOW_FIELDS[k], value: k === "country" && now[k] ? countryName(now[k]) : now[k] }));
+}
+
+/** A favorite trade show that changed or got new exhibitors since the last email. */
+export type DigestShow = {
+  tradeShow: string;
+  changes: Change[];
+  newExhibitors: number;
+  url: string; // the show's exhibitors on the Exhibitors page
+};
 
 /** One exhibitor in the email: the lists it is on, who added it and what changed. */
 export type DigestEntry = {
@@ -92,13 +143,14 @@ const short = (s: string) => (s.length > 200 ? `${s.slice(0, 197)}…` : s);
 /**
  * The email for one person: subject, HTML and plain text. Follow-ups due
  * today or overdue come first; then what was added and what changed; then
- * new exhibitors at favorite trade shows that look like the favorites.
+ * changes to favorite trade shows; then new exhibitors at favorite trade shows that look like the favorites.
  */
 export function digestEmail({
   accountName,
   entries,
   followUps = [],
   suggestions = [],
+  shows = [],
   listsUrl,
   favoritesUrl,
 }: {
@@ -106,6 +158,7 @@ export function digestEmail({
   entries: DigestEntry[];
   followUps?: DigestFollowUp[];
   suggestions?: DigestSuggestion[];
+  shows?: DigestShow[];
   listsUrl: string;
   favoritesUrl: string;
 }) {
@@ -115,6 +168,7 @@ export function digestEmail({
     followUps.length > 0 && `${followUps.length} ${followUps.length === 1 ? "follow-up" : "follow-ups"} due`,
     added > 0 && `${added} new ${added === 1 ? "exhibitor" : "exhibitors"}`,
     changed > 0 && `${changed} updated`,
+    shows.length > 0 && `${shows.length} ${shows.length === 1 ? "trade show" : "trade shows"} changed`,
     suggestions.length > 0 && `${suggestions.length} new ${suggestions.length === 1 ? "exhibitor" : "exhibitors"} you may like`,
   ].filter(Boolean);
   const listed = suggestions.slice(0, MAX_SUGGESTIONS);
@@ -126,7 +180,11 @@ export function digestEmail({
     ...(e.addedBy ? [`Added to ${e.lists.join(", ")} by ${e.addedBy}`] : []),
     ...e.changes.map((c) => `${c.label}: ${c.value ? short(c.value) : "removed"}`),
   ];
-  const footer = `You get this email because you are a user of ${accountName} in Trade Show System. Turn it off on the Saved lists page: ${listsUrl}`;
+  const showLines = (s: DigestShow) => [
+    ...s.changes.map((c) => `${c.label}: ${c.value ? short(c.value) : "removed"}`),
+    ...(s.newExhibitors > 0 ? [`${s.newExhibitors} new ${s.newExhibitors === 1 ? "exhibitor" : "exhibitors"} on the list`] : []),
+  ];
+  const footer = `You get this email because you are a user of ${accountName} in Trade Show System. Choose what it tells you, or turn it off, on the Saved lists page: ${listsUrl}`;
 
   const text = [
     ...(followUps.length > 0
@@ -141,6 +199,13 @@ export function digestEmail({
           `What is new in ${accountName}'s Favorites:`,
           "",
           ...entries.flatMap((e) => [`${e.exhibitor} (${e.tradeShow})${e.addedBy ? "" : ` · ${e.lists.join(", ")}`}`, ...lines(e).map((l) => `  - ${l}`), ""]),
+        ]
+      : []),
+    ...(shows.length > 0
+      ? [
+          "Changes to your favorite trade shows:",
+          "",
+          ...shows.flatMap((s) => [s.tradeShow, ...showLines(s).map((l) => `  - ${l}`), `  Open: ${s.url}`, ""]),
         ]
       : []),
     ...(listed.length > 0
@@ -182,8 +247,20 @@ export function digestEmail({
           `</div>`,
       )
       .join("") +
+    (shows.length > 0
+      ? `<h2 style="font-size:18px;margin:${followUps.length + entries.length > 0 ? "20px" : "0"} 0 12px">Changes to your favorite trade shows</h2>` +
+        shows
+          .map(
+            (s) =>
+              `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 10px">` +
+              `<div><span style="font-weight:bold">${escape(s.tradeShow)}</span> <a href="${escape(s.url)}" style="color:#287bbf;font-size:12px;font-weight:bold;text-decoration:none">Open</a></div>` +
+              `<ul style="margin:8px 0 0;padding-left:18px">${showLines(s).map((l) => `<li>${escape(l)}</li>`).join("")}</ul>` +
+              `</div>`,
+          )
+          .join("")
+      : "") +
     (listed.length > 0
-      ? `<h2 style="font-size:18px;margin:${followUps.length + entries.length > 0 ? "20px" : "0"} 0 4px">New exhibitors you may like</h2>` +
+      ? `<h2 style="font-size:18px;margin:${followUps.length + entries.length + shows.length > 0 ? "20px" : "0"} 0 4px">New exhibitors you may like</h2>` +
         `<p style="color:#64748b;font-size:12px;margin:0 0 12px">New at your favorite trade shows, and like the exhibitors you have starred.</p>` +
         listed
           .map(

@@ -22,18 +22,23 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  name           String?
-  passwordHash   String?
-  emailVerified  DateTime?
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  name                  String?
+  passwordHash          String?
+  emailVerified         DateTime?
   // Gets the daily email about what is new on the saved lists of their accounts.
-  listEmails     Boolean   @default(true)
+  listEmails            Boolean   @default(true)
+  // What the daily email tells, each part on or off on the Saved lists page.
+  emailExhibitorChanges Boolean   @default(true) // starred exhibitors added by others or changed
+  emailShowChanges      Boolean   @default(true) // favorite trade shows changed or got new exhibitors
+  emailFollowUps        Boolean   @default(true) // follow-ups due today or overdue
+  emailSuggestions      Boolean   @default(true) // new exhibitors you may like
   // Goes up by one on every login. A session made before the latest login no
   // longer matches and is logged out, so one login can't be used in two places.
-  sessionVersion Int       @default(0)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  sessionVersion        Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   memberships     Membership[]
   invitationsSent Invitation[]     @relation("InvitedBy")
@@ -482,6 +487,9 @@ model FavoriteShow {
   // Exhibitors added to the show up to this time have been looked at for the
   // daily email's "New exhibitors you may like"; null until the first email.
   suggestedUntil DateTime?
+  // The show's details as the daily email last reported them (see
+  // showSnapshot in src/lib/list-digest.ts); null until the first email.
+  snapshot       Json?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tradeShow    TradeShow    @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
