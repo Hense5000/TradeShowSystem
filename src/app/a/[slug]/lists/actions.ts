@@ -158,3 +158,20 @@ export async function setListEmails(slug: string, on: boolean) {
   await db.user.update({ where: { id: user.id }, data: { listEmails: on } });
   revalidatePath(`/a/${slug}/lists`);
 }
+
+/** The parts of the daily email the signed-in user wants; a part left unticked is not told. */
+export async function setEmailParts(slug: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { user } = await requireMembership(slug);
+  const on = (name: string) => formData.get(name) === "on";
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      emailExhibitorChanges: on("exhibitors"),
+      emailShowChanges: on("shows"),
+      emailFollowUps: on("followUps"),
+      emailSuggestions: on("suggestions"),
+    },
+  });
+  revalidatePath(`/a/${slug}/lists`);
+  return undefined;
+}

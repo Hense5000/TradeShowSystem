@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changedFields, digestEmail, exhibitorSnapshot, MAX_SUGGESTIONS, similarExhibitors } from "./list-digest";
+import { changedFields, changedShowFields, digestEmail, exhibitorSnapshot, MAX_SUGGESTIONS, showSnapshot, similarExhibitors } from "./list-digest";
 
 const base = exhibitorSnapshot({
   name: "Acme",
@@ -104,5 +104,42 @@ describe("new exhibitors you may like", () => {
     expect(mail.text).not.toContain("Co 10 ");
     expect(mail.html).toContain("New exhibitors you may like");
     expect(mail.html).toContain('href="https://x.test/a/bolt/exhibitors?show=s&amp;q=Co%200"');
+  });
+});
+
+describe("favorite trade show changes", () => {
+  const show = {
+    name: "Medica 2026",
+    startDate: new Date("2026-11-16"),
+    endDate: new Date("2026-11-19"),
+    city: "Düsseldorf",
+    country: "DE",
+    website: "https://medica.de",
+    exhibitorDirectoryUrl: null,
+    center: { name: "Messe Düsseldorf" },
+  };
+
+  it("reports new dates, a new exhibitor list and a removed center", () => {
+    const before = showSnapshot(show);
+    const now = showSnapshot({ ...show, endDate: new Date("2026-11-20"), exhibitorDirectoryUrl: "https://medica.de/list", center: null });
+    expect(changedShowFields(before, now)).toEqual([
+      { label: "Dates", value: "Nov 16 – 20, 2026" },
+      { label: "Exhibitor list", value: "https://medica.de/list" },
+      { label: "Exhibition center", value: null },
+    ]);
+    expect(changedShowFields(before, showSnapshot(show))).toEqual([]);
+  });
+
+  it("lists the show changes and new exhibitors in the email", () => {
+    const mail = digestEmail({
+      accountName: "Bolt",
+      entries: [],
+      shows: [{ tradeShow: "Medica 2026", changes: [{ label: "City", value: "Essen" }], newExhibitors: 3, url: "https://x.test/a/bolt/exhibitors?show=s" }],
+      listsUrl: "https://x.test/a/bolt/lists",
+      favoritesUrl: "https://x.test/a/bolt/favorites",
+    });
+    expect(mail.subject).toBe("Bolt: 1 trade show changed in your Favorites");
+    expect(mail.text).toContain("Medica 2026\n  - City: Essen\n  - 3 new exhibitors on the list\n  Open: https://x.test/a/bolt/exhibitors?show=s");
+    expect(mail.html).toContain("Changes to your favorite trade shows");
   });
 });

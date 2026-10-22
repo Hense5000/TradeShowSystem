@@ -6,7 +6,14 @@ import { db } from "@/lib/db";
 import { isEmailConfigured } from "@/lib/email";
 import { FAVORITES_NAME, MAX_LIST_NAME } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
-import { createList, setListEmails } from "./actions";
+import { createList, setEmailParts, setListEmails } from "./actions";
+
+const emailParts = [
+  { name: "exhibitors", field: "emailExhibitorChanges", title: "Changes to favorite exhibitors", text: "New contact person, email, phone, booth and other details, and exhibitors other users starred." },
+  { name: "shows", field: "emailShowChanges", title: "Changes to favorite trade shows", text: "New dates, city, website, exhibitor list or exhibition center, and new exhibitors on the list." },
+  { name: "followUps", field: "emailFollowUps", title: "Follow-ups that are due", text: "Your own and unassigned leads with a follow-up today or overdue." },
+  { name: "suggestions", field: "emailSuggestions", title: "New exhibitors you may like", text: "New at your favorite trade shows, and like the exhibitors you have starred." },
+] as const;
 
 export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/lists">) {
   const { slug } = await params;
@@ -82,23 +89,42 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
       </section>
 
       {isEmailConfigured() && (
-        <section className="card flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-              <Icon name="mail" className="size-5" />
-            </span>
-            <div>
-              <h2 className="flex items-center gap-2 font-bold">
-                Daily email {user.listEmails ? <span className="pill pill-ok">On</span> : <span className="pill pill-neutral">Off</span>}
-              </h2>
-              <p className="mt-0.5 text-sm text-muted">
-                Each morning you get one email to {user.email} when something is new in {FAVORITES_NAME}: exhibitors other users starred, new or changed details such as contact person, email or phone, follow-ups that are due, and new exhibitors at your favorite trade shows that look like the ones you have starred. Your other lists are not included. Only you are affected by this setting.
-              </p>
+        <section className="card">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+                <Icon name="mail" className="size-5" />
+              </span>
+              <div>
+                <h2 className="flex items-center gap-2 font-bold">
+                  Daily email {user.listEmails ? <span className="pill pill-ok">On</span> : <span className="pill pill-neutral">Off</span>}
+                </h2>
+                <p className="mt-0.5 text-sm text-muted">
+                  Each morning you get one email to {user.email} when something is new in {FAVORITES_NAME} or at your favorite trade shows. Nothing new, no email. Your other lists are not included. Only you are affected by these settings.
+                </p>
+              </div>
             </div>
+            <form action={setListEmails.bind(null, slug, !user.listEmails)}>
+              <button className={user.listEmails ? "btn-secondary" : "btn"}>{user.listEmails ? "Turn off" : "Turn on"}</button>
+            </form>
           </div>
-          <form action={setListEmails.bind(null, slug, !user.listEmails)}>
-            <button className={user.listEmails ? "btn-secondary" : "btn"}>{user.listEmails ? "Turn off" : "Turn on"}</button>
-          </form>
+          {user.listEmails && (
+            <ActionForm action={setEmailParts.bind(null, slug)} className="mt-4 border-t border-line pt-4">
+              <p className="label">Tell me about</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {emailParts.map((p) => (
+                  <label key={p.name} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line px-3 py-2.5 text-sm hover:bg-subtle">
+                    <input type="checkbox" name={p.name} defaultChecked={user[p.field]} className="mt-0.5 accent-brand" />
+                    <span>
+                      <span className="block font-semibold">{p.title}</span>
+                      <span className="block text-muted">{p.text}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <button className="btn mt-3">Save</button>
+            </ActionForm>
+          )}
         </section>
       )}
     </>
