@@ -41,7 +41,7 @@ async function companyKeysOf(exhibitorIds: string[]): Promise<string[]> {
 }
 
 /** The account's Favorites list, created the first time it is needed. */
-export async function favoritesListId(organizationId: string) {
+async function favoritesListId(organizationId: string) {
   const existing = await db.savedList.findFirst({ where: { organizationId, favorites: true }, select: { id: true } });
   if (existing) return existing.id;
   try {
