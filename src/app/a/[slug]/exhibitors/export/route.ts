@@ -2,6 +2,8 @@ import { countryName } from "@/lib/countries";
 import { crmTable } from "@/lib/crm-export";
 import { db } from "@/lib/db";
 import { exhibitorFilters, exhibitorWhere } from "@/lib/exhibitor-list";
+import { FREE_LIST_SIZE } from "@/lib/export-limit";
+import { claimExport } from "@/lib/export-limit-run";
 import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
 import { type Table, toCsv, toXlsx } from "@/lib/spreadsheet";
 import { requireMembership } from "@/lib/tenant";
@@ -18,10 +20,14 @@ export const maxDuration = 60;
  * Favorites page's filters (?q, ?show, ?status) and adds the status and notes;
  * with ?layout=crm it has the columns a CRM such as HubSpot, Pipedrive or
  * Salesforce imports (see src/lib/crm-export.ts).
+ *
+ * Each user may download exhibitors from a limited number of trade shows per
+ * day (see src/lib/export-limit.ts). Over the limit it answers 402 with what
+ * the limit dialog shows (src/components/export-button.tsx) instead of a file.
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
-  const { user, organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
@@ -47,6 +53,12 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
+
+  // Small saved lists and Favorites are hand-picked leads and don't count.
+  if (!list || exhibitors.length > FREE_LIST_SIZE) {
+    const claim = await claimExport(user, membership.role, organization, exhibitors.map((e) => e.tradeShowId));
+    if ("error" in claim) return Response.json(claim, { status: 402, headers: { "Cache-Control": "no-store" } });
+  }
 
   const day = (d: Date) => d.toISOString().slice(0, 10);
   const crm = leads && url.searchParams.get("layout") === "crm";

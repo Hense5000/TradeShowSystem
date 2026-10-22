@@ -50,6 +50,7 @@ model User {
   loginCodes      LoginCode[]
   supportTickets  SupportTicket[]
   supportMessages SupportMessage[]
+  exportedShows   ExportedShow[]
 }
 
 // A browser that has confirmed a login code from the user's email. It can log
@@ -234,12 +235,31 @@ model OrganizationFeature {
   @@id([organizationId, featureId])
 }
 
+// A trade show whose exhibitors a user downloaded (Excel or CSV) on a day.
+// Users may download from a limited number of shows per day, depending on
+// the plan (see src/lib/export-limit.ts); the same show again that day is free.
+model ExportedShow {
+  userId      String
+  tradeShowId String
+  day         String // "2026-10-22", the day in Denmark
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tradeShow TradeShow @relation(fields: [tradeShowId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day, tradeShowId])
+  @@index([tradeShowId])
+}
+
 model Subscription {
   id                   String    @id @default(cuid())
   organizationId       String
   stripeSubscriptionId String    @unique
   // Stripe status string: trialing, active, past_due, canceled, unpaid, ...
   status               String
+  // The Stripe Price the subscription is on: the basic plan (STRIPE_PRICE_ID)
+  // or the upgraded one (STRIPE_PRO_PRICE_ID), see src/lib/export-limit.ts.
+  priceId              String?
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean   @default(false)
   createdAt            DateTime  @default(now())
@@ -349,6 +369,7 @@ model TradeShow {
   suggestions SuggestedShow[]
   favoriteOf  FavoriteShow[]
   hiddenFrom  HiddenShowRecommendation[]
+  exportedBy  ExportedShow[]
 
   @@index([startDate])
   @@index([name])

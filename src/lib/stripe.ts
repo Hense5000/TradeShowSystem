@@ -23,6 +23,14 @@ export function planPriceId(): string | undefined {
   return process.env.STRIPE_PRICE_ID?.trim() || undefined;
 }
 
+/**
+ * The Stripe Price of the upgraded plan, which allows downloads from more
+ * trade shows per day (see src/lib/export-limit.ts), e.g. price_456.
+ */
+export function proPriceId(): string | undefined {
+  return process.env.STRIPE_PRO_PRICE_ID?.trim() || undefined;
+}
+
 /** Whether everything needed to take payments is set in the environment. */
 export function billingConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY && planPriceId());
@@ -33,9 +41,8 @@ export function stripeTestMode(): boolean {
   return process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ?? false;
 }
 
-/** The plan's price and product name, for the billing page. Null if Stripe can't be reached. */
-export async function planPrice() {
-  const id = planPriceId();
+/** A price and its product name, for the billing page. Null if Stripe can't be reached. */
+export async function planPrice(id = planPriceId()) {
   if (!id || !process.env.STRIPE_SECRET_KEY) return null;
   try {
     const price = await stripe().prices.retrieve(id, { expand: ["product"] });
@@ -112,6 +119,7 @@ export async function syncSubscription(subscriptionId: string) {
   const periodEnds = sub.items.data.map((i) => i.current_period_end).filter(Boolean);
   const data = {
     status: sub.status,
+    priceId: (sub.items.data.find((i) => i.price.id === proPriceId()) ?? sub.items.data[0])?.price.id ?? null,
     currentPeriodEnd: periodEnds.length ? new Date(Math.min(...periodEnds) * 1000) : null,
     // The customer portal may cancel with a date instead of "at period end".
     cancelAtPeriodEnd: sub.cancel_at_period_end || sub.cancel_at !== null,
@@ -163,7 +171,7 @@ export async function syncSeats(organizationId: string) {
     const current = currentSubscription(subs);
     if (!current || !isLive(current.status)) return;
     const sub = await stripe().subscriptions.retrieve(current.stripeSubscriptionId);
-    const item = sub.items.data.find((i) => i.price.id === planPriceId()) ?? sub.items.data[0];
+    const item = sub.items.data.find((i) => i.price.id === planPriceId() || i.price.id === proPriceId()) ?? sub.items.data[0];
     const users = Math.max(1, await db.membership.count({ where: { organizationId } }));
     if (!item || item.quantity === users) return;
     await stripe().subscriptions.update(sub.id, {
