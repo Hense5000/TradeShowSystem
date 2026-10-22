@@ -13,6 +13,7 @@ import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABE
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
+import { ExportButton } from "../exhibitors/export-button";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
@@ -112,20 +113,19 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                   <Icon name="check" className="size-4" /> Meeting plan
                 </Link>
               )}
-              <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${shownCount} exhibitors shown, with status and notes, as an Excel file`}>
-                <Icon name="download" className="size-4" /> Excel
-              </a>
-              <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${shownCount} exhibitors shown, with status and notes, as a CSV file`}>
-                <Icon name="download" className="size-4" /> CSV
-              </a>
-              <a
+              <ExportButton slug={slug} href={exportHref("xlsx")} title={`Download the ${shownCount} exhibitors shown, with status and notes, as an Excel file`}>
+                Excel
+              </ExportButton>
+              <ExportButton slug={slug} href={exportHref("csv")} title={`Download the ${shownCount} exhibitors shown, with status and notes, as a CSV file`}>
+                CSV
+              </ExportButton>
+              <ExportButton
+                slug={slug}
                 href={`/a/${slug}/exhibitors/export${favoriteQuery(filters, { list: listId, format: "xlsx", layout: "crm" })}`}
-                download
-                className="btn-secondary py-2"
                 title={`Download the ${shownCount} leads shown as an Excel file ready to import into a CRM such as HubSpot, Pipedrive or Salesforce`}
               >
-                <Icon name="download" className="size-4" /> Export for CRM
-              </a>
+                Export for CRM
+              </ExportButton>
             </div>
           )
         }

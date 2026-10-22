@@ -20,6 +20,7 @@ import { addShownToList, setListMembership } from "../lists/actions";
 import { askAiSearch, fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
 import { AiSearch } from "./ai-search";
+import { ExportButton } from "./export-button";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
 import { tradeShowOptions } from "./show-select";
@@ -110,12 +111,12 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           <div className="flex flex-wrap gap-2">
             {matchingRows > 0 && (
               <>
-                <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
-                  <Icon name="download" className="size-4" /> Excel
-                </a>
-                <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
-                  <Icon name="download" className="size-4" /> CSV
-                </a>
+                <ExportButton slug={slug} href={exportHref("xlsx")} title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
+                  Excel
+                </ExportButton>
+                <ExportButton slug={slug} href={exportHref("csv")} title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
+                  CSV
+                </ExportButton>
               </>
             )}
             {canEdit && (

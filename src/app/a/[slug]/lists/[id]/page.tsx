@@ -9,6 +9,7 @@ import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { FAVORITES_NAME, MAX_LIST_NAME } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
+import { ExportButton } from "../../exhibitors/export-button";
 import { deleteList, renameList, setListMembership, toggleFavorite } from "../actions";
 
 const PAGE_SIZE = 50;
@@ -54,12 +55,12 @@ export default async function SavedListPage({ params, searchParams }: PageProps<
           <div className="flex flex-wrap gap-2">
             {count > 0 && (
               <>
-                <a href={exportHref("xlsx")} download className="btn-secondary py-2" title={`Download the ${count} exhibitors on this list as an Excel file`}>
-                  <Icon name="download" className="size-4" /> Excel
-                </a>
-                <a href={exportHref("csv")} download className="btn-secondary py-2" title={`Download the ${count} exhibitors on this list as a CSV file`}>
-                  <Icon name="download" className="size-4" /> CSV
-                </a>
+                <ExportButton slug={slug} href={exportHref("xlsx")} title={`Download the ${count} exhibitors on this list as an Excel file`}>
+                  Excel
+                </ExportButton>
+                <ExportButton slug={slug} href={exportHref("csv")} title={`Download the ${count} exhibitors on this list as a CSV file`}>
+                  CSV
+                </ExportButton>
               </>
             )}
             <Link href={`/a/${slug}/lists`} className="btn-secondary py-2">All lists</Link>
