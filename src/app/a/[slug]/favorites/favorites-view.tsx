@@ -18,6 +18,7 @@ import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
 import { RemoveFavoriteStar } from "./remove-favorite";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadProjectValue, LeadStatusSelect } from "./lead-controls";
+import { LeadLinks } from "./lead-links";
 import { RecommendedShows } from "./recommended-shows";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -49,7 +50,10 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
     tab === "exhibitors"
       ? db.savedListItem.findMany({
           where,
-          include: { exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } } },
+          include: {
+            exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } },
+            links: { include: { addedBy: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" } },
+          },
           // With a follow-up filter, the soonest follow-up first.
           orderBy: filters.followUp ? [{ followUpAt: "asc" }, { exhibitor: { name: "asc" } }] : [{ exhibitor: { name: "asc" } }],
           skip: (page - 1) * PAGE_SIZE,
@@ -230,10 +234,11 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                       <th className="w-[38%] px-5 py-2.5">Notes</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
-                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue }) => (
-                      <tr key={e.id} className="align-top">
-                        <td className="py-3 pr-5 pl-3">
+                  {/* One tbody per favorite: its lead row, and its file links under Lead and Notes. */}
+                  {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue, links }) => (
+                    <tbody key={e.id} className="border-b border-line last:border-b-0">
+                      <tr className="align-top">
+                        <td rowSpan={2} className="py-3 pr-5 pl-3">
                           <div className="flex min-w-52 items-start gap-1">
                             <RemoveFavoriteStar slug={slug} exhibitorId={e.id} name={e.name} />
                             <div className="min-w-0 pt-1">
@@ -263,7 +268,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3">
+                        <td rowSpan={2} className="px-5 py-3">
                           <div className="min-w-40">
                             <Link href={`${base}${favoriteQuery({ ...filters, show: e.tradeShow.id })}`} className="font-medium hover:text-brand" title="Show only this trade show">
                               {e.tradeShow.name}
@@ -309,15 +314,33 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                           />
                         </td>
                       </tr>
-                    ))}
-                    {items.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="px-5 pb-3">
+                          <LeadLinks
+                            slug={slug}
+                            exhibitorId={e.id}
+                            name={e.name}
+                            links={links.map((l) => ({
+                              id: l.id,
+                              url: l.url,
+                              title: l.title,
+                              addedBy: l.addedBy ? (l.addedBy.name ?? l.addedBy.email) : null,
+                              date: formatDay(l.createdAt),
+                            }))}
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  ))}
+                  {items.length === 0 && (
+                    <tbody>
                       <tr>
                         <td colSpan={4} className="px-5 py-8 text-center text-muted">
                           No favorites match. <Link href={base} className="font-semibold text-brand">Show all</Link>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
+                    </tbody>
+                  )}
                 </table>
               </div>
               {pages > 1 && (
@@ -400,6 +423,11 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
       )}
     </>
   );
+}
+
+/** "23.10.2026", as the dates in the notes. */
+function formatDay(d: Date): string {
+  return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`;
 }
 
 function Empty({ icon, text, href, label }: { icon: "store" | "calendar"; text: string; href: string; label: string }) {

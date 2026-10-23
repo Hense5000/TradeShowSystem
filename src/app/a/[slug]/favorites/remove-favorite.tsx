@@ -6,7 +6,7 @@ import { toggleFavorite } from "../lists/actions";
 
 /**
  * The filled star on a Favorites row. Taking it off also deletes the lead's
- * status, notes, project value and reminder, so it asks first.
+ * status, notes, project value, reminder and file links, so it asks first.
  */
 export function RemoveFavoriteStar({
   slug,
@@ -48,7 +48,7 @@ export function RemoveFavoriteStar({
             <p className="text-sm text-muted">
               <strong className="text-ink">{name}</strong> will be removed from
               your account&apos;s Favorites. Its lead status, notes, project
-              value, responsible user and reminder are deleted too.
+              value, responsible user, reminder and file links are deleted too.
             </p>
             <div className="flex justify-end gap-2">
               <button

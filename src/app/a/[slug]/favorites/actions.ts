@@ -6,6 +6,7 @@ import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { leadAssignedEmailContent } from "@/lib/lead-assigned";
+import { checkLeadLink, MAX_LINKS_PER_LEAD } from "@/lib/lead-links";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
 import { parseProjectValue } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
@@ -132,6 +133,31 @@ export async function setLeadAssignee(slug: string, exhibitorId: string, _prev: 
     console.error("Lead assigned email failed", e);
     return { notifyFailed: who };
   }
+}
+
+/** A link on a favorite exhibitor to a file or folder in the account's own storage, e.g. Google Drive or Dropbox. */
+export async function addLeadLink(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+  const { user, organization } = await requireMembership(slug);
+  const checked = checkLeadLink(formData.get("url"), formData.get("title"));
+  if (checked.error !== undefined) return { error: checked.error };
+  const item = await db.savedListItem.findFirst({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    select: { listId: true, _count: { select: { links: true } } },
+  });
+  if (!item) return { error: "This exhibitor is no longer in Favorites." };
+  if (item._count.links >= MAX_LINKS_PER_LEAD) return { error: `A favorite can have up to ${MAX_LINKS_PER_LEAD} links. Delete one first.` };
+  await db.leadLink.create({
+    data: { organizationId: organization.id, listId: item.listId, exhibitorId, url: checked.url, title: checked.title, addedById: user.id },
+  });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
+  return { saved: true };
+}
+
+/** Takes a link off a favorite exhibitor. The file itself stays in the account's storage. */
+export async function deleteLeadLink(slug: string, linkId: string) {
+  const { organization } = await requireMembership(slug);
+  await db.leadLink.deleteMany({ where: { id: linkId, organizationId: organization.id } });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
 }
 
 /** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */
