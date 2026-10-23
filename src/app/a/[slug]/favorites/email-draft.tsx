@@ -44,7 +44,7 @@ export function EmailDraftButton({
 
   return (
     <>
-      <button type="button" className="btn-secondary mt-2 w-full" onClick={start} title={`Write a first email to ${name}`}>
+      <button type="button" className="btn mt-2 w-full py-1.5" onClick={start} title={`Write a first email to ${name}`}>
         <Icon name="mail" className="size-4" /> Write email
       </button>
       {open && (
