@@ -39,6 +39,7 @@ export const CRM_HEADERS = [
   "Notes",
   "Follow-up Date",
   "Follow-up Task",
+  "Deal Value",
   "Lead Source",
   "Trade Show",
   "Booth",
@@ -62,14 +63,18 @@ type Lead = {
     leadNote: string | null;
     followUpAt: Date | null;
     followUpNote: string | null;
+    projectValue: number | null;
     assignee: { name: string | null; email: string } | null;
   }[];
 };
 
-/** One row per favorite exhibitor, with the person split into first and last name. */
-export function crmTable(leads: Lead[]): Table {
+/**
+ * One row per favorite exhibitor, with the person split into first and last name.
+ * valueHeader names the project value column with the account's currency, e.g. "Deal Value (EUR)".
+ */
+export function crmTable(leads: Lead[], valueHeader = "Deal Value"): Table {
   return {
-    headers: CRM_HEADERS,
+    headers: CRM_HEADERS.map((h) => (h === "Deal Value" ? valueHeader : h)),
     rows: leads.map((e) => {
       const lead = e.savedIn[0];
       const { first, last } = splitName(e.contactName);
@@ -89,6 +94,7 @@ export function crmTable(leads: Lead[]): Table {
         lead?.leadNote,
         lead?.followUpAt && lead.followUpAt.toISOString().slice(0, 10),
         lead?.followUpNote,
+        lead?.projectValue?.toString(),
         `Trade show: ${e.tradeShow.name}`,
         e.tradeShow.name,
         e.boothNumber,

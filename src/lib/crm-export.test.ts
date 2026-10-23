@@ -16,6 +16,10 @@ describe("splitName", () => {
 });
 
 describe("crmTable", () => {
+  it("names the value column with the currency", () => {
+    expect(crmTable([], "Deal Value (GBP)").headers).toContain("Deal Value (GBP)");
+  });
+
   it("writes one CRM row per lead", () => {
     const table = crmTable([
       {
@@ -36,6 +40,7 @@ describe("crmTable", () => {
             leadNote: "Demo booked",
             followUpAt: new Date("2026-11-02T00:00:00Z"),
             followUpNote: "Confirm time",
+            projectValue: 25000,
             assignee: { name: "Henrik", email: "h@vivolead.com" },
           },
         ],
@@ -52,6 +57,7 @@ describe("crmTable", () => {
       "Follow-up Date": "2026-11-02",
       "Lead Source": "Trade show: MEDICA 2026",
       Booth: "B10",
+      "Deal Value": "25000",
     });
   });
 });

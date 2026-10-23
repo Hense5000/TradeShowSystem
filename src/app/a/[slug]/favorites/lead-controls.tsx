@@ -1,10 +1,11 @@
 "use client";
 
-import type { LeadStatus } from "@prisma/client";
+import type { Currency, LeadStatus } from "@prisma/client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { LEAD_LABEL, LEAD_STATUSES, MAX_FOLLOW_UP_NOTE, MAX_LEAD_NOTE } from "@/lib/leads";
-import { saveFollowUp, saveLeadNote, setLeadAssignee, setLeadStatus } from "./actions";
+import { CURRENCY_SYMBOL, projectValueText } from "@/lib/project-value";
+import { saveFollowUp, saveLeadNote, saveProjectValue, setLeadAssignee, setLeadStatus } from "./actions";
 
 /** The status of a favorite exhibitor. Saves as soon as another status is picked. */
 export function LeadStatusSelect({ slug, exhibitorId, name, status }: { slug: string; exhibitorId: string; name: string; status: LeadStatus }) {
@@ -75,6 +76,53 @@ export function LeadAssigneeSelect({
           </p>
         </Dialog>
       )}
+    </form>
+  );
+}
+
+/** What the project with a favorite exhibitor is worth, in the account's currency. Saves when the field is left. */
+export function LeadProjectValue({
+  slug,
+  exhibitorId,
+  name,
+  value,
+  currency,
+}: {
+  slug: string;
+  exhibitorId: string;
+  name: string;
+  value: number | null;
+  currency: Currency;
+}) {
+  const [state, formAction, pending] = useActionState(saveProjectValue.bind(null, slug, exhibitorId), undefined);
+  const saved = useRef(projectValueText(value));
+
+  return (
+    <form action={formAction} className="min-w-48">
+      <div className="relative">
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">{CURRENCY_SYMBOL[currency]}</span>
+        <input
+          name="value"
+          defaultValue={projectValueText(value)}
+          inputMode="decimal"
+          maxLength={20}
+          placeholder="Project value"
+          aria-label={`Project value for ${name} in ${currency}`}
+          className="input py-1.5 pl-7 tabular-nums"
+          onBlur={(e) => {
+            if (e.currentTarget.value.trim() === saved.current.trim()) return;
+            saved.current = e.currentTarget.value;
+            e.currentTarget.form?.requestSubmit();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+        />
+      </div>
+      {pending ? <p className="hint">Saving…</p> : state?.error && <p className="mt-1 text-xs text-bad">{state.error}</p>}
     </form>
   );
 }

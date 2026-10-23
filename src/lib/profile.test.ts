@@ -33,6 +33,11 @@ describe("profileSchema", () => {
     expect(parsed.country).toBeNull();
     expect(parsed.addressLine1).toBeNull();
   });
+  it("takes a supported currency and leaves it out when not sent", () => {
+    expect(profileSchema.parse({ ...base, currency: "GBP" }).currency).toBe("GBP");
+    expect(profileSchema.parse(base).currency).toBeUndefined();
+    expect(profileSchema.safeParse({ ...base, currency: "DKK" }).success).toBe(false);
+  });
   it("normalises the country code", () => expect(profileSchema.parse({ ...base, country: "dk" }).country).toBe("DK"));
   it("rejects unknown countries and a missing name", () => {
     expect(profileSchema.safeParse({ ...base, country: "XX" }).success).toBe(false);

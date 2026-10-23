@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isCountryCode } from "@/lib/countries";
 import { parseDate } from "@/lib/dates";
+import { CURRENCIES } from "@/lib/project-value";
 
 export const email = z
   .string()
@@ -74,6 +75,8 @@ export const profileSchema = z.object({
   region: optionalText(100, "Region"),
   country,
   website,
+  // Left unchanged when the form does not send it.
+  currency: z.enum(CURRENCIES, "Pick a currency.").optional(),
 });
 
 const phone = z

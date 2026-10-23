@@ -10,6 +10,7 @@ import { MAX_DRAFT_GOAL, parseDraftLanguage } from "@/lib/email-draft";
 import { writeEmailDraft } from "@/lib/email-draft-run";
 import { leadAssignedEmailContent } from "@/lib/lead-assigned";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
+import { parseProjectValue } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
 
 // Every member of an account works the same favorites. Each action only
@@ -68,6 +69,20 @@ export async function saveFollowUp(slug: string, exhibitorId: string, _prev: Sav
   const { count } = await db.savedListItem.updateMany({
     where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
     data: { followUpAt: checked.date, followUpNote: checked.note, leadUpdatedAt: new Date() },
+  });
+  if (count === 0) return { error: "This exhibitor is no longer in Favorites." };
+  refresh(slug);
+  return { saved: true };
+}
+
+/** What the project with a favorite exhibitor is worth. An empty field clears it. */
+export async function saveProjectValue(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+  const { organization } = await requireMembership(slug);
+  const checked = parseProjectValue(formData.get("value"));
+  if (checked.error !== undefined) return { error: checked.error };
+  const { count } = await db.savedListItem.updateMany({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    data: { projectValue: checked.value, leadUpdatedAt: new Date() },
   });
   if (count === 0) return { error: "This exhibitor is no longer in Favorites." };
   refresh(slug);

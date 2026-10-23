@@ -48,7 +48,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       // The lead details on the Favorites list (none for other exports).
       savedIn: {
         where: { listId: leads ? list.id : "" },
-        select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true, assignee: { select: { name: true, email: true } } },
+        select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true, projectValue: true, assignee: { select: { name: true, email: true } } },
       },
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
@@ -62,7 +62,8 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
 
   const day = (d: Date) => d.toISOString().slice(0, 10);
   const crm = leads && url.searchParams.get("layout") === "crm";
-  const table: Table = crm ? crmTable(exhibitors) : {
+  const valueHeader = `Project Value (${organization.currency})`;
+  const table: Table = crm ? crmTable(exhibitors, `Deal Value (${organization.currency})`) : {
     headers: [
       "Company Name",
       "Trade Show",
@@ -79,7 +80,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Booth No.",
       "Stand Location URL",
       "Company Profile",
-      ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder"] : []),
+      ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder", valueHeader] : []),
     ],
     rows: exhibitors.map((e) => [
       e.name,
@@ -104,6 +105,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
             e.savedIn[0]?.leadNote,
             e.savedIn[0]?.followUpAt && day(e.savedIn[0].followUpAt),
             e.savedIn[0]?.followUpNote,
+            e.savedIn[0]?.projectValue?.toString(),
           ]
         : []),
     ]),
