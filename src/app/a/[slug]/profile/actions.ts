@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
 import { requireMembership } from "@/lib/tenant";
-import { contactSchema, firstError, profileSchema } from "@/lib/validation";
-
+import { contactSchema, emailIntroSchema, firstError, profileSchema } from "@/lib/validation";
 
 export async function updateProfile(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
   const { organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
@@ -33,6 +32,21 @@ export async function updatePrimaryContact(slug: string, _prev: SaveState, formD
   } else {
     await db.contact.create({ data: { ...parsed.data, organizationId: organization.id, isPrimary: true } });
   }
+  revalidatePath(`/a/${slug}`, "layout");
+  return { saved: true };
+}
+
+export async function updateEmailIntro(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+  const { organization } = await requireMembership(slug, "ADMIN", { allowUnpaid: true });
+  const parsed = emailIntroSchema.safeParse({
+    emailOffer: formData.get("emailOffer") ?? "",
+    emailBenefits: formData.getAll("emailBenefit").map(String),
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+
+  // Empty benefits are dropped so the email's bullet list has no gaps.
+  const { emailOffer, emailBenefits } = parsed.data;
+  await db.organization.update({ where: { id: organization.id }, data: { emailOffer, emailBenefits: emailBenefits.filter(Boolean) } });
   revalidatePath(`/a/${slug}`, "layout");
   return { saved: true };
 }

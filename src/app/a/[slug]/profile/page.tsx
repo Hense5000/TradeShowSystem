@@ -2,10 +2,11 @@ import { CountrySelect, Field } from "@/components/field";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { db } from "@/lib/db";
+import { EMAIL_BENEFITS, MAX_EMAIL_BENEFIT, MAX_EMAIL_OFFER } from "@/lib/email-draft";
 import { canManageMembers } from "@/lib/permissions";
 import { CURRENCIES, CURRENCY_LABEL } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
-import { updatePrimaryContact, updateProfile } from "./actions";
+import { updateEmailIntro, updatePrimaryContact, updateProfile } from "./actions";
 
 export default async function ProfilePage({ params }: PageProps<"/a/[slug]/profile">) {
   const { slug } = await params;
@@ -57,6 +58,42 @@ export default async function ProfilePage({ params }: PageProps<"/a/[slug]/profi
             <p className="hint">Project values on favorite exhibitors and the total on the dashboard are shown in this currency.</p>
           </div>
         </div>
+      </SaveForm>
+
+      <SaveForm
+        action={updateEmailIntro.bind(null, slug)}
+        title="Introduction email"
+        description={'Used in the standard email your users get when they press "Write email" on a favorite exhibitor. Empty fields are left out of the email.'}
+        submitLabel="Save email text"
+        readOnly={!canEdit}
+      >
+        <div className="min-w-0">
+          <label className="label" htmlFor="emailOffer">What we offer</label>
+          <textarea
+            id="emailOffer"
+            name="emailOffer"
+            className="input resize-y leading-relaxed"
+            rows={3}
+            maxLength={MAX_EMAIL_OFFER}
+            defaultValue={org.emailOffer ?? ""}
+            placeholder="e.g. We supply custom exhibition stands and furniture for trade shows across Europe."
+          />
+          <p className="hint">A few lines about what your company delivers. Written in English, like the rest of the email.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: EMAIL_BENEFITS }, (_, i) => (
+            <Field
+              key={i}
+              id={`emailBenefit${i + 1}`}
+              name="emailBenefit"
+              label={`Benefit ${i + 1}`}
+              defaultValue={org.emailBenefits[i] ?? ""}
+              maxLength={MAX_EMAIL_BENEFIT}
+              placeholder={["e.g. Fixed prices, no surprises", "e.g. Ready in 4 weeks", "e.g. One contact from start to finish"][i]}
+            />
+          ))}
+        </div>
+        <p className="hint -mt-2">Shown as a bullet list in the email.</p>
       </SaveForm>
 
       <SaveForm
