@@ -14,24 +14,42 @@ import { RecommendedShows } from "./favorites/recommended-shows";
 // The follow-ups card under "Lead retrieval active" lists at most this many.
 const FOLLOW_UPS_SHOWN = 8;
 
+// Henrik's pale green for the lead cards ("Lead retrieval active" and "Project value").
+const LEAD_CARD = "border-[#7FE07F] bg-[#98FB98]";
+const LEAD_ICON = "bg-white/60 text-ink";
+
 // How far ahead the upcoming list looks, in months. The first is the default.
 const RANGES = [2, 3, 6] as const;
 type Range = (typeof RANGES)[number];
 
-function Stat({ icon, label, value, note, href }: { icon: IconName; label: string; value: number; note: string; href?: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+  note,
+  href,
+  highlight,
+}: {
+  icon: IconName;
+  label: string;
+  value: number;
+  note: string;
+  href?: string;
+  highlight?: boolean;
+}) {
   const body = (
     <>
       <span className="min-w-0">
         <span className="eyebrow block">{label}</span>
         <span className="mt-1 block text-3xl font-bold tabular-nums">{value.toLocaleString("en-US")}</span>
-        <span className="mt-0.5 block text-sm text-muted">{note}</span>
+        <span className={`mt-0.5 block text-sm ${highlight ? "text-ink/70" : "text-muted"}`}>{note}</span>
       </span>
-      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+      <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${highlight ? LEAD_ICON : "bg-brand-soft text-brand"}`}>
         <Icon name={icon} className="size-5.5" />
       </span>
     </>
   );
-  const cls = "card flex items-start justify-between gap-3";
+  const cls = `card flex items-start justify-between gap-3 ${highlight ? LEAD_CARD : ""}`;
   return href ? (
     <Link href={href} className={`${cls} hover:border-brand`}>{body}</Link>
   ) : (
@@ -106,24 +124,25 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           value={openLeads}
           note={`Open leads · ${favoriteShows} ${favoriteShows === 1 ? "show" : "shows"}`}
           href={`/a/${slug}/favorites/exhibitors`}
+          highlight
         />
       </div>
 
       {/* The follow-ups sit right under "Lead retrieval active", next to the upcoming trade shows. */}
       <div className="grid items-start gap-3.5 xl:grid-cols-4">
         <div className="flex flex-col gap-3.5 xl:col-start-4 xl:row-start-1">
-          <Link href={`/a/${slug}/favorites/exhibitors`} className="card flex items-start justify-between gap-3 hover:border-brand">
+          <Link href={`/a/${slug}/favorites/exhibitors`} className={`card flex items-start justify-between gap-3 hover:border-brand ${LEAD_CARD}`}>
             <span className="min-w-0">
               <span className="eyebrow block">Project value</span>
               <span className="mt-1 block truncate text-3xl font-bold tabular-nums">{money(openValue)}</span>
-              <span className="mt-0.5 block text-sm text-muted">
+              <span className="mt-0.5 block text-sm text-ink/70">
                 {openValueCount === 0
                   ? "Add a project value to your favorite exhibitors"
                   : `${openValueCount} running ${openValueCount === 1 ? "project" : "projects"}`}
               </span>
-              {wonValue > 0 && <span className="mt-0.5 block text-xs text-faint">Won: {money(wonValue)}</span>}
+              {wonValue > 0 && <span className="mt-0.5 block text-xs text-ink/60">Won: {money(wonValue)}</span>}
             </span>
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+            <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${LEAD_ICON}`}>
               <Icon name="briefcase" className="size-5.5" />
             </span>
           </Link>
