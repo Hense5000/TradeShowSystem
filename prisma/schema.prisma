@@ -51,7 +51,7 @@ model User {
   supportTickets  SupportTicket[]
   supportMessages SupportMessage[]
   exportedShows   ExportedShow[]
-  leadFiles       LeadFile[]
+  leadLinks       LeadLink[]
 }
 
 // A browser that has confirmed a login code from the user's email. It can log
@@ -481,32 +481,31 @@ model SavedListItem {
   exhibitor Exhibitor  @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
   addedBy   User?      @relation(fields: [addedById], references: [id], onDelete: SetNull)
   assignee  User?      @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  files     LeadFile[]
+  links     LeadLink[]
 
   @@id([listId, exhibitorId])
   @@index([exhibitorId])
   @@index([assigneeId])
 }
 
-// A file the account keeps with a favorite exhibitor, e.g. a quote or a
-// presentation. The file itself is in the private Vercel Blob store under
-// pathname; only members of the account can download it, through the app.
-// It follows the favorite when the favorite moves to the company's latest
-// trade show (onUpdate: Cascade), and goes when the favorite is removed.
-model LeadFile {
+// A link to a file or folder the account keeps with a favorite exhibitor,
+// e.g. a quote or a presentation in its own Google Drive, Dropbox, Box or
+// OneDrive. The file stays in the customer's storage, which decides who can
+// open it; only the link and its name are kept here. It follows the favorite
+// when the favorite moves to the company's latest trade show (onUpdate:
+// Cascade), and goes when the favorite is removed.
+model LeadLink {
   id             String   @id @default(cuid())
   organizationId String
   listId         String
   exhibitorId    String
-  pathname       String   @unique
-  name           String
-  size           Int
-  contentType    String
-  uploadedById   String?
+  url            String
+  title          String
+  addedById      String?
   createdAt      DateTime @default(now())
 
-  item       SavedListItem @relation(fields: [listId, exhibitorId], references: [listId, exhibitorId], onDelete: Cascade, onUpdate: Cascade)
-  uploadedBy User?         @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  item    SavedListItem @relation(fields: [listId, exhibitorId], references: [listId, exhibitorId], onDelete: Cascade, onUpdate: Cascade)
+  addedBy User?         @relation(fields: [addedById], references: [id], onDelete: SetNull)
 
   @@index([listId, exhibitorId])
   @@index([organizationId])

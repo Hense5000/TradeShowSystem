@@ -7,7 +7,6 @@ import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
 import { moveFavoritesToLatestShow } from "@/lib/company-run";
 import { db } from "@/lib/db";
-import { deleteLeadFileBlobs } from "@/lib/lead-files-run";
 import { type ExhibitorFilters, exhibitorWhere } from "@/lib/exhibitor-list";
 import { checkListName, FAVORITES_NAME, MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
@@ -69,8 +68,6 @@ async function setInList(listId: string, exhibitorIds: string | string[], add: b
   if (add) {
     await db.savedListItem.createMany({ data: [{ listId, exhibitorId: ids[0], addedById }], skipDuplicates: true });
   } else {
-    // Files kept with a favorite go with it.
-    await deleteLeadFileBlobs({ listId, exhibitorId: { in: ids } });
     await db.savedListItem.deleteMany({ where: { listId, exhibitorId: { in: ids } } });
   }
   await db.savedList.update({ where: { id: listId }, data: { updatedAt: new Date() } });

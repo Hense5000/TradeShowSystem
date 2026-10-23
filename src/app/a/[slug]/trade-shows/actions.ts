@@ -7,7 +7,6 @@ import type { ImportState } from "@/components/import-form";
 import type { SaveState } from "@/components/save-form";
 import { parseCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
-import { deleteLeadFileBlobs } from "@/lib/lead-files-run";
 import { findDirectoryUrl } from "@/lib/directory-url-run";
 import type { OrganizerFillResult } from "@/lib/organizer-finder";
 import { fillMissingOrganizers, isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
@@ -78,7 +77,6 @@ export async function updateTradeShow(slug: string, id: string, _prev: SaveState
 
 export async function deleteTradeShow(slug: string, id: string): Promise<ActionState> {
   await requirePlatformAdmin(slug);
-  await deleteLeadFileBlobs({ item: { exhibitor: { tradeShowId: id } } });
   await db.tradeShow.deleteMany({ where: { id } });
   revalidatePath(`/a/${slug}/trade-shows`);
   redirect(`/a/${slug}/trade-shows`);

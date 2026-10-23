@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import { deleteLeadFileBlobs } from "@/lib/lead-files-run";
 import { oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
 
 // Called by Vercel Cron every day (see vercel.json). Deletes trade shows that
@@ -16,7 +15,6 @@ export async function GET(request: Request) {
   }
   const settings = await db.tradeShowCleanupSettings.findUnique({ where: { id: 1 } });
   if (!settings?.enabled) return Response.json({ skipped: "The cleanup of old trade shows is switched off." });
-  await deleteLeadFileBlobs({ item: { exhibitor: { tradeShow: oldTradeShowsWhere() } } });
   const { count } = await db.tradeShow.deleteMany({ where: oldTradeShowsWhere() });
   await db.tradeShowCleanupSettings.update({ where: { id: 1 }, data: { lastRunAt: new Date(), lastRunDeleted: count } });
   return Response.json({ deleted: count });

@@ -16,7 +16,6 @@ import { describeContactError, fillMissingContacts, findContact, isContactFinder
 import { hunterDomain, hunterUpdate } from "@/lib/hunter";
 import { isHunterConfigured } from "@/lib/hunter-run";
 import { db } from "@/lib/db";
-import { deleteLeadFileBlobs } from "@/lib/lead-files-run";
 import { MAX_QUESTION } from "@/lib/exhibitor-ai-search";
 import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
 import { exhibitorQuery } from "@/lib/exhibitor-list";
@@ -86,7 +85,6 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
 
 export async function deleteExhibitor(slug: string, id: string): Promise<ActionState> {
   if (!(await editableExhibitor(slug, id))) return { error: "This exhibitor no longer exists, or your account did not add it." };
-  await deleteLeadFileBlobs({ exhibitorId: id });
   await db.exhibitor.deleteMany({ where: { id } });
   revalidatePath(`/a/${slug}/exhibitors`);
   redirect(`/a/${slug}/exhibitors`);

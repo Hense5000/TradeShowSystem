@@ -9,7 +9,6 @@ import { db } from "@/lib/db";
 import { standardEmail } from "@/lib/email-draft";
 import { canManageMembers } from "@/lib/permissions";
 import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
-import { isFileStoreConfigured } from "@/lib/lead-files-run";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
@@ -19,7 +18,7 @@ import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
 import { RemoveFavoriteStar } from "./remove-favorite";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadProjectValue, LeadStatusSelect } from "./lead-controls";
-import { LeadFiles } from "./lead-files";
+import { LeadLinks } from "./lead-links";
 import { RecommendedShows } from "./recommended-shows";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -53,7 +52,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
           where,
           include: {
             exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } },
-            files: { include: { uploadedBy: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" } },
+            links: { include: { addedBy: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" } },
           },
           // With a follow-up filter, the soonest follow-up first.
           orderBy: filters.followUp ? [{ followUpAt: "asc" }, { exhibitor: { name: "asc" } }] : [{ exhibitor: { name: "asc" } }],
@@ -107,7 +106,6 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
   const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp || filters.owner);
   const mine = tab === "exhibitors" && filters.owner === "me";
   const exportHref = (format: "xlsx" | "csv") => `/a/${slug}/exhibitors/export${favoriteQuery(filters, { list: listId, format })}`;
-  const filesConfigured = isFileStoreConfigured();
   const tabCls = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
   const tabOn = "border-brand bg-brand text-white";
   const tabOff = "border-line-strong bg-surface text-ink hover:bg-subtle";
@@ -236,8 +234,8 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                       <th className="w-[38%] px-5 py-2.5">Notes</th>
                     </tr>
                   </thead>
-                  {/* One tbody per favorite: its lead row, and its files under Lead and Notes. */}
-                  {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue, files }) => (
+                  {/* One tbody per favorite: its lead row, and its file links under Lead and Notes. */}
+                  {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue, links }) => (
                     <tbody key={e.id} className="border-b border-line last:border-b-0">
                       <tr className="align-top">
                         <td rowSpan={2} className="py-3 pr-5 pl-3">
@@ -318,18 +316,16 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                       </tr>
                       <tr>
                         <td colSpan={2} className="px-5 pb-3">
-                          <LeadFiles
+                          <LeadLinks
                             slug={slug}
-                            organizationId={organization.id}
                             exhibitorId={e.id}
                             name={e.name}
-                            configured={filesConfigured}
-                            files={files.map((f) => ({
-                              id: f.id,
-                              name: f.name,
-                              size: f.size,
-                              uploadedBy: f.uploadedBy ? (f.uploadedBy.name ?? f.uploadedBy.email) : null,
-                              date: formatDay(f.createdAt),
+                            links={links.map((l) => ({
+                              id: l.id,
+                              url: l.url,
+                              title: l.title,
+                              addedBy: l.addedBy ? (l.addedBy.name ?? l.addedBy.email) : null,
+                              date: formatDay(l.createdAt),
                             }))}
                           />
                         </td>

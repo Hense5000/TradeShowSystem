@@ -1,14 +1,12 @@
 "use server";
 
-import { del, head } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
 import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { leadAssignedEmailContent } from "@/lib/lead-assigned";
-import { cleanFileName, leadFileContentType, leadFileFolder, MAX_FILES_PER_LEAD, MAX_LEAD_FILE_BYTES } from "@/lib/lead-files";
-import { isFileStoreConfigured } from "@/lib/lead-files-run";
+import { checkLeadLink, MAX_LINKS_PER_LEAD } from "@/lib/lead-links";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
 import { parseProjectValue } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
@@ -137,64 +135,29 @@ export async function setLeadAssignee(slug: string, exhibitorId: string, _prev: 
   }
 }
 
-/**
- * Saves a file the browser has just uploaded to the store (through
- * files/upload/route.ts) on a favorite exhibitor. The upload must be in the
- * account's own folder for that favorite; anything else is deleted again.
- */
-export async function addLeadFile(slug: string, exhibitorId: string, pathname: string, fileName: string): Promise<SaveState> {
+/** A link on a favorite exhibitor to a file or folder in the account's own storage, e.g. Google Drive or Dropbox. */
+export async function addLeadLink(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
   const { user, organization } = await requireMembership(slug);
-  if (!isFileStoreConfigured()) return { error: "File uploads are not set up yet." };
-  if (!pathname.startsWith(leadFileFolder(organization.id, exhibitorId)) || pathname.includes("..")) return { error: "The file could not be saved." };
-
-  const stored = await head(pathname).catch(() => null);
-  if (!stored) return { error: "The upload did not finish. Try again." };
-  const name = cleanFileName(fileName);
+  const checked = checkLeadLink(formData.get("url"), formData.get("title"));
+  if (checked.error !== undefined) return { error: checked.error };
   const item = await db.savedListItem.findFirst({
     where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
-    select: { listId: true, _count: { select: { files: true } } },
+    select: { listId: true, _count: { select: { links: true } } },
   });
-  const problem = !item
-    ? "This exhibitor is no longer in Favorites."
-    : item._count.files >= MAX_FILES_PER_LEAD
-      ? `A favorite can have up to ${MAX_FILES_PER_LEAD} files. Delete one first.`
-      : stored.size > MAX_LEAD_FILE_BYTES
-        ? "The file is too large."
-        : undefined;
-  if (problem || !item) {
-    await del(pathname).catch(() => {});
-    return { error: problem };
-  }
-  await db.leadFile.create({
-    data: {
-      organizationId: organization.id,
-      listId: item.listId,
-      exhibitorId,
-      pathname,
-      name,
-      size: stored.size,
-      contentType: leadFileContentType(name) ?? stored.contentType,
-      uploadedById: user.id,
-    },
+  if (!item) return { error: "This exhibitor is no longer in Favorites." };
+  if (item._count.links >= MAX_LINKS_PER_LEAD) return { error: `A favorite can have up to ${MAX_LINKS_PER_LEAD} links. Delete one first.` };
+  await db.leadLink.create({
+    data: { organizationId: organization.id, listId: item.listId, exhibitorId, url: checked.url, title: checked.title, addedById: user.id },
   });
   revalidatePath(`/a/${slug}/favorites`, "layout");
   return { saved: true };
 }
 
-/** Deletes a file kept with a favorite exhibitor, from the list and from the store. */
-export async function deleteLeadFile(slug: string, fileId: string): Promise<SaveState> {
+/** Takes a link off a favorite exhibitor. The file itself stays in the account's storage. */
+export async function deleteLeadLink(slug: string, linkId: string) {
   const { organization } = await requireMembership(slug);
-  const file = await db.leadFile.findFirst({ where: { id: fileId, organizationId: organization.id }, select: { id: true, pathname: true } });
-  if (!file) return { saved: true }; // already gone
-  try {
-    await del(file.pathname);
-  } catch (e) {
-    console.error("Deleting a lead file from the store failed", e);
-    return { error: "The file could not be deleted. Try again." };
-  }
-  await db.leadFile.deleteMany({ where: { id: file.id } });
+  await db.leadLink.deleteMany({ where: { id: linkId, organizationId: organization.id } });
   revalidatePath(`/a/${slug}/favorites`, "layout");
-  return { saved: true };
 }
 
 /** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */
