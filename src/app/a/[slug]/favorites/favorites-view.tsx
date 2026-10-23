@@ -14,9 +14,9 @@ import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { ExportButton } from "../exhibitors/export-button";
-import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
+import { RemoveFavoriteStar } from "./remove-favorite";
 import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadProjectValue, LeadStatusSelect } from "./lead-controls";
 import { RecommendedShows } from "./recommended-shows";
 import { SearchButton, SearchForm } from "@/components/search-form";
@@ -224,41 +224,43 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
-                      <th className="px-5 py-2.5">Company</th>
+                      <th className="py-2.5 pr-5 pl-12">Company</th>
                       <th className="px-5 py-2.5">Trade show</th>
                       <th className="px-5 py-2.5">Lead</th>
                       <th className="w-[38%] px-5 py-2.5">Notes</th>
-                      <th className="px-5 py-2.5"><span className="sr-only">Remove</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue }) => (
                       <tr key={e.id} className="align-top">
-                        <td className="px-5 py-3">
-                          <div className="min-w-48">
-                            {e.companyKey ? (
-                              <Link href={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`} className="block font-semibold hover:text-brand">
-                                {e.name}
-                              </Link>
-                            ) : (
-                              <p className="font-semibold">{e.name}</p>
-                            )}
-                            {(e.industry || e.country) && (
-                              <p className="text-xs text-muted">{[e.industry, e.country && countryName(e.country)].filter(Boolean).join(" · ")}</p>
-                            )}
-                            {e.website && (
-                              <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
-                                {e.website.replace(/^https?:\/\/(www\.)?/, "")}
-                              </a>
-                            )}
-                            {(e.contactName || e.email || e.phone) && (
-                              <div className="mt-2 border-t border-line pt-2">
-                                {e.contactName && <p className="font-medium">{e.contactName}</p>}
-                                {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
-                                {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium break-all text-brand hover:underline">{e.email}</a>}
-                                {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
-                              </div>
-                            )}
+                        <td className="py-3 pr-5 pl-3">
+                          <div className="flex min-w-52 items-start gap-1">
+                            <RemoveFavoriteStar slug={slug} exhibitorId={e.id} name={e.name} />
+                            <div className="min-w-0 pt-1">
+                              {e.companyKey ? (
+                                <Link href={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`} className="block font-semibold hover:text-brand">
+                                  {e.name}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold">{e.name}</p>
+                              )}
+                              {(e.industry || e.country) && (
+                                <p className="text-xs text-muted">{[e.industry, e.country && countryName(e.country)].filter(Boolean).join(" · ")}</p>
+                              )}
+                              {e.website && (
+                                <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
+                                  {e.website.replace(/^https?:\/\/(www\.)?/, "")}
+                                </a>
+                              )}
+                              {(e.contactName || e.email || e.phone) && (
+                                <div className="mt-2 border-t border-line pt-2">
+                                  {e.contactName && <p className="font-medium">{e.contactName}</p>}
+                                  {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
+                                  {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium break-all text-brand hover:underline">{e.email}</a>}
+                                  {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-5 py-3">
@@ -306,16 +308,11 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                             profileFilled={emailProfileFilled}
                           />
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="flex justify-end">
-                            <FavoriteStar slug={slug} exhibitorIds={e.id} name={e.name} on />
-                          </div>
-                        </td>
                       </tr>
                     ))}
                     {items.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-5 py-8 text-center text-muted">
+                        <td colSpan={4} className="px-5 py-8 text-center text-muted">
                           No favorites match. <Link href={base} className="font-semibold text-brand">Show all</Link>
                         </td>
                       </tr>
