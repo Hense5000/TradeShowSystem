@@ -101,6 +101,8 @@ model Organization {
   country      String? // ISO 3166-1 alpha-2, e.g. "DK"
   website      String?
   vatNumber    String? // e.g. Danish CVR number
+  // The currency the project values on favorite exhibitors are shown in.
+  currency     Currency @default(EUR)
 
   // Stripe: we only store Stripe ids. Card data lives in Stripe, never here.
   stripeCustomerId String? @unique
@@ -121,6 +123,12 @@ model Organization {
   boothVisits           BoothVisit[]
   hiddenRecommendations HiddenShowRecommendation[]
   supportTickets        SupportTicket[]
+}
+
+enum Currency {
+  EUR
+  USD
+  GBP
 }
 
 enum Role {
@@ -461,6 +469,9 @@ model SavedListItem {
   followUpNote  String?
   // The user in the account who is responsible for the lead; null when no one is.
   assigneeId    String?
+  // What the project with the exhibitor is worth, in whole units of the
+  // account's currency; null when no value is set.
+  projectValue  Int?
 
   list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
   exhibitor Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)

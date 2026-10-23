@@ -17,7 +17,7 @@ import { ExportButton } from "../exhibitors/export-button";
 import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
-import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
+import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadProjectValue, LeadStatusSelect } from "./lead-controls";
 import { RecommendedShows } from "./recommended-shows";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -226,7 +226,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId }) => (
+                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue }) => (
                       <tr key={e.id} className="align-top">
                         <td className="px-5 py-3">
                           <div className="min-w-48">
@@ -270,6 +270,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                           <div className="flex flex-col gap-1.5">
                             <LeadAssigneeSelect slug={slug} exhibitorId={e.id} name={e.name} assigneeId={assigneeId} members={members} />
                             <LeadStatusSelect slug={slug} exhibitorId={e.id} name={e.name} status={leadStatus} />
+                            <LeadProjectValue
+                              key={projectValue ?? ""}
+                              slug={slug}
+                              exhibitorId={e.id}
+                              name={e.name}
+                              value={projectValue}
+                              currency={organization.currency}
+                            />
                             <LeadFollowUp
                               key={`${followUpAt ? isoDate(followUpAt) : ""}:${followUpNote ?? ""}`}
                               slug={slug}
