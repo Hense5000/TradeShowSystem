@@ -1,61 +1,32 @@
-// Pure helpers for the AI-written first email to a favorite exhibitor. The
-// part that calls the AI is in email-draft-run.ts.
+// The standard first email to a favorite exhibitor: a general introduction of
+// the user's company, filled in from the account's Company profile. No AI is
+// used, so writing it costs nothing.
 
-/** The languages a draft can be written in. */
-export const DRAFT_LANGUAGES = {
-  en: "English",
-  da: "Danish",
-  sv: "Swedish",
-  no: "Norwegian",
-  de: "German",
-  nl: "Dutch",
-  fr: "French",
-  es: "Spanish",
-  it: "Italian",
-  pt: "Portuguese",
-  pl: "Polish",
-} as const;
-export type DraftLanguage = keyof typeof DRAFT_LANGUAGES;
+export const MAX_EMAIL_OFFER = 600;
+export const MAX_EMAIL_BENEFIT = 150;
+export const EMAIL_BENEFITS = 3;
 
-// Countries where the exhibitor most likely prefers its own language over English.
-const COUNTRY_LANGUAGE: Record<string, DraftLanguage> = {
-  DK: "da",
-  SE: "sv",
-  NO: "no",
-  DE: "de",
-  AT: "de",
-  NL: "nl",
-  FR: "fr",
-  ES: "es",
-  MX: "es",
-  AR: "es",
-  IT: "it",
-  PT: "pt",
-  BR: "pt",
-  PL: "pl",
+export type EmailTemplateInput = {
+  sender: { name: string; company: string; website: string | null; offer: string | null; benefits: string[] };
+  exhibitor: { name: string; contactName: string | null };
+  tradeShow: { name: string };
 };
 
-/** The language to write in when the user has not picked one: the exhibitor's own, else English. */
-export function defaultDraftLanguage(country: string | null): DraftLanguage {
-  return (country && COUNTRY_LANGUAGE[country]) || "en";
-}
-
-export function parseDraftLanguage(value: unknown): DraftLanguage {
-  return typeof value === "string" && value in DRAFT_LANGUAGES ? (value as DraftLanguage) : "en";
-}
-
-export const MAX_DRAFT_GOAL = 300;
-
-/**
- * Reads the AI's answer: a line "SUBJECT: …" and then the email body.
- * Without a subject line the whole answer is the body.
- */
-export function parseDraft(answer: string): { subject: string; body: string } {
-  const text = answer.replace(/\r\n/g, "\n").trim();
-  const m = text.match(/^\s*\**subject\**\s*:\s*(.+)\n+([\s\S]*)$/i);
-  const subject = m ? m[1].replace(/\*\*/g, "").trim() : "";
-  const body = (m ? m[2] : text).replace(/\n{3,}/g, "\n\n").trim();
-  return { subject, body };
+/** The email's subject and body. Lines without data are left out. */
+export function standardEmail({ sender: s, exhibitor: e, tradeShow: t }: EmailTemplateInput): { subject: string; body: string } {
+  const website = s.website?.replace(/\/+$/, "") || null;
+  const benefits = s.benefits.map((b) => b.trim()).filter(Boolean);
+  const paragraphs = [
+    e.contactName?.trim() ? `Dear ${e.contactName.trim()},` : `Dear ${e.name} team,`,
+    `I came across ${e.name} as an exhibitor at ${t.name}, and I would like to briefly introduce ${s.company}.`,
+    s.offer?.trim() || null,
+    `We work with companies like yours and would be happy to tell you more about how we could support ${e.name}.`,
+    benefits.length ? benefits.map((b) => `• ${b}`).join("\n") : null,
+    "If it sounds relevant, I would be glad to send you more information or set up a short call at a time that suits you.",
+    website ? `You can read more about us at ${website}.` : null,
+    ["Best regards,", s.name, s.company, website].filter(Boolean).join("\n"),
+  ];
+  return { subject: `Introduction: ${s.company}`, body: paragraphs.filter(Boolean).join("\n\n") };
 }
 
 /** A mailto: link that opens the user's own mail program with the draft filled in. */

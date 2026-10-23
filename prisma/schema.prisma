@@ -103,6 +103,9 @@ model Organization {
   vatNumber    String? // e.g. Danish CVR number
   // The currency the project values on favorite exhibitors are shown in.
   currency     Currency @default(EUR)
+  // Used in the standard first email to an exhibitor ("Write email" on Favorites).
+  emailOffer    String?
+  emailBenefits String[] @default([])
 
   // Stripe: we only store Stripe ids. Card data lives in Stripe, never here.
   stripeCustomerId String? @unique

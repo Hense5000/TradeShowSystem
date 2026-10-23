@@ -2,12 +2,12 @@ import type { LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { defaultDraftLanguage } from "@/lib/email-draft";
+import { standardEmail } from "@/lib/email-draft";
+import { canManageMembers } from "@/lib/permissions";
 import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { recommendedShows } from "@/lib/show-recommendations-run";
@@ -27,7 +27,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 /** Favorites -> Exhibitors and Favorites -> Trade shows: the same page with the tabs on top, each tab its own menu sub-page. */
 export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exhibitors" | "shows"; sp: SearchParams }) {
-  const { user, organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
   const filters = favoriteFilters(sp);
   const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
 
@@ -90,7 +90,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
 
   const fav = `/a/${slug}/favorites`;
   const base = `${fav}/exhibitors`;
-  const canDraft = isCompanyProfileConfigured();
+  const sender = {
+    name: user.name ?? user.email,
+    company: organization.name,
+    website: organization.website,
+    offer: organization.emailOffer,
+    benefits: organization.emailBenefits,
+  };
+  const emailProfileFilled = Boolean(organization.emailOffer || organization.emailBenefits.length);
   const pages = Math.max(1, Math.ceil(shownCount / PAGE_SIZE));
   const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp || filters.owner);
   const mine = tab === "exhibitors" && filters.owner === "me";
@@ -291,7 +298,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                         </td>
                         <td className="px-5 py-3">
                           <LeadNote key={leadNote ?? ""} slug={slug} exhibitorId={e.id} name={e.name} note={leadNote} />
-                          {canDraft && <EmailDraftButton slug={slug} exhibitorId={e.id} name={e.name} email={e.email} language={defaultDraftLanguage(e.country)} />}
+                          <EmailDraftButton
+                            slug={slug}
+                            name={e.name}
+                            email={e.email}
+                            draft={standardEmail({ sender, exhibitor: e, tradeShow: e.tradeShow })}
+                            canEditProfile={canManageMembers(membership.role)}
+                            profileFilled={emailProfileFilled}
+                          />
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex justify-end">
