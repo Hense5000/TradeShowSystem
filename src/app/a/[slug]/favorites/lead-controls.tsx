@@ -127,10 +127,21 @@ export function LeadProjectValue({
   );
 }
 
-/** The account's notes about a favorite exhibitor. Saves when the field is left. */
+/** "23.10.2026: ", today in the browser, to start a new note line with. */
+function noteStamp() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}: `;
+}
+
+/**
+ * The account's notes about a favorite exhibitor. Clicking into the field
+ * starts a new line with today's date; the stamp is taken off again if nothing
+ * is written after it. Saves when the field is left.
+ */
 export function LeadNote({ slug, exhibitorId, name, note }: { slug: string; exhibitorId: string; name: string; note: string | null }) {
   const [state, formAction, pending] = useActionState(saveLeadNote.bind(null, slug, exhibitorId), undefined);
   const saved = useRef(note ?? "");
+  const stamp = useRef("");
   const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
@@ -145,12 +156,25 @@ export function LeadNote({ slug, exhibitorId, name, note }: { slug: string; exhi
       <textarea
         name="note"
         defaultValue={note ?? ""}
-        rows={2}
         maxLength={MAX_LEAD_NOTE}
         placeholder="Add a note"
         aria-label={`Notes about ${name}`}
-        className="input resize-y py-1.5"
+        // As tall as the lead controls above the reminder text, so Write email lines up with it.
+        className="input h-38 resize-y py-1.5"
+        onFocus={(e) => {
+          const field = e.currentTarget;
+          const before = field.value.trimEnd();
+          stamp.current = (before ? "\n" : "") + noteStamp();
+          field.value = before + stamp.current;
+          field.setSelectionRange(field.value.length, field.value.length);
+          field.scrollTop = field.scrollHeight;
+        }}
         onBlur={(e) => {
+          // A date with nothing written after it is not a note.
+          const bare = stamp.current.trimEnd();
+          const value = e.currentTarget.value.trimEnd();
+          if (bare && value.endsWith(bare)) e.currentTarget.value = value.slice(0, -bare.length);
+          stamp.current = "";
           if (e.currentTarget.value.trim() === saved.current.trim()) return;
           saved.current = e.currentTarget.value;
           e.currentTarget.form?.requestSubmit();
