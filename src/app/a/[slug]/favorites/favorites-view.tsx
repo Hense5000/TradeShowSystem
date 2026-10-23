@@ -226,9 +226,8 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                     <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
                       <th className="px-5 py-2.5">Company</th>
                       <th className="px-5 py-2.5">Trade show</th>
-                      <th className="px-5 py-2.5">Contact</th>
                       <th className="px-5 py-2.5">Lead</th>
-                      <th className="px-5 py-2.5">Notes</th>
+                      <th className="w-[38%] px-5 py-2.5">Notes</th>
                       <th className="px-5 py-2.5"><span className="sr-only">Remove</span></th>
                     </tr>
                   </thead>
@@ -252,6 +251,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                                 {e.website.replace(/^https?:\/\/(www\.)?/, "")}
                               </a>
                             )}
+                            {(e.contactName || e.email || e.phone) && (
+                              <div className="mt-2 border-t border-line pt-2">
+                                {e.contactName && <p className="font-medium">{e.contactName}</p>}
+                                {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
+                                {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium break-all text-brand hover:underline">{e.email}</a>}
+                                {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-5 py-3">
@@ -263,14 +270,6 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                               {formatDateRange(e.tradeShow.startDate, e.tradeShow.endDate)}
                               {e.boothNumber && ` · Booth ${e.boothNumber}`}
                             </p>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="min-w-44">
-                            {e.contactName ? <p className="font-medium">{e.contactName}</p> : <span className="text-faint">—</span>}
-                            {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
-                            {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
-                            {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
                           </div>
                         </td>
                         <td className="px-5 py-3">
@@ -316,7 +315,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                     ))}
                     {items.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-5 py-8 text-center text-muted">
+                        <td colSpan={5} className="px-5 py-8 text-center text-muted">
                           No favorites match. <Link href={base} className="font-semibold text-brand">Show all</Link>
                         </td>
                       </tr>
