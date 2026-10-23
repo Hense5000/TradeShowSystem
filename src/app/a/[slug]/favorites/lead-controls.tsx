@@ -2,6 +2,7 @@
 
 import type { LeadStatus } from "@prisma/client";
 import { useActionState, useEffect, useRef, useState } from "react";
+import { Dialog } from "@/components/dialog";
 import { LEAD_LABEL, LEAD_STATUSES, MAX_FOLLOW_UP_NOTE, MAX_LEAD_NOTE } from "@/lib/leads";
 import { saveFollowUp, saveLeadNote, setLeadAssignee, setLeadStatus } from "./actions";
 
@@ -39,8 +40,12 @@ export function LeadAssigneeSelect({
   assigneeId: string | null;
   members: { id: string; name: string }[];
 }) {
+  const [state, formAction] = useActionState(setLeadAssignee.bind(null, slug, exhibitorId), undefined);
+  const [shown, setShown] = useState<typeof state>(undefined);
+  useEffect(() => setShown(state), [state]);
+
   return (
-    <form action={setLeadAssignee.bind(null, slug, exhibitorId)}>
+    <form action={formAction}>
       <select
         name="assignee"
         defaultValue={assigneeId ?? ""}
@@ -54,6 +59,22 @@ export function LeadAssigneeSelect({
           <option key={m.id} value={m.id}>{m.name}</option>
         ))}
       </select>
+      {shown?.notified && (
+        <Dialog title="User notified by email" onClose={() => setShown(undefined)}>
+          <p className="text-sm text-muted">
+            <strong className="text-ink">{shown.notified}</strong> is now responsible for <strong className="text-ink">{name}</strong> and has
+            been notified by email.
+          </p>
+        </Dialog>
+      )}
+      {shown?.notifyFailed && (
+        <Dialog title="The email could not be sent" onClose={() => setShown(undefined)}>
+          <p className="text-sm text-muted">
+            <strong className="text-ink">{shown.notifyFailed}</strong> is now responsible for <strong className="text-ink">{name}</strong>, but
+            the notification email could not be sent. Please tell them yourself.
+          </p>
+        </Dialog>
+      )}
     </form>
   );
 }

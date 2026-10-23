@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
+import { appUrl } from "@/lib/app-url";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { db } from "@/lib/db";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { MAX_DRAFT_GOAL, parseDraftLanguage } from "@/lib/email-draft";
 import { writeEmailDraft } from "@/lib/email-draft-run";
+import { leadAssignedEmailContent } from "@/lib/lead-assigned";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
 import { requireMembership } from "@/lib/tenant";
 
@@ -71,18 +74,52 @@ export async function saveFollowUp(slug: string, exhibitorId: string, _prev: Sav
   return { saved: true };
 }
 
-/** The user in the account who is responsible for a favorite exhibitor, or no one. */
-export async function setLeadAssignee(slug: string, exhibitorId: string, formData: FormData) {
-  const { organization } = await requireMembership(slug);
+export type AssigneeState = { notified?: string; notifyFailed?: string } | undefined;
+
+/**
+ * The user in the account who is responsible for a favorite exhibitor, or no one.
+ * When it is another user than the one signed in, they get an email about it.
+ */
+export async function setLeadAssignee(slug: string, exhibitorId: string, _prev: AssigneeState, formData: FormData): Promise<AssigneeState> {
+  const { user, organization } = await requireMembership(slug);
   const chosen = String(formData.get("assignee") ?? "");
   // Only members of this account can be made responsible.
-  const member = chosen ? await db.membership.findFirst({ where: { organizationId: organization.id, userId: chosen }, select: { userId: true } }) : null;
+  const member = chosen
+    ? await db.membership.findFirst({
+        where: { organizationId: organization.id, userId: chosen },
+        select: { user: { select: { id: true, name: true, email: true } } },
+      })
+    : null;
   if (chosen && !member) return;
-  await db.savedListItem.updateMany({
-    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
-    data: { assigneeId: member?.userId ?? null, leadUpdatedAt: new Date() },
+  const where = { exhibitorId, list: { organizationId: organization.id, favorites: true } };
+  const before = await db.savedListItem.findFirst({
+    where,
+    select: { assigneeId: true, exhibitor: { select: { name: true, tradeShow: { select: { name: true } } } } },
   });
+  if (!before) return;
+  const assignee = member?.user ?? null;
+  await db.savedListItem.updateMany({ where, data: { assigneeId: assignee?.id ?? null, leadUpdatedAt: new Date() } });
   refresh(slug);
+
+  if (!assignee || assignee.id === user.id || assignee.id === before.assigneeId) return;
+  const who = assignee.name ?? assignee.email;
+  if (!isEmailConfigured()) return { notifyFailed: who };
+  try {
+    await sendEmail({
+      to: assignee.email,
+      ...leadAssignedEmailContent({
+        assignedBy: user.name ?? user.email,
+        accountName: organization.name,
+        exhibitor: before.exhibitor.name,
+        tradeShow: before.exhibitor.tradeShow.name,
+        url: `${appUrl()}/a/${slug}/favorites/exhibitors?owner=me`,
+      }),
+    });
+    return { notified: who };
+  } catch (e) {
+    console.error("Lead assigned email failed", e);
+    return { notifyFailed: who };
+  }
 }
 
 export type DraftState = { subject?: string; body?: string; error?: string } | undefined;
