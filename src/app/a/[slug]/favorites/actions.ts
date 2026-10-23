@@ -1,11 +1,14 @@
 "use server";
 
+import { del, head } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
 import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { leadAssignedEmailContent } from "@/lib/lead-assigned";
+import { cleanFileName, leadFileContentType, leadFileFolder, MAX_FILES_PER_LEAD, MAX_LEAD_FILE_BYTES } from "@/lib/lead-files";
+import { isFileStoreConfigured } from "@/lib/lead-files-run";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
 import { parseProjectValue } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
@@ -132,6 +135,66 @@ export async function setLeadAssignee(slug: string, exhibitorId: string, _prev: 
     console.error("Lead assigned email failed", e);
     return { notifyFailed: who };
   }
+}
+
+/**
+ * Saves a file the browser has just uploaded to the store (through
+ * files/upload/route.ts) on a favorite exhibitor. The upload must be in the
+ * account's own folder for that favorite; anything else is deleted again.
+ */
+export async function addLeadFile(slug: string, exhibitorId: string, pathname: string, fileName: string): Promise<SaveState> {
+  const { user, organization } = await requireMembership(slug);
+  if (!isFileStoreConfigured()) return { error: "File uploads are not set up yet." };
+  if (!pathname.startsWith(leadFileFolder(organization.id, exhibitorId)) || pathname.includes("..")) return { error: "The file could not be saved." };
+
+  const stored = await head(pathname).catch(() => null);
+  if (!stored) return { error: "The upload did not finish. Try again." };
+  const name = cleanFileName(fileName);
+  const item = await db.savedListItem.findFirst({
+    where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
+    select: { listId: true, _count: { select: { files: true } } },
+  });
+  const problem = !item
+    ? "This exhibitor is no longer in Favorites."
+    : item._count.files >= MAX_FILES_PER_LEAD
+      ? `A favorite can have up to ${MAX_FILES_PER_LEAD} files. Delete one first.`
+      : stored.size > MAX_LEAD_FILE_BYTES
+        ? "The file is too large."
+        : undefined;
+  if (problem || !item) {
+    await del(pathname).catch(() => {});
+    return { error: problem };
+  }
+  await db.leadFile.create({
+    data: {
+      organizationId: organization.id,
+      listId: item.listId,
+      exhibitorId,
+      pathname,
+      name,
+      size: stored.size,
+      contentType: leadFileContentType(name) ?? stored.contentType,
+      uploadedById: user.id,
+    },
+  });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
+  return { saved: true };
+}
+
+/** Deletes a file kept with a favorite exhibitor, from the list and from the store. */
+export async function deleteLeadFile(slug: string, fileId: string): Promise<SaveState> {
+  const { organization } = await requireMembership(slug);
+  const file = await db.leadFile.findFirst({ where: { id: fileId, organizationId: organization.id }, select: { id: true, pathname: true } });
+  if (!file) return { saved: true }; // already gone
+  try {
+    await del(file.pathname);
+  } catch (e) {
+    console.error("Deleting a lead file from the store failed", e);
+    return { error: "The file could not be deleted. Try again." };
+  }
+  await db.leadFile.deleteMany({ where: { id: file.id } });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
+  return { saved: true };
 }
 
 /** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */
