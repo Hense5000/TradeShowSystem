@@ -5,7 +5,8 @@ import { initials } from "@/lib/initials";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
-import { accountHasAccess, requireMembership } from "@/lib/tenant";
+import { accountAccess, requireMembership } from "@/lib/tenant";
+import { daysLeftLabel, TRIAL_DAYS, trialDaysLeft } from "@/lib/trial";
 import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
@@ -14,7 +15,9 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const userName = user.name ?? user.email;
   const platformAdmin = isPlatformAdmin(user.email);
   const { subscriptions } = organization;
-  const hasAccess = accountHasAccess(subscriptions, user.email);
+  const access = accountAccess(organization, user.email);
+  const hasAccess = access !== "none";
+  const isOwner = membership.role === "OWNER";
   const [primaryContact, ticketsWaiting] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
     platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
@@ -81,10 +84,26 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
           : []),
       ]}
     >
+      {access === "trial" && organization.trialEndsAt && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-brand-soft px-3 py-2.5 text-sm print:hidden">
+          <p>
+            <span className="font-semibold">Free trial: {daysLeftLabel(trialDaysLeft(organization.trialEndsAt))}.</span> Look around as much as you like.
+            Downloads (Excel, CSV, CRM, calendar, print) open when you subscribe.
+            {!isOwner && " Ask the account owner to subscribe."}
+          </p>
+          {isOwner && (
+            <a href={`/a/${slug}/billing/checkout`} className="btn py-1.5">
+              Subscribe
+            </a>
+          )}
+        </div>
+      )}
       {!hasAccess ? (
         <p className="rounded-lg bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          This account needs an active subscription to use Trade Show System.{" "}
-          {membership.role === "OWNER" ? (
+          {organization.trialEndsAt && !subscriptions.length
+            ? `Your ${TRIAL_DAYS} day free trial has ended. Subscribe to keep using Trade Show System.`
+            : "This account needs an active subscription to use Trade Show System."}{" "}
+          {isOwner ? (
             <>
               Start it on the{" "}
               <Link href={`/a/${slug}/billing`} className="font-semibold underline">
@@ -100,7 +119,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
         paymentFailed && (
           <p className="rounded-lg bg-warn-soft px-3 py-2.5 text-sm text-warn">
             The last payment failed.{" "}
-            {membership.role === "OWNER" ? (
+            {isOwner ? (
               <Link href={`/a/${slug}/billing`} className="font-semibold underline">
                 Update your card
               </Link>
@@ -111,7 +130,15 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
           </p>
         )
       )}
-      {children}
+      {access === "trial" ? (
+        <>
+          {/* Printing (and saving as PDF) is not part of the free trial. */}
+          <div className="contents print:hidden">{children}</div>
+          <p className="hidden print:block">Printing is not part of the free trial. Subscribe to print and download.</p>
+        </>
+      ) : (
+        children
+      )}
     </AccountFrame>
   );
 }

@@ -7,15 +7,19 @@ import { formatDateRange } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { favoriteRowsAt } from "@/lib/favorite-companies";
 import { byBooth, LEAD_LABEL, LEAD_PILL } from "@/lib/leads";
-import { requireMembership } from "@/lib/tenant";
+import { hasRole } from "@/lib/permissions";
+import { accountAccess, requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
+import { TrialLockedButton } from "../../exhibitors/export-button";
 import { PrintButton, VisitedBox } from "./visited-box";
 
 // The meeting plan for one trade show: the account's favorite exhibitors at
 // the show in booth order, to tick off on the show floor or print.
 export default async function MeetingPlanPage({ params, searchParams }: PageProps<"/a/[slug]/favorites/plan">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
+  // No printing or PDF during the free trial.
+  const trial = accountAccess(organization, user.email) === "trial";
   const sp = await searchParams;
   const showId = typeof sp.show === "string" ? sp.show : "";
   const show = showId ? await db.tradeShow.findUnique({ where: { id: showId }, include: { center: { select: { name: true } } } }) : null;
@@ -75,7 +79,14 @@ export default async function MeetingPlanPage({ params, searchParams }: PageProp
           <p className="text-sm font-semibold tabular-nums">
             {visitedCount} of {rows.length} visited
           </p>
-          {rows.length > 0 && <PrintButton />}
+          {rows.length > 0 &&
+            (trial ? (
+              <TrialLockedButton slug={slug} canSubscribe={hasRole(membership.role, "OWNER")} title="Printing is not part of the free trial">
+                Print / PDF
+              </TrialLockedButton>
+            ) : (
+              <PrintButton />
+            ))}
         </div>
       </div>
 

@@ -7,8 +7,10 @@ import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
-import { requireMembership } from "@/lib/tenant";
+import { hasRole } from "@/lib/permissions";
+import { accountAccess, requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
+import { TrialLockedButton } from "../../exhibitors/export-button";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const monthName = (month: Date) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(month);
@@ -17,7 +19,8 @@ const monthName = (month: Date) => new Intl.DateTimeFormat("en-US", { timeZone: 
 // month is shown as a list.
 export default async function FavoritesCalendarPage({ params, searchParams }: PageProps<"/a/[slug]/favorites/calendar">) {
   const { slug } = await params;
-  const { organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
+  const trial = accountAccess(organization, user.email) === "trial";
   const sp = await searchParams;
   const day = today();
   const month = parseMonth(sp.month, day);
@@ -48,11 +51,16 @@ export default async function FavoritesCalendarPage({ params, searchParams }: Pa
         title="Calendar"
         description="Your favorite trade shows by month. Star a trade show on the Trade shows page to add it here."
         action={
-          shows.length > 0 && (
+          shows.length > 0 &&
+          (trial ? (
+            <TrialLockedButton slug={slug} canSubscribe={hasRole(membership.role, "OWNER")} title="Downloads are not part of the free trial">
+              Add to calendar (.ics)
+            </TrialLockedButton>
+          ) : (
             <a href={`${base}/calendar.ics`} download className="btn-secondary py-2" title="Download all favorite trade shows as a calendar file for Outlook, Google Calendar or Apple Calendar">
               <Icon name="download" className="size-4" /> Add to calendar (.ics)
             </a>
-          )
+          ))
         }
       />
 

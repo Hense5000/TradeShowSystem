@@ -4,16 +4,19 @@ import { useActionState, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { Icon } from "@/components/icons";
 import type { ExportLimitInfo } from "@/lib/export-limit-run";
+import type { TrialLockInfo } from "@/lib/trial";
 import { upgradePlan } from "../billing/actions";
 
 /**
  * An Excel or CSV download button. Over the daily trade show limit (see
  * src/lib/export-limit.ts) the export answers with the limit instead of a
  * file, and a dialog explains it, with an Upgrade button for the owner.
+ * During the free trial it answers that downloads need a subscription.
  */
 export function ExportButton({ slug, href, title, children }: { slug: string; href: string; title: string; children: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState<ExportLimitInfo | null>(null);
+  const [trial, setTrial] = useState<TrialLockInfo | null>(null);
   const [failed, setFailed] = useState(false);
 
   const download = async () => {
@@ -21,7 +24,9 @@ export function ExportButton({ slug, href, title, children }: { slug: string; hr
     try {
       const res = await fetch(href, { cache: "no-store" });
       if (res.status === 402) {
-        setLimit(await res.json());
+        const info: ExportLimitInfo | TrialLockInfo = await res.json();
+        if (info.error === "trial") setTrial(info);
+        else setLimit(info);
         return;
       }
       // Logged out meanwhile: let the browser follow on to the login page.
@@ -53,12 +58,44 @@ export function ExportButton({ slug, href, title, children }: { slug: string; hr
         <Icon name="download" className="size-4" /> {busy ? "Preparing…" : children}
       </button>
       {limit && <LimitDialog slug={slug} info={limit} onClose={() => setLimit(null)} />}
+      {trial && <TrialDialog slug={slug} canSubscribe={trial.canSubscribe} onClose={() => setTrial(null)} />}
       {failed && (
         <Dialog title="The download failed" onClose={() => setFailed(false)}>
           <p className="text-sm text-muted">Please try again in a moment.</p>
         </Dialog>
       )}
     </>
+  );
+}
+
+/** A download button during the free trial: it only explains that downloads need a subscription. */
+export function TrialLockedButton({ slug, canSubscribe, title, children }: { slug: string; canSubscribe: boolean; title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn-secondary py-2" title={title} onClick={() => setOpen(true)}>
+        <Icon name="download" className="size-4" /> {children}
+      </button>
+      {open && <TrialDialog slug={slug} canSubscribe={canSubscribe} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function TrialDialog({ slug, canSubscribe, onClose }: { slug: string; canSubscribe: boolean; onClose: () => void }) {
+  return (
+    <Dialog title="Downloads are not part of the free trial" onClose={onClose}>
+      <p className="text-sm">
+        During the free trial you can use everything in Trade Show System, but not download anything. Subscribe to download exhibitors to Excel, CSV and
+        your CRM, and to add trade shows to your calendar.
+      </p>
+      {canSubscribe ? (
+        <a href={`/a/${slug}/billing/checkout`} className="btn self-start">
+          Subscribe now
+        </a>
+      ) : (
+        <p className="text-sm text-muted">Ask the account owner to subscribe.</p>
+      )}
+    </Dialog>
   );
 }
 

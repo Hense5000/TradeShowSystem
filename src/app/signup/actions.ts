@@ -6,8 +6,8 @@ import { db } from "@/lib/db";
 import { acceptInvitation, findInvitation } from "@/lib/invitations";
 import { issueTicket } from "@/lib/login-guard";
 import { createOrganization } from "@/lib/organizations";
-import { billingConfigured, syncSeats } from "@/lib/stripe";
-import { isPlatformAdmin } from "@/lib/platform-admin";
+import { syncSeats } from "@/lib/stripe";
+import { trialEnd } from "@/lib/trial";
 import { firstError, signupSchema } from "@/lib/validation";
 
 // Entered values (except the password) are sent back so the form keeps them after an error.
@@ -51,12 +51,12 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     if (!companyName) return fail("Enter a company name.");
     const { user, organization } = await db.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { name, email, passwordHash } });
-      return { user, organization: await createOrganization(tx, user.id, companyName) };
+      return { user, organization: await createOrganization(tx, user.id, companyName, { trialEndsAt: trialEnd() }) };
     });
     userId = user.id;
-    // A new account pays before it can be used: straight on to enter a card.
-    destination =
-      billingConfigured() && !isPlatformAdmin(email) ? `/a/${organization.slug}/billing/checkout` : `/a/${organization.slug}`;
+    // A new account starts with a free trial (src/lib/trial.ts): straight in,
+    // no card needed until it ends.
+    destination = `/a/${organization.slug}`;
   }
 
   // The browser used to sign up is trusted, so no login code is needed here.

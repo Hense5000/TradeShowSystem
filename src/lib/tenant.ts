@@ -1,5 +1,5 @@
 import "server-only";
-import type { Role, Subscription } from "@prisma/client";
+import type { Organization, Role, Subscription } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "@/auth";
@@ -8,6 +8,7 @@ import { currentSubscription, hasPaidAccess } from "@/lib/billing";
 import { hasRole } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { billingConfigured } from "@/lib/stripe";
+import { inTrial } from "@/lib/trial";
 
 // The lookups below are cached for one request: the account layout and the
 // page under it both check the user, and every database round trip is felt.
@@ -49,22 +50,27 @@ export async function requireMembership(slug: string, minRole: Role = "MEMBER", 
   const membership = memberships[0];
   if (!membership) notFound();
   if (!hasRole(membership.role, minRole)) notFound();
-  // Accounts without a paid subscription only reach Billing, Users and
-  // Company profile (the pages that pass allowUnpaid).
-  if (!allowUnpaid && !accountHasAccess(membership.organization.subscriptions, user.email)) {
+  // Accounts without a paid subscription or a running free trial only reach
+  // Billing, Users and Company profile (the pages that pass allowUnpaid).
+  if (!allowUnpaid && accountAccess(membership.organization, user.email) === "none") {
     redirect(`/a/${slug}/billing`);
   }
   return { user, membership, organization: membership.organization };
 }
 
 /**
- * Whether the account with these subscriptions may use the app. Always true
+ * What the account may do: "full" use, the free "trial" (everything but
+ * downloads, see src/lib/trial.ts) or "none" until it subscribes. Always full
  * while payments aren't set up, and for platform admins, so they can look
  * into any account.
  */
-export function accountHasAccess(subscriptions: Subscription[], email: string): boolean {
-  if (!billingConfigured() || isPlatformAdmin(email)) return true;
-  return hasPaidAccess(currentSubscription(subscriptions));
+export function accountAccess(
+  organization: Pick<Organization, "trialEndsAt"> & { subscriptions: Subscription[] },
+  email: string,
+): "full" | "trial" | "none" {
+  if (!billingConfigured() || isPlatformAdmin(email)) return "full";
+  if (hasPaidAccess(currentSubscription(organization.subscriptions))) return "full";
+  return inTrial(organization.trialEndsAt) ? "trial" : "none";
 }
 
 /**

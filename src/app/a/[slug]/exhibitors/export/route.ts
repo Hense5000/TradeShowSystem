@@ -6,7 +6,9 @@ import { FREE_LIST_SIZE } from "@/lib/export-limit";
 import { claimExport } from "@/lib/export-limit-run";
 import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
 import { type Table, toCsv, toXlsx } from "@/lib/spreadsheet";
-import { requireMembership } from "@/lib/tenant";
+import { hasRole } from "@/lib/permissions";
+import { accountAccess, requireMembership } from "@/lib/tenant";
+import type { TrialLockInfo } from "@/lib/trial";
 
 // A large export can take a while to read and pack.
 export const maxDuration = 60;
@@ -24,10 +26,16 @@ export const maxDuration = 60;
  * Each user may download exhibitors from a limited number of trade shows per
  * day (see src/lib/export-limit.ts). Over the limit it answers 402 with what
  * the limit dialog shows (src/components/export-button.tsx) instead of a file.
+ * During the free trial nothing can be downloaded, and it answers 402 with
+ * what the trial dialog shows.
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
   const { user, membership, organization } = await requireMembership(slug);
+  if (accountAccess(organization, user.email) === "trial") {
+    const info: TrialLockInfo = { error: "trial", canSubscribe: hasRole(membership.role, "OWNER") };
+    return Response.json(info, { status: 402, headers: { "Cache-Control": "no-store" } });
+  }
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
