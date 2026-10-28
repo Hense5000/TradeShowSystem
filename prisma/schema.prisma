@@ -111,6 +111,13 @@ model Organization {
   // Stripe: we only store Stripe ids. Card data lives in Stripe, never here.
   stripeCustomerId String? @unique
 
+  // Free trial for accounts signed up on their own: the app can be used
+  // without paying until this time, but nothing can be downloaded (see
+  // src/lib/trial.ts). Null for accounts that never had a trial.
+  trialEndsAt        DateTime?
+  // When the owners were emailed that the trial ended, so it is sent once.
+  trialEndedEmailAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

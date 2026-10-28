@@ -6,6 +6,7 @@ import { planOf, SHOWS_PER_DAY } from "@/lib/export-limit";
 import { hasRole } from "@/lib/permissions";
 import { billingConfigured, planPrice, proPriceId, stripe, stripeTestMode, syncSubscription } from "@/lib/stripe";
 import { requireMembership } from "@/lib/tenant";
+import { inTrial } from "@/lib/trial";
 import { openPortal, startCheckout, upgradePlan } from "./actions";
 
 const date = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -118,7 +119,13 @@ export default async function BillingPage({ params, searchParams }: PageProps<"/
           <p className="text-sm text-muted">Online payment is not available yet. We will let you know when it is.</p>
         ) : !sub || !live ? (
           <p className="text-sm text-muted">
-            {sub ? "Your subscription has ended. Start a new one to continue." : "You don't have a subscription yet."}
+            {sub
+              ? "Your subscription has ended. Start a new one to continue."
+              : organization.trialEndsAt && inTrial(organization.trialEndsAt)
+                ? `You are on the free trial until ${date.format(organization.trialEndsAt)}. Subscribe to download exhibitors and keep using Trade Show System after that.`
+                : organization.trialEndsAt
+                  ? `Your free trial ended on ${date.format(organization.trialEndsAt)}. Subscribe to continue.`
+                  : "You don't have a subscription yet."}
           </p>
         ) : (
           <p className="text-sm text-muted">
