@@ -5,6 +5,7 @@ import { countryName } from "@/lib/countries";
 import { addMonths, formatDateRange, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { ACTIVE_LEAD_STATUSES, FOLLOW_UP_PILL, FOLLOW_UP_SOON_DAYS, followUpLabel, followUpState, mineOrUnassigned } from "@/lib/leads";
+import { formatMoney } from "@/lib/project-value";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
@@ -13,24 +14,42 @@ import { RecommendedShows } from "./favorites/recommended-shows";
 // The follow-ups card under "Lead retrieval active" lists at most this many.
 const FOLLOW_UPS_SHOWN = 8;
 
+// Henrik's pale green for the lead cards ("Lead retrieval active" and "Project value").
+const LEAD_CARD = "border-[#7FE07F] bg-[#98FB98]";
+const LEAD_ICON = "bg-white/60 text-ink";
+
 // How far ahead the upcoming list looks, in months. The first is the default.
 const RANGES = [2, 3, 6] as const;
 type Range = (typeof RANGES)[number];
 
-function Stat({ icon, label, value, note, href }: { icon: IconName; label: string; value: number; note: string; href?: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+  note,
+  href,
+  highlight,
+}: {
+  icon: IconName;
+  label: string;
+  value: number;
+  note: string;
+  href?: string;
+  highlight?: boolean;
+}) {
   const body = (
     <>
       <span className="min-w-0">
         <span className="eyebrow block">{label}</span>
         <span className="mt-1 block text-3xl font-bold tabular-nums">{value.toLocaleString("en-US")}</span>
-        <span className="mt-0.5 block text-sm text-muted">{note}</span>
+        <span className={`mt-0.5 block text-sm ${highlight ? "text-ink/70" : "text-muted"}`}>{note}</span>
       </span>
-      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+      <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${highlight ? LEAD_ICON : "bg-brand-soft text-brand"}`}>
         <Icon name={icon} className="size-5.5" />
       </span>
     </>
   );
-  const cls = "card flex items-start justify-between gap-3";
+  const cls = `card flex items-start justify-between gap-3 ${highlight ? LEAD_CARD : ""}`;
   return href ? (
     <Link href={href} className={`${cls} hover:border-brand`}>{body}</Link>
   ) : (
@@ -49,7 +68,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
   // The follow-ups card shows the user's own leads and the ones no one is responsible for.
   const myLeads = { list: { organizationId: organization.id, favorites: true }, ...mineOrUnassigned(user.id) };
   const followUpWhere = { ...myLeads, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
-  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended, values] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
@@ -73,7 +92,21 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       orderBy: [{ startDate: "asc" }, { name: "asc" }],
     }),
     recommendedShows(organization.id, day, 3),
+    // The project values on the favorite exhibitors, per status.
+    db.savedListItem.groupBy({
+      by: ["leadStatus"],
+      where: { list: { organizationId: organization.id, favorites: true }, projectValue: { not: null } },
+      _sum: { projectValue: true },
+      _count: true,
+    }),
   ]);
+
+  // Running projects are the leads still being worked on; won ones are shown apart.
+  const openValues = values.filter((v) => ACTIVE_LEAD_STATUSES.includes(v.leadStatus));
+  const openValue = openValues.reduce((sum, v) => sum + (v._sum.projectValue ?? 0), 0);
+  const openValueCount = openValues.reduce((sum, v) => sum + v._count, 0);
+  const wonValue = values.find((v) => v.leadStatus === "WON")?._sum.projectValue ?? 0;
+  const money = (n: number) => formatMoney(n, organization.currency);
 
   const tab = "rounded-lg border px-3 py-1.5 text-sm font-semibold whitespace-nowrap";
 
@@ -91,12 +124,28 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           value={openLeads}
           note={`Open leads · ${favoriteShows} ${favoriteShows === 1 ? "show" : "shows"}`}
           href={`/a/${slug}/favorites/exhibitors`}
+          highlight
         />
       </div>
 
       {/* The follow-ups sit right under "Lead retrieval active", next to the upcoming trade shows. */}
       <div className="grid items-start gap-3.5 xl:grid-cols-4">
         <div className="flex flex-col gap-3.5 xl:col-start-4 xl:row-start-1">
+          <Link href={`/a/${slug}/favorites/exhibitors`} className={`card flex items-start justify-between gap-3 hover:border-brand ${LEAD_CARD}`}>
+            <span className="min-w-0">
+              <span className="eyebrow block">Project value</span>
+              <span className="mt-1 block truncate text-3xl font-bold tabular-nums">{money(openValue)}</span>
+              <span className="mt-0.5 block text-sm text-ink/70">
+                {openValueCount === 0
+                  ? "Add a project value to your favorite exhibitors"
+                  : `${openValueCount} running ${openValueCount === 1 ? "project" : "projects"}`}
+              </span>
+              {wonValue > 0 && <span className="mt-0.5 block text-xs text-ink/60">Won: {money(wonValue)}</span>}
+            </span>
+            <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${LEAD_ICON}`}>
+              <Icon name="briefcase" className="size-5.5" />
+            </span>
+          </Link>
           <section className="card flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
               <div>

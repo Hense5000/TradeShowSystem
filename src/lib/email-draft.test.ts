@@ -1,23 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { defaultDraftLanguage, mailtoHref, parseDraft, parseDraftLanguage } from "./email-draft";
+import { mailtoHref, standardEmail } from "./email-draft";
 
-describe("email draft", () => {
-  it("writes in the exhibitor's language when it is likely to prefer it, else English", () => {
-    expect(defaultDraftLanguage("DK")).toBe("da");
-    expect(defaultDraftLanguage("AT")).toBe("de");
-    expect(defaultDraftLanguage("US")).toBe("en");
-    expect(defaultDraftLanguage(null)).toBe("en");
-    expect(parseDraftLanguage("de")).toBe("de");
-    expect(parseDraftLanguage("xx")).toBe("en");
+const sender = {
+  name: "Henrik Hansen",
+  company: "Acme Stands",
+  website: "https://acme.com/",
+  offer: "We build custom exhibition stands across Europe.",
+  benefits: ["Fixed prices", " ", "Delivery in 4 weeks"],
+};
+
+describe("standard email", () => {
+  it("fills in the template from the profile, the exhibitor and the show", () => {
+    const { subject, body } = standardEmail({ sender, exhibitor: { name: "Medtech AB", contactName: "Anna Berg" }, tradeShow: { name: "MEDICA 2026" } });
+    expect(subject).toBe("Introduction: Acme Stands");
+    expect(body).toBe(
+      [
+        "Dear Anna Berg,",
+        "I came across Medtech AB as an exhibitor at MEDICA 2026, and I would like to briefly introduce Acme Stands.",
+        "We build custom exhibition stands across Europe.",
+        "We work with companies like yours and would be happy to tell you more about how we could support Medtech AB.",
+        "• Fixed prices\n• Delivery in 4 weeks",
+        "If it sounds relevant, I would be glad to send you more information or set up a short call at a time that suits you.",
+        "You can read more about us at https://acme.com.",
+        "Best regards,\nHenrik Hansen\nAcme Stands\nhttps://acme.com",
+      ].join("\n\n"),
+    );
   });
 
-  it("splits the subject from the body", () => {
-    expect(parseDraft("SUBJECT: Meeting at MEDICA\n\nDear Anna,\n\n\n\nBest regards")).toEqual({
-      subject: "Meeting at MEDICA",
-      body: "Dear Anna,\n\nBest regards",
+  it("leaves out lines without data", () => {
+    const { body } = standardEmail({
+      sender: { ...sender, website: null, offer: null, benefits: [] },
+      exhibitor: { name: "Medtech AB", contactName: null },
+      tradeShow: { name: "MEDICA 2026" },
     });
-    expect(parseDraft("**Subject:** **Hello**\nHi")).toEqual({ subject: "Hello", body: "Hi" });
-    expect(parseDraft("Just a body")).toEqual({ subject: "", body: "Just a body" });
+    expect(body.startsWith("Dear Medtech AB team,\n\n")).toBe(true);
+    expect(body).not.toContain("•");
+    expect(body).not.toContain("read more");
+    expect(body.endsWith("Best regards,\nHenrik Hansen\nAcme Stands")).toBe(true);
   });
 
   it("builds a mailto link", () => {

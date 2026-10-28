@@ -2,22 +2,23 @@ import type { LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { defaultDraftLanguage } from "@/lib/email-draft";
+import { standardEmail } from "@/lib/email-draft";
+import { canManageMembers } from "@/lib/permissions";
 import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { ExportButton } from "../exhibitors/export-button";
-import { FavoriteStar } from "../exhibitors/favorite-star";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
-import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadStatusSelect } from "./lead-controls";
+import { RemoveFavoriteStar } from "./remove-favorite";
+import { LeadAssigneeSelect, LeadFollowUp, LeadNote, LeadProjectValue, LeadStatusSelect } from "./lead-controls";
+import { LeadLinks } from "./lead-links";
 import { RecommendedShows } from "./recommended-shows";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -27,7 +28,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 /** Favorites -> Exhibitors and Favorites -> Trade shows: the same page with the tabs on top, each tab its own menu sub-page. */
 export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exhibitors" | "shows"; sp: SearchParams }) {
-  const { user, organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
   const filters = favoriteFilters(sp);
   const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
 
@@ -49,7 +50,10 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
     tab === "exhibitors"
       ? db.savedListItem.findMany({
           where,
-          include: { exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } } },
+          include: {
+            exhibitor: { include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } } },
+            links: { include: { addedBy: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" } },
+          },
           // With a follow-up filter, the soonest follow-up first.
           orderBy: filters.followUp ? [{ followUpAt: "asc" }, { exhibitor: { name: "asc" } }] : [{ exhibitor: { name: "asc" } }],
           skip: (page - 1) * PAGE_SIZE,
@@ -90,7 +94,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
 
   const fav = `/a/${slug}/favorites`;
   const base = `${fav}/exhibitors`;
-  const canDraft = isCompanyProfileConfigured();
+  const sender = {
+    name: user.name ?? user.email,
+    company: organization.name,
+    website: organization.website,
+    offer: organization.emailOffer,
+    benefits: organization.emailBenefits,
+  };
+  const emailProfileFilled = Boolean(organization.emailOffer || organization.emailBenefits.length);
   const pages = Math.max(1, Math.ceil(shownCount / PAGE_SIZE));
   const narrowed = Boolean(filters.q || filters.show || filters.status || filters.followUp || filters.owner);
   const mine = tab === "exhibitors" && filters.owner === "me";
@@ -217,37 +228,47 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
-                      <th className="px-5 py-2.5">Company</th>
+                      <th className="py-2.5 pr-5 pl-12">Company</th>
                       <th className="px-5 py-2.5">Trade show</th>
-                      <th className="px-5 py-2.5">Contact</th>
                       <th className="px-5 py-2.5">Lead</th>
-                      <th className="px-5 py-2.5">Notes</th>
-                      <th className="px-5 py-2.5"><span className="sr-only">Remove</span></th>
+                      <th className="w-[38%] px-5 py-2.5">Notes</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
-                    {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId }) => (
-                      <tr key={e.id} className="align-top">
-                        <td className="px-5 py-3">
-                          <div className="min-w-48">
-                            {e.companyKey ? (
-                              <Link href={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`} className="block font-semibold hover:text-brand">
-                                {e.name}
-                              </Link>
-                            ) : (
-                              <p className="font-semibold">{e.name}</p>
-                            )}
-                            {(e.industry || e.country) && (
-                              <p className="text-xs text-muted">{[e.industry, e.country && countryName(e.country)].filter(Boolean).join(" · ")}</p>
-                            )}
-                            {e.website && (
-                              <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
-                                {e.website.replace(/^https?:\/\/(www\.)?/, "")}
-                              </a>
-                            )}
+                  {/* One tbody per favorite: its lead row, and its file links under Lead and Notes. */}
+                  {items.map(({ exhibitor: e, leadStatus, leadNote, followUpAt, followUpNote, assigneeId, projectValue, links }) => (
+                    <tbody key={e.id} className="border-b border-line last:border-b-0">
+                      <tr className="align-top">
+                        <td rowSpan={2} className="py-3 pr-5 pl-3">
+                          <div className="flex min-w-52 items-start gap-1">
+                            <RemoveFavoriteStar slug={slug} exhibitorId={e.id} name={e.name} />
+                            <div className="min-w-0 pt-1">
+                              {e.companyKey ? (
+                                <Link href={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`} className="block font-semibold hover:text-brand">
+                                  {e.name}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold">{e.name}</p>
+                              )}
+                              {(e.industry || e.country) && (
+                                <p className="text-xs text-muted">{[e.industry, e.country && countryName(e.country)].filter(Boolean).join(" · ")}</p>
+                              )}
+                              {e.website && (
+                                <a href={e.website} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
+                                  {e.website.replace(/^https?:\/\/(www\.)?/, "")}
+                                </a>
+                              )}
+                              {(e.contactName || e.email || e.phone) && (
+                                <div className="mt-2 border-t border-line pt-2">
+                                  {e.contactName && <p className="font-medium">{e.contactName}</p>}
+                                  {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
+                                  {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium break-all text-brand hover:underline">{e.email}</a>}
+                                  {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3">
+                        <td rowSpan={2} className="px-5 py-3">
                           <div className="min-w-40">
                             <Link href={`${base}${favoriteQuery({ ...filters, show: e.tradeShow.id })}`} className="font-medium hover:text-brand" title="Show only this trade show">
                               {e.tradeShow.name}
@@ -259,17 +280,17 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                           </div>
                         </td>
                         <td className="px-5 py-3">
-                          <div className="min-w-44">
-                            {e.contactName ? <p className="font-medium">{e.contactName}</p> : <span className="text-faint">—</span>}
-                            {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
-                            {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
-                            {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">
                           <div className="flex flex-col gap-1.5">
                             <LeadAssigneeSelect slug={slug} exhibitorId={e.id} name={e.name} assigneeId={assigneeId} members={members} />
                             <LeadStatusSelect slug={slug} exhibitorId={e.id} name={e.name} status={leadStatus} />
+                            <LeadProjectValue
+                              key={projectValue ?? ""}
+                              slug={slug}
+                              exhibitorId={e.id}
+                              name={e.name}
+                              value={projectValue}
+                              currency={organization.currency}
+                            />
                             <LeadFollowUp
                               key={`${followUpAt ? isoDate(followUpAt) : ""}:${followUpNote ?? ""}`}
                               slug={slug}
@@ -283,23 +304,43 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                         </td>
                         <td className="px-5 py-3">
                           <LeadNote key={leadNote ?? ""} slug={slug} exhibitorId={e.id} name={e.name} note={leadNote} />
-                          {canDraft && <EmailDraftButton slug={slug} exhibitorId={e.id} name={e.name} email={e.email} language={defaultDraftLanguage(e.country)} />}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex justify-end">
-                            <FavoriteStar slug={slug} exhibitorIds={e.id} name={e.name} on />
-                          </div>
+                          <EmailDraftButton
+                            slug={slug}
+                            name={e.name}
+                            email={e.email}
+                            draft={standardEmail({ sender, exhibitor: e, tradeShow: e.tradeShow })}
+                            canEditProfile={canManageMembers(membership.role)}
+                            profileFilled={emailProfileFilled}
+                          />
                         </td>
                       </tr>
-                    ))}
-                    {items.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-5 py-8 text-center text-muted">
+                        <td colSpan={2} className="px-5 pb-3">
+                          <LeadLinks
+                            slug={slug}
+                            exhibitorId={e.id}
+                            name={e.name}
+                            links={links.map((l) => ({
+                              id: l.id,
+                              url: l.url,
+                              title: l.title,
+                              addedBy: l.addedBy ? (l.addedBy.name ?? l.addedBy.email) : null,
+                              date: formatDay(l.createdAt),
+                            }))}
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  ))}
+                  {items.length === 0 && (
+                    <tbody>
+                      <tr>
+                        <td colSpan={4} className="px-5 py-8 text-center text-muted">
                           No favorites match. <Link href={base} className="font-semibold text-brand">Show all</Link>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
+                    </tbody>
+                  )}
                 </table>
               </div>
               {pages > 1 && (
@@ -382,6 +423,11 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
       )}
     </>
   );
+}
+
+/** "23.10.2026", as the dates in the notes. */
+function formatDay(d: Date): string {
+  return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`;
 }
 
 function Empty({ icon, text, href, label }: { icon: "store" | "calendar"; text: string; href: string; label: string }) {

@@ -2,9 +2,10 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { appUrl } from "@/lib/app-url";
 import { syncCompanyKeys } from "@/lib/company-run";
-import { today } from "@/lib/dates";
+import { isoDate, today } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { followUpReminderEmail } from "@/lib/follow-up-reminder";
 import { followUpLabel } from "@/lib/leads";
 import {
   changedFields,
@@ -32,6 +33,10 @@ import {
  * Afterwards every reported exhibitor's and show's details are remembered, so nothing is told twice; a due
  * follow-up is told every day until it is moved or cleared on the Favorites
  * page.
+ *
+ * Besides the digest, the user responsible for a lead gets an email of its
+ * own on the day its follow-up is due, whatever their digest settings. That
+ * follow-up is then left out of their digest that day so it is not told twice.
  */
 export async function runListDigest() {
   if (!isEmailConfigured()) return { skipped: "No email service is set up (RESEND_API_KEY and EMAIL_FROM)." };
@@ -137,6 +142,33 @@ export async function runListDigest() {
       );
     }
 
+    // Today's follow-ups go straight to the user responsible, if they are still in the account.
+    const remindedToday = new Set<string>(); // "userId:exhibitorId"
+    const dueToday = due.filter((i) => i.assigneeId && isoDate(i.followUpAt!) === isoDate(day));
+    if (dueToday.length > 0) {
+      const assignees = await db.membership.findMany({
+        where: { organizationId: org.id, userId: { in: [...new Set(dueToday.map((i) => i.assigneeId!))] } },
+        select: { user: { select: { id: true, email: true } } },
+      });
+      for (const { user } of assignees) {
+        const mine = dueToday.filter((i) => i.assigneeId === user.id);
+        try {
+          await sendEmail({
+            to: user.email,
+            ...followUpReminderEmail({
+              accountName: org.name,
+              leads: mine.map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, note: i.followUpNote })),
+              url: `${base}/favorites/exhibitors?owner=me&followup=due`,
+            }),
+          });
+          sent++;
+          for (const i of mine) remindedToday.add(`${user.id}:${i.exhibitorId}`);
+        } catch (e) {
+          errors.push(`${user.email} (reminder): ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+
     if (news.length === 0 && due.length === 0 && suggestions.length === 0 && shows.length === 0) continue;
 
     const members = await db.membership.findMany({
@@ -165,6 +197,7 @@ export async function runListDigest() {
       // Each user is reminded about their own leads and the ones no one is responsible for.
       const followUps: DigestFollowUp[] = (user.emailFollowUps ? due : [])
         .filter((i) => i.assigneeId === null || i.assigneeId === user.id)
+        .filter((i) => !remindedToday.has(`${user.id}:${i.exhibitorId}`))
         .map((i) => ({ exhibitor: i.exhibitor.name, tradeShow: i.exhibitor.tradeShow.name, due: followUpLabel(i.followUpAt!, day), note: i.followUpNote }));
       const mySuggestions = user.emailSuggestions ? suggestions : [];
       const myShows = user.emailShowChanges ? shows : [];

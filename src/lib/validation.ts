@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { isCountryCode } from "@/lib/countries";
 import { parseDate } from "@/lib/dates";
+import { EMAIL_BENEFITS, MAX_EMAIL_BENEFIT, MAX_EMAIL_OFFER } from "@/lib/email-draft";
+import { CURRENCIES } from "@/lib/project-value";
 
 export const email = z
   .string()
@@ -74,6 +76,14 @@ export const profileSchema = z.object({
   region: optionalText(100, "Region"),
   country,
   website,
+  // Left unchanged when the form does not send it.
+  currency: z.enum(CURRENCIES, "Pick a currency.").optional(),
+});
+
+/** The "Introduction email" part of Company profile: what the account offers and up to 3 benefits. */
+export const emailIntroSchema = z.object({
+  emailOffer: optionalText(MAX_EMAIL_OFFER, "What you offer"),
+  emailBenefits: z.array(z.string().trim().max(MAX_EMAIL_BENEFIT, `A benefit can be at most ${MAX_EMAIL_BENEFIT} characters.`)).max(EMAIL_BENEFITS),
 });
 
 const phone = z

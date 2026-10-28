@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import type { SaveState } from "@/components/save-form";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { appUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
-import { MAX_DRAFT_GOAL, parseDraftLanguage } from "@/lib/email-draft";
-import { writeEmailDraft } from "@/lib/email-draft-run";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { leadAssignedEmailContent } from "@/lib/lead-assigned";
+import { checkLeadLink, MAX_LINKS_PER_LEAD } from "@/lib/lead-links";
 import { checkFollowUp, checkLeadNote, parseLeadStatus } from "@/lib/leads";
+import { parseProjectValue } from "@/lib/project-value";
 import { requireMembership } from "@/lib/tenant";
 
 // Every member of an account works the same favorites. Each action only
@@ -71,44 +73,91 @@ export async function saveFollowUp(slug: string, exhibitorId: string, _prev: Sav
   return { saved: true };
 }
 
-/** The user in the account who is responsible for a favorite exhibitor, or no one. */
-export async function setLeadAssignee(slug: string, exhibitorId: string, formData: FormData) {
+/** What the project with a favorite exhibitor is worth. An empty field clears it. */
+export async function saveProjectValue(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
   const { organization } = await requireMembership(slug);
-  const chosen = String(formData.get("assignee") ?? "");
-  // Only members of this account can be made responsible.
-  const member = chosen ? await db.membership.findFirst({ where: { organizationId: organization.id, userId: chosen }, select: { userId: true } }) : null;
-  if (chosen && !member) return;
-  await db.savedListItem.updateMany({
+  const checked = parseProjectValue(formData.get("value"));
+  if (checked.error !== undefined) return { error: checked.error };
+  const { count } = await db.savedListItem.updateMany({
     where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
-    data: { assigneeId: member?.userId ?? null, leadUpdatedAt: new Date() },
+    data: { projectValue: checked.value, leadUpdatedAt: new Date() },
   });
+  if (count === 0) return { error: "This exhibitor is no longer in Favorites." };
   refresh(slug);
+  return { saved: true };
 }
 
-export type DraftState = { subject?: string; body?: string; error?: string } | undefined;
+export type AssigneeState = { notified?: string; notifyFailed?: string } | undefined;
 
-/** Writes a first email to a favorite exhibitor with AI. It is only shown to the user; nothing is sent. */
-export async function draftLeadEmail(slug: string, exhibitorId: string, _prev: DraftState, formData: FormData): Promise<DraftState> {
+/**
+ * The user in the account who is responsible for a favorite exhibitor, or no one.
+ * When it is another user than the one signed in, they get an email about it.
+ */
+export async function setLeadAssignee(slug: string, exhibitorId: string, _prev: AssigneeState, formData: FormData): Promise<AssigneeState> {
   const { user, organization } = await requireMembership(slug);
-  if (!isCompanyProfileConfigured()) return { error: "Add ANTHROPIC_API_KEY in Vercel before AI can write emails." };
-  const goal = String(formData.get("goal") ?? "").trim().slice(0, MAX_DRAFT_GOAL);
+  const chosen = String(formData.get("assignee") ?? "");
+  // Only members of this account can be made responsible.
+  const member = chosen
+    ? await db.membership.findFirst({
+        where: { organizationId: organization.id, userId: chosen },
+        select: { user: { select: { id: true, name: true, email: true } } },
+      })
+    : null;
+  if (chosen && !member) return;
+  const where = { exhibitorId, list: { organizationId: organization.id, favorites: true } };
+  const before = await db.savedListItem.findFirst({
+    where,
+    select: { assigneeId: true, exhibitor: { select: { name: true, tradeShow: { select: { name: true } } } } },
+  });
+  if (!before) return;
+  const assignee = member?.user ?? null;
+  await db.savedListItem.updateMany({ where, data: { assigneeId: assignee?.id ?? null, leadUpdatedAt: new Date() } });
+  refresh(slug);
+
+  if (!assignee || assignee.id === user.id || assignee.id === before.assigneeId) return;
+  const who = assignee.name ?? assignee.email;
+  if (!isEmailConfigured()) return { notifyFailed: who };
+  try {
+    await sendEmail({
+      to: assignee.email,
+      ...leadAssignedEmailContent({
+        assignedBy: user.name ?? user.email,
+        accountName: organization.name,
+        exhibitor: before.exhibitor.name,
+        tradeShow: before.exhibitor.tradeShow.name,
+        url: `${appUrl()}/a/${slug}/favorites/exhibitors?owner=me`,
+      }),
+    });
+    return { notified: who };
+  } catch (e) {
+    console.error("Lead assigned email failed", e);
+    return { notifyFailed: who };
+  }
+}
+
+/** A link on a favorite exhibitor to a file or folder in the account's own storage, e.g. Google Drive or Dropbox. */
+export async function addLeadLink(slug: string, exhibitorId: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
+  const { user, organization } = await requireMembership(slug);
+  const checked = checkLeadLink(formData.get("url"), formData.get("title"));
+  if (checked.error !== undefined) return { error: checked.error };
   const item = await db.savedListItem.findFirst({
     where: { exhibitorId, list: { organizationId: organization.id, favorites: true } },
-    include: { exhibitor: { include: { tradeShow: { select: { name: true, startDate: true, endDate: true, city: true } } } } },
+    select: { listId: true, _count: { select: { links: true } } },
   });
   if (!item) return { error: "This exhibitor is no longer in Favorites." };
-  const e = item.exhibitor;
-  try {
-    return await writeEmailDraft({
-      language: parseDraftLanguage(formData.get("language")),
-      goal,
-      sender: { name: user.name ?? user.email, company: organization.name, website: organization.website },
-      exhibitor: e,
-      tradeShow: e.tradeShow,
-    });
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "The AI could not write the email. Try again." };
-  }
+  if (item._count.links >= MAX_LINKS_PER_LEAD) return { error: `A favorite can have up to ${MAX_LINKS_PER_LEAD} links. Delete one first.` };
+  await db.leadLink.create({
+    data: { organizationId: organization.id, listId: item.listId, exhibitorId, url: checked.url, title: checked.title, addedById: user.id },
+  });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
+  return { saved: true };
+}
+
+/** Takes a link off a favorite exhibitor. The file itself stays in the account's storage. */
+export async function deleteLeadLink(slug: string, linkId: string) {
+  const { organization } = await requireMembership(slug);
+  await db.leadLink.deleteMany({ where: { id: linkId, organizationId: organization.id } });
+  revalidatePath(`/a/${slug}/favorites`, "layout");
 }
 
 /** The tick on a trade show's meeting plan: the account has visited the exhibitor's booth, or not yet. */

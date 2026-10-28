@@ -6,7 +6,9 @@ import { FREE_LIST_SIZE } from "@/lib/export-limit";
 import { claimExport } from "@/lib/export-limit-run";
 import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
 import { type Table, toCsv, toXlsx } from "@/lib/spreadsheet";
-import { requireMembership } from "@/lib/tenant";
+import { hasRole } from "@/lib/permissions";
+import { accountAccess, requireMembership } from "@/lib/tenant";
+import type { TrialLockInfo } from "@/lib/trial";
 
 // A large export can take a while to read and pack.
 export const maxDuration = 60;
@@ -24,10 +26,16 @@ export const maxDuration = 60;
  * Each user may download exhibitors from a limited number of trade shows per
  * day (see src/lib/export-limit.ts). Over the limit it answers 402 with what
  * the limit dialog shows (src/components/export-button.tsx) instead of a file.
+ * During the free trial nothing can be downloaded, and it answers 402 with
+ * what the trial dialog shows.
  */
 export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/exhibitors/export">) {
   const { slug } = await params;
   const { user, membership, organization } = await requireMembership(slug);
+  if (accountAccess(organization, user.email) === "trial") {
+    const info: TrialLockInfo = { error: "trial", canSubscribe: hasRole(membership.role, "OWNER") };
+    return Response.json(info, { status: 402, headers: { "Cache-Control": "no-store" } });
+  }
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
@@ -48,7 +56,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       // The lead details on the Favorites list (none for other exports).
       savedIn: {
         where: { listId: leads ? list.id : "" },
-        select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true, assignee: { select: { name: true, email: true } } },
+        select: { leadStatus: true, leadNote: true, followUpAt: true, followUpNote: true, projectValue: true, assignee: { select: { name: true, email: true } } },
       },
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
@@ -62,7 +70,8 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
 
   const day = (d: Date) => d.toISOString().slice(0, 10);
   const crm = leads && url.searchParams.get("layout") === "crm";
-  const table: Table = crm ? crmTable(exhibitors) : {
+  const valueHeader = `Project Value (${organization.currency})`;
+  const table: Table = crm ? crmTable(exhibitors, `Deal Value (${organization.currency})`) : {
     headers: [
       "Company Name",
       "Trade Show",
@@ -79,7 +88,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Booth No.",
       "Stand Location URL",
       "Company Profile",
-      ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder"] : []),
+      ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder", valueHeader] : []),
     ],
     rows: exhibitors.map((e) => [
       e.name,
@@ -104,6 +113,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
             e.savedIn[0]?.leadNote,
             e.savedIn[0]?.followUpAt && day(e.savedIn[0].followUpAt),
             e.savedIn[0]?.followUpNote,
+            e.savedIn[0]?.projectValue?.toString(),
           ]
         : []),
     ]),
