@@ -228,3 +228,54 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<boolean> {
   await db.stripeEvent.createMany({ data: [{ id: event.id, type: event.type }], skipDuplicates: true });
   return true;
 }
+
+/** Whether Stripe says the object doesn't exist, e.g. a test-mode id asked with a live key. */
+function isMissing(error: unknown): boolean {
+  return error instanceof Stripe.errors.StripeError && error.code === "resource_missing";
+}
+
+/** Runs `retrieve` for each id and returns the ids Stripe doesn't know. Other errors stop it. */
+async function missingIds(ids: string[], retrieve: (id: string) => Promise<unknown>): Promise<string[]> {
+  const missing: string[] = [];
+  for (const id of ids) {
+    try {
+      await retrieve(id);
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      missing.push(id);
+    }
+  }
+  return missing;
+}
+
+/**
+ * After switching from test keys to live keys: removes the copies of
+ * subscriptions, invoices and customers the current Stripe account doesn't
+ * know (the test-mode ones). Accounts that only paid in test mode are then
+ * unpaid and must subscribe again. Safe to run any time: what Stripe knows
+ * is kept.
+ */
+export async function removeUnknownBillingData() {
+  const s = stripe();
+  const [subs, invoices, orgs, items] = await Promise.all([
+    db.subscription.findMany({ select: { stripeSubscriptionId: true } }),
+    db.invoice.findMany({ select: { stripeInvoiceId: true } }),
+    db.organization.findMany({ where: { stripeCustomerId: { not: null } }, select: { stripeCustomerId: true } }),
+    db.organizationFeature.findMany({ where: { stripeSubscriptionItemId: { not: null } }, select: { stripeSubscriptionItemId: true } }),
+  ]);
+  const goneSubs = await missingIds(subs.map((x) => x.stripeSubscriptionId), (id) => s.subscriptions.retrieve(id));
+  const goneInvoices = await missingIds(invoices.map((x) => x.stripeInvoiceId), (id) => s.invoices.retrieve(id));
+  const goneCustomers = await missingIds(orgs.map((x) => x.stripeCustomerId!), (id) => s.customers.retrieve(id));
+  const goneItems = await missingIds(items.map((x) => x.stripeSubscriptionItemId!), (id) => s.subscriptionItems.retrieve(id));
+
+  await db.$transaction([
+    db.subscription.deleteMany({ where: { stripeSubscriptionId: { in: goneSubs } } }),
+    db.invoice.deleteMany({ where: { stripeInvoiceId: { in: goneInvoices } } }),
+    db.organization.updateMany({ where: { stripeCustomerId: { in: goneCustomers } }, data: { stripeCustomerId: null } }),
+    db.organizationFeature.updateMany({
+      where: { stripeSubscriptionItemId: { in: goneItems } },
+      data: { stripeSubscriptionItemId: null },
+    }),
+  ]);
+  return { subscriptions: goneSubs.length, invoices: goneInvoices.length, customers: goneCustomers.length };
+}

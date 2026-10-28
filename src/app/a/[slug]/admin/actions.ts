@@ -6,6 +6,7 @@ import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
 import { db } from "@/lib/db";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { billingConfigured, removeUnknownBillingData, stripeTestMode } from "@/lib/stripe";
 import { featureSchema } from "@/lib/features";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { requirePlatformAdmin } from "@/lib/tenant";
@@ -95,6 +96,24 @@ export async function sendTestEmail(slug: string): Promise<TestEmailState> {
       html: "<p>This is a test. Login codes are sent the same way, so they work too.</p>",
     });
     return { sent: `Sent to ${user.email}. Check the inbox (and spam).` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export type CleanupBillingState = { done?: string; error?: string } | undefined;
+
+/** Removes test-mode subscriptions, invoices and customers after switching Stripe to live keys. */
+export async function removeTestBillingData(slug: string): Promise<CleanupBillingState> {
+  await requirePlatformAdmin(slug);
+  if (!billingConfigured()) return { error: "Stripe is not set up." };
+  if (stripeTestMode()) return { error: "Stripe still uses a test key (sk_test_...). Put the live key in Vercel first." };
+  try {
+    const removed = await removeUnknownBillingData();
+    revalidatePath("/a/[slug]", "layout");
+    return {
+      done: `Removed ${removed.subscriptions} test subscriptions, ${removed.invoices} test invoices and ${removed.customers} test customers.`,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

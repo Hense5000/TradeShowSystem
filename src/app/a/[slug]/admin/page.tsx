@@ -9,7 +9,9 @@ import { requirePlatformAdmin } from "@/lib/tenant";
 import { cleanupCutoff, oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
 import { emailSender } from "@/lib/email";
 import { deviceCheckOffReason } from "@/lib/login-guard";
-import { sendTestEmail, setCleanupEnabled } from "./actions";
+import { billingConfigured, stripeTestMode } from "@/lib/stripe";
+import { removeTestBillingData, sendTestEmail, setCleanupEnabled } from "./actions";
+import { RemoveTestBillingButton } from "./remove-test-billing-button";
 import { TestEmailButton } from "./test-email-button";
 
 const ROLLOUT_PILL: Record<FeatureRollout, string> = {
@@ -144,6 +146,27 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
         </div>
         <TestEmailButton action={sendTestEmail.bind(null, slug)} />
       </section>
+
+      {billingConfigured() && (
+        <section className="card flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-56 flex-1 items-start gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+              <Icon name="card" className="size-4" />
+            </span>
+            <span>
+              <span className="flex flex-wrap items-center gap-2 font-semibold">
+                Stripe
+                <span className={`pill ${stripeTestMode() ? "pill-warn" : "pill-ok"}`}>{stripeTestMode() ? "Test mode" : "Live"}</span>
+              </span>
+              <span className="block text-sm text-muted">
+                After switching to live keys, remove the test-mode subscriptions, invoices and customers. Accounts that only paid in test mode must
+                then subscribe again. Real payments are never removed.
+              </span>
+            </span>
+          </div>
+          {!stripeTestMode() && <RemoveTestBillingButton action={removeTestBillingData.bind(null, slug)} />}
+        </section>
+      )}
 
       {features.length === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
