@@ -6,7 +6,7 @@ import { ProgressBar } from "@/components/progress-bar";
 import { parseCsv } from "@/lib/csv";
 import { IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
 import { importExhibitorRows } from "../actions";
-import { findMissingContacts } from "../write-profiles";
+import { findMissingContacts } from "../contact-batches";
 
 const MAX_IMPORT_BYTES = 4_000_000;
 
@@ -23,17 +23,16 @@ type Progress = {
  * Imports a CSV file of exhibitors in small parts, so a progress bar can show
  * how far it has come: first the rows are saved, then AI looks up a contact
  * person on each website where the file gave no name or email, a few at a
- * time. Company profiles are not written here; a user asks for one on the
- * company's page.
+ * time.
  */
 export function ExhibitorImportForm({
   slug,
-  writeProfiles,
+  findContacts,
   children,
 }: {
   slug: string;
   /** Whether AI looks up the missing contacts during the import. */
-  writeProfiles: boolean;
+  findContacts: boolean;
   /** The trade show picker. */
   children: React.ReactNode;
 }) {
@@ -60,7 +59,7 @@ export function ExhibitorImportForm({
     // Checked here too, so a wrong file is turned away before anything is sent.
     const check = parseExhibitorRows(header ? [header] : []);
     if (check.error) return setState({ error: check.error });
-    const items = writeProfiles ? parseExhibitorRows([header, ...rows]).items.filter((e) => e.website) : [];
+    const items = findContacts ? parseExhibitorRows([header, ...rows]).items.filter((e) => e.website) : [];
     const guessedContacts = items.filter((e) => !e.contactName || !e.email).length;
 
     const result = { imported: 0, alreadyThere: 0, problems: [] as string[] };
@@ -80,7 +79,7 @@ export function ExhibitorImportForm({
       }
 
       const notes: (string | undefined)[] = [];
-      if (writeProfiles && result.imported > 0) {
+      if (findContacts && result.imported > 0) {
         notes.push(
           await findMissingContacts(slug, tradeShowId, (done, total) => {
             p = { ...p, phase: "contacts", contactsDone: done, contacts: total };

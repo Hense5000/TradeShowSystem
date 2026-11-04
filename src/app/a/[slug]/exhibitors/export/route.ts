@@ -90,7 +90,6 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       "Industry",
       "Booth No.",
       "Stand Location URL",
-      "Company Profile",
       ...(leads ? ["Lead Status", "Responsible", "Notes", "Follow-up Date", "Follow-up Reminder", valueHeader] : []),
     ],
     rows: exhibitors.map((e) => [
@@ -108,7 +107,6 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
       e.industry,
       e.boothNumber,
       e.standLocationUrl,
-      e.companyProfile,
       ...(leads
         ? [
             e.savedIn[0] && LEAD_LABEL[e.savedIn[0].leadStatus],

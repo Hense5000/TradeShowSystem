@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { describeProfileError, isCompanyProfileConfigured, stopsEveryRow } from "@/lib/company-profile-run";
+import { describeAiError, isAiConfigured, stopsEveryRow } from "@/lib/ai-run";
 import {
   cleanContact,
   type ContactFillResult,
@@ -34,8 +34,8 @@ const FETCH_TIMEOUT_MS = 15_000;
 const AI_TIMEOUT_MS = 60_000;
 const PARALLEL = 5;
 
-/** The same AI key as the company profiles. */
-export const isContactFinderConfigured = isCompanyProfileConfigured;
+/** Whether the AI key is set. */
+export const isContactFinderConfigured = isAiConfigured;
 
 const contactSchema = z.object({
   contactName: z.string().nullable().describe("Full name of the person, as written, or null"),
@@ -143,7 +143,7 @@ export async function findContact(company: Company, client = new Anthropic()): P
   return text ? pickContact(client, company, text) : null;
 }
 
-export const describeContactError = describeProfileError;
+export const describeContactError = describeAiError;
 
 /**
  * Exhibitors with a website but no contact person or no email that are still

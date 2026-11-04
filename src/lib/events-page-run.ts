@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { describeProfileError, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { describeAiError, isAiConfigured } from "@/lib/ai-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import {
@@ -34,9 +34,9 @@ const PARALLEL = 5;
 /** A homepage with fewer links than this is probably built with JavaScript; open it in Chrome instead. */
 const FEW_LINKS = 10;
 
-/** The same AI key as the company profiles. */
-export const isEventsPageFinderConfigured = isCompanyProfileConfigured;
-export const describeEventsPageError = describeProfileError;
+/** Whether the AI key is set. */
+export const isEventsPageFinderConfigured = isAiConfigured;
+export const describeEventsPageError = describeAiError;
 
 export type Center = { name: string; city: string | null; country: string | null; website: string | null };
 export type FoundEventsPage = { eventsUrl: string; website: string | null };

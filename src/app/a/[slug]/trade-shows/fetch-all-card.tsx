@@ -25,8 +25,8 @@ type LogLine = { show: string; text: string; ok: boolean };
  * without an Exhibitor directory URL gets one found by AI on the web first.
  * Each show is tried once, so a show without a public list is not searched
  * again on the next run; a show whose lookup failed is tried again. Under
- * the bar it lists what happened to each show. Company profiles and contact persons are left to the
- * nightly run.
+ * the bar it lists what happened to each show. Contact persons are left to
+ * the nightly run.
  */
 export function FetchAllCard({ slug, missing }: { slug: string; missing: number }) {
   const router = useRouter();
@@ -139,7 +139,7 @@ export function FetchAllCard({ slug, missing }: { slug: string; missing: number 
           </p>
           <p className="text-muted">
             {message ??
-              "AI reads each show's exhibitor list and adds the exhibitors to the Exhibitors section. A show without an Exhibitor directory URL gets one found on the web first. Company profiles and contact persons are written by the nightly run."}
+              "AI reads each show's exhibitor list and adds the exhibitors to the Exhibitors section. A show without an Exhibitor directory URL gets one found on the web first. Contact persons are found by the nightly run."}
           </p>
         </div>
         {missing > 0 && (

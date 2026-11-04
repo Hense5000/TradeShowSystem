@@ -1,9 +1,8 @@
 import type { Exhibitor } from "@prisma/client";
 import { CountrySelect, Field } from "@/components/field";
 import type { ContactFields as ContactValues } from "@/lib/contact-finder";
-import type { ContactState, ProfileState } from "./actions";
+import type { ContactState } from "./actions";
 import { ContactFields } from "./contact-fields";
-import { CompanyProfileField } from "./profile-field";
 import { type ShowOption, ShowSelect } from "./show-select";
 
 /** The inputs shared by the add and edit forms. */
@@ -11,14 +10,11 @@ export function ExhibitorFields({
   exhibitor,
   shows,
   showId,
-  generateProfile,
   findContact,
 }: {
   exhibitor?: Exhibitor;
   shows: ShowOption[];
   showId?: string;
-  /** Writes the company profile with AI; left out when no AI key is set. */
-  generateProfile?: (name: string, website: string) => Promise<ProfileState>;
   /** Looks up the contact person with AI; left out when no AI key is set. */
   findContact?: (name: string, website: string, typed: ContactValues) => Promise<ContactState>;
 }) {
@@ -42,7 +38,6 @@ export function ExhibitorFields({
         <Field id="boothNumber" label="Booth no." defaultValue={e?.boothNumber ?? ""} maxLength={50} placeholder="A-123" />
       </div>
       <Field id="standLocationUrl" label="Stand location URL" defaultValue={e?.standLocationUrl ?? ""} maxLength={300} placeholder="floorplan.com/booth/123" hint="Link to the booth on the show's floor plan." />
-      <CompanyProfileField defaultValue={e?.companyProfile ?? ""} generate={generateProfile} />
     </>
   );
 }

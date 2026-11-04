@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isAiConfigured } from "@/lib/ai-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { ShowSelect, tradeShowOptions } from "../show-select";
 import { ExhibitorImportForm } from "./exhibitor-import-form";
@@ -16,10 +16,9 @@ const COLUMNS = [
   "Industry",
   "Booth no.",
   "Stand location URL",
-  "Company profile",
 ];
 
-// Each part of the import (a batch of rows or of AI profiles) is one call to this page.
+// Each part of the import (a batch of rows or of AI contact lookups) is one call to this page.
 export const maxDuration = 300;
 
 export default async function ImportExhibitorsPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/import">) {
@@ -51,7 +50,7 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
           Country can be a name (Denmark) or a code (DK). Companies already listed at the chosen show are skipped, so it is
           safe to import the same file again.
         </p>
-        {isCompanyProfileConfigured() && (
+        {isAiConfigured() && (
           <p className="mt-3 text-muted">
             When <strong className="text-ink">Contact person</strong> or <strong className="text-ink">Email</strong> is empty, AI also looks
             them up on the website, with position and phone; only empty fields are filled.
@@ -64,7 +63,7 @@ export default async function ImportExhibitorsPage({ params, searchParams }: Pag
           Exhibitors belong to a trade show, so <Link href={`/a/${slug}/trade-shows/new`} className="font-semibold text-brand">add a trade show</Link> first.
         </p>
       ) : (
-        <ExhibitorImportForm slug={slug} writeProfiles={isCompanyProfileConfigured()}>
+        <ExhibitorImportForm slug={slug} findContacts={isAiConfigured()}>
           <ShowSelect shows={shows} defaultValue={typeof show === "string" ? show : undefined} />
         </ExhibitorImportForm>
       )}

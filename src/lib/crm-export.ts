@@ -43,7 +43,6 @@ export const CRM_HEADERS = [
   "Lead Source",
   "Trade Show",
   "Booth",
-  "Company Description",
 ];
 
 type Lead = {
@@ -56,7 +55,6 @@ type Lead = {
   country: string | null;
   industry: string | null;
   boothNumber: string | null;
-  companyProfile: string | null;
   tradeShow: { name: string };
   savedIn: {
     leadStatus: LeadStatus;
@@ -98,7 +96,6 @@ export function crmTable(leads: Lead[], valueHeader = "Deal Value"): Table {
         `Trade show: ${e.tradeShow.name}`,
         e.tradeShow.name,
         e.boothNumber,
-        e.companyProfile,
       ];
     }),
   };

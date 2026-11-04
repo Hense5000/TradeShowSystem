@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { exhibitorKey, parseExhibitorRows } from "./exhibitors";
 
 describe("parseExhibitorRows", () => {
-  it("maps the Base44 exhibitor columns", () => {
+  it("maps the Base44 exhibitor columns and skips the old AI Company Profile column", () => {
     const result = parseExhibitorRows([
       ["Company Name", "Contact Person", "Contact Position", "Email", "Phone", "Website", "Country", "Industry", "Booth No.", "Stand Location URL", "AI Company Profile"],
       ["Acme Corporation", "John Smith", "Sales Manager", "Contact@Company.com", "+1 555 123 4567", "company.com", "Denmark", "Technology", "A-123", "floorplan.com/booth/123", "Makes things."],
@@ -20,7 +20,6 @@ describe("parseExhibitorRows", () => {
         industry: "Technology",
         boothNumber: "A-123",
         standLocationUrl: "https://floorplan.com/booth/123",
-        companyProfile: "Makes things.",
       },
     ]);
   });

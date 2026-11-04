@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isAiConfigured } from "@/lib/ai-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { createExhibitor, findExhibitorContact, generateExhibitorProfile } from "../actions";
+import { createExhibitor, findExhibitorContact } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
 import { tradeShowOptions } from "../show-select";
 
-// Writing a profile or finding a contact with AI can take up to a minute or two.
+// Finding a contact with AI can take up to a minute or two.
 export const maxDuration = 300;
 
 export default async function NewExhibitorPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/new">) {
   const { slug } = await params;
   const { user } = await requireMembership(slug);
   // The AI buttons are for platform admins only, like their actions.
-  const useAi = isPlatformAdmin(user.email) && isCompanyProfileConfigured();
+  const useAi = isPlatformAdmin(user.email) && isAiConfigured();
   const { show } = await searchParams;
   const shows = await tradeShowOptions();
 
@@ -32,7 +32,7 @@ export default async function NewExhibitorPage({ params, searchParams }: PagePro
         </p>
       ) : (
         <SaveForm action={createExhibitor.bind(null, slug)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Add exhibitor" readOnly={false}>
-          <ExhibitorFields findContact={useAi ? findExhibitorContact.bind(null, slug) : undefined} generateProfile={useAi ? generateExhibitorProfile.bind(null, slug) : undefined} shows={shows} showId={typeof show === "string" ? show : undefined} />
+          <ExhibitorFields findContact={useAi ? findExhibitorContact.bind(null, slug) : undefined} shows={shows} showId={typeof show === "string" ? show : undefined} />
         </SaveForm>
       )}
     </>

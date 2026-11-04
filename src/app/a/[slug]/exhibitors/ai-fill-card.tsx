@@ -6,7 +6,7 @@ import type { FillState } from "./actions";
 
 /**
  * A note above the exhibitor list with a button that lets AI fill in what is
- * missing: the company profiles, or the contact persons.
+ * missing, such as the contact persons.
  */
 export function AiFillCard({
   title,

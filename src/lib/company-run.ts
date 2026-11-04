@@ -36,11 +36,11 @@ export async function syncCompanyKeys(): Promise<void> {
 
 // Facts about the company itself, the same at every show. Booth and floor plan
 // are not, so they are never copied.
-const COMPANY_FIELDS = ["companyProfile", "industry", "website", "country"] as const;
+const COMPANY_FIELDS = ["industry", "website", "country"] as const;
 
 /**
  * Fills the empty fields of these rows from the company's rows at other trade
- * shows, the latest show first: the company's profile, industry, website and
+ * shows, the latest show first: the company's industry, website and
  * country, and the contact person found earlier. So a company imported again
  * for next year's show keeps what is known about it, and AI and Hunter.io do
  * not look it up again. Nothing that is already filled in is changed.
@@ -58,11 +58,6 @@ export async function inheritCompanyDetails(ids: string[]): Promise<void> {
       WHERE e."id" = ANY(${ids}::text[]) AND COALESCE(e.${f}, '') = '' AND e."companyKey" IS NOT NULL
         AND EXISTS (SELECT 1 FROM "Exhibitor" s WHERE s."companyKey" = e."companyKey" AND s."id" <> e."id" AND COALESCE(s.${f}, '') <> '')`;
   }
-  // A profile that was copied counts as written, like one the AI wrote.
-  await db.$executeRaw`
-    UPDATE "Exhibitor" SET "profileTriedAt" = now()
-    WHERE "id" = ANY(${ids}::text[]) AND "profileTriedAt" IS NULL AND COALESCE("companyProfile", '') <> ''`;
-
   // The contact person is copied as a whole (name, position and email
   // together), from the latest show that has one, when the row has no person.
   // An email of its own, e.g. info@, gives way to the person's email.

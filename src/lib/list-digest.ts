@@ -16,7 +16,6 @@ export const DIGEST_FIELDS = {
   industry: "Industry",
   boothNumber: "Booth",
   standLocationUrl: "Stand location",
-  companyProfile: "Company profile",
 } as const;
 
 type Field = keyof typeof DIGEST_FIELDS;

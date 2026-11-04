@@ -416,8 +416,8 @@ model Exhibitor {
   industry              String?
   boothNumber           String?
   standLocationUrl      String? // link to the booth on the show's floor plan
-  companyProfile        String? // short description of the company
-  profileTriedAt        DateTime? // when the AI last tried to write companyProfile from the website
+  companyProfile        String? // no longer used: the AI company profile was removed (kept so old texts are not lost)
+  profileTriedAt        DateTime? // no longer used, see companyProfile
   contactTriedAt        DateTime? // when the AI last looked for a contact person on the website
   hunterTriedAt         DateTime? // when Hunter.io was last asked for the company's contacts
   companyKey            String? // the same for every show's row of one company; null until worked out, e.g. after the name or website changed

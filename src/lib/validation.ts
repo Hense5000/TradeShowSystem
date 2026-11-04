@@ -187,7 +187,6 @@ export const exhibitorRowSchema = z.object({
   industry: optionalText(100, "Industry"),
   boothNumber: optionalText(50, "Booth no."),
   standLocationUrl: webAddress("Stand location URL"),
-  companyProfile: optionalText(5000, "Company profile"),
 });
 
 export const exhibitorSchema = exhibitorRowSchema.extend({

@@ -32,7 +32,6 @@ describe("crmTable", () => {
         country: "DE",
         industry: "Medical devices",
         boothNumber: "B10",
-        companyProfile: null,
         tradeShow: { name: "MEDICA 2026" },
         savedIn: [
           {
