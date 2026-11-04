@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
-import { describeProfileError, isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { describeAiError, isAiConfigured } from "@/lib/ai-run";
 import { countryName } from "@/lib/countries";
 import { isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -23,9 +23,9 @@ const PARALLEL = 5;
 /** At most this many known organizer names are shown to the AI. */
 const MAX_KNOWN = 2000;
 
-/** The same AI key as the company profiles. */
-export const isOrganizerFinderConfigured = isCompanyProfileConfigured;
-export const describeOrganizerError = describeProfileError;
+/** Whether the AI key is set. */
+export const isOrganizerFinderConfigured = isAiConfigured;
+export const describeOrganizerError = describeAiError;
 
 export type Show = { name: string; startDate: Date; city: string | null; country: string | null; website: string | null };
 

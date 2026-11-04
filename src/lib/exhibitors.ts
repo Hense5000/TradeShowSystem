@@ -23,7 +23,6 @@ export function parseExhibitorRows(rows: string[][], firstRowNo?: number) {
       industry: ["industry", "sector", "category"],
       boothNumber: ["boothno", "booth", "boothnumber", "standno", "stand", "standnumber"],
       standLocationUrl: ["standlocationurl", "standlocation", "boothurl", "floorplanurl", "floorplan"],
-      companyProfile: ["aicompanyprofile", "companyprofile", "profile", "description", "about"],
     },
     schema: exhibitorRowSchema,
     key: exhibitorKey,

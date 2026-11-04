@@ -3,7 +3,7 @@ import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { summarizeCompany } from "@/lib/company";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isAiConfigured } from "@/lib/ai-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { missingContactWhere } from "@/lib/contact-finder-run";
 import { countryName } from "@/lib/countries";
@@ -50,7 +50,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   // A company at several trade shows is one row here (see src/lib/company.ts).
   await syncCompanyKeys();
   const where = exhibitorWhere(filters);
-  const useAi = canEdit && isCompanyProfileConfigured();
+  const useAi = canEdit && isAiConfigured();
   // Everything that doesn't depend on the companies on this page is read at once.
   const [{ keys: pageKeys, companies: matching, rows: matchingRows }, total, shows, countries, lists, missingContacts, missingCountries] = await Promise.all([
     companyPage(filters, page, PAGE_SIZE),
@@ -176,7 +176,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
         </section>
       ) : (
         <section className="card overflow-hidden p-0">
-          {isCompanyProfileConfigured() && <AiSearch action={askAiSearch.bind(null, slug)} question={filters.ai} />}
+          {isAiConfigured() && <AiSearch action={askAiSearch.bind(null, slug)} question={filters.ai} />}
           <SearchForm className="flex flex-wrap items-center gap-2 p-4">
             <div className="relative min-w-56 flex-1">
               <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />

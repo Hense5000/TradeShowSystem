@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { companyDomain, summarizeCompany } from "@/lib/company";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
@@ -14,13 +13,12 @@ import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
 import { setListMembership } from "../../lists/actions";
-import { findOwnHunterContact, writeCompanyProfileWithAi } from "../actions";
+import { findOwnHunterContact } from "../actions";
 import { FavoriteStar } from "../favorite-star";
 import { ListMenu } from "../list-menu";
 import { OwnContactTag, OwnHunterButton } from "../own-hunter-button";
-import { ProfileButton } from "./profile-button";
 
-// "Write company profile with AI" waits for the AI on this page.
+// The Hunter.io lookup waits for an answer on this page.
 export const maxDuration = 300;
 
 const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running: "pill-ok", finished: "pill-neutral" };
@@ -64,7 +62,6 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   const hunterDomainOf = hunterRow && companyDomain(hunterRow.website);
   const industry = first("industry");
   const country = first("country");
-  const profile = first("companyProfile");
   const otherNames = [...new Set(rows.map((r) => r.name))].filter((n) => n !== main.name);
 
   return (
@@ -104,8 +101,6 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             </p>
           )}
         </div>
-        {profile && <p className="text-sm whitespace-pre-line text-muted">{profile}</p>}
-        {!profile && isCompanyProfileConfigured() && <ProfileButton action={writeCompanyProfileWithAi.bind(null, slug, key)} />}
         {hunterRow && hunterDomainOf && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg bg-subtle px-4 py-3 text-sm">
             {ownHunter ? (

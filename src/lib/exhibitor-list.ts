@@ -70,13 +70,7 @@ export function exhibitorWhere({ q, show, country, industry, showCountry, showCi
   }
   const terms = industryTerms(industry);
   if (terms.length) {
-    // Industry is often empty or worded differently, so the company profile counts too.
-    and.push({
-      OR: terms.flatMap((t) => [
-        { industry: { contains: t, mode: "insensitive" as const } },
-        { companyProfile: { contains: t, mode: "insensitive" as const } },
-      ]),
-    });
+    and.push({ OR: terms.map((t) => ({ industry: { contains: t, mode: "insensitive" as const } })) });
   }
   const tradeShow: Prisma.TradeShowWhereInput = {
     ...(showCountry && { country: showCountry }),
@@ -105,7 +99,7 @@ export function exhibitorSql({ q, show, country, industry, showCountry, showCity
   if (q) and.push(Prisma.sql`(${Prisma.join([ilike(Prisma.sql`e."name"`, q), ilike(Prisma.sql`e."contactName"`, q), ilike(Prisma.sql`e."industry"`, q)], " OR ")})`);
   const terms = industryTerms(industry);
   if (terms.length) {
-    and.push(Prisma.sql`(${Prisma.join(terms.flatMap((t) => [ilike(Prisma.sql`e."industry"`, t), ilike(Prisma.sql`e."companyProfile"`, t)]), " OR ")})`);
+    and.push(Prisma.sql`(${Prisma.join(terms.map((t) => ilike(Prisma.sql`e."industry"`, t)), " OR ")})`);
   }
   if (show) and.push(Prisma.sql`e."tradeShowId" = ${show}`);
   if (country) and.push(Prisma.sql`e."country" = ${country}`);

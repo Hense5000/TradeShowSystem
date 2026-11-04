@@ -12,7 +12,6 @@ const base = exhibitorSnapshot({
   industry: null,
   boothNumber: null,
   standLocationUrl: null,
-  companyProfile: null,
 });
 
 describe("list email", () => {

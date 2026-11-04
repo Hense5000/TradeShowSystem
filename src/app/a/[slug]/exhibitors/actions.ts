@@ -4,13 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import type { SaveState } from "@/components/save-form";
-import {
-  type CompanyProfileResult,
-  describeProfileError,
-  isCompanyProfileConfigured,
-  writeCompanyProfile,
-  writeProfileForCompany,
-} from "@/lib/company-profile-run";
+import { isAiConfigured } from "@/lib/ai-run";
 import { type ContactFields, type ContactFillResult, contactSummary, contactUpdate, type FoundContact } from "@/lib/contact-finder";
 import { describeContactError, fillMissingContacts, findContact, isContactFinderConfigured, missingContactWhere, needsHunter, withHunter } from "@/lib/contact-finder-run";
 import { hunterDomain, hunterUpdate } from "@/lib/hunter";
@@ -27,8 +21,8 @@ import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership, requirePlatformAdmin } from "@/lib/tenant";
 import { exhibitorSchema, firstError, website } from "@/lib/validation";
 
-/** How long an import or a contact lookup press spends on AI profiles; the page may run for 300 seconds. */
-const PROFILE_BUDGET_MS = 150_000;
+/** How long an import or a contact lookup press spends on AI lookups; the page may run for 300 seconds. */
+const AI_BUDGET_MS = 150_000;
 
 const showExists = async (id: string) => Boolean(await db.tradeShow.findUnique({ where: { id }, select: { id: true } }));
 
@@ -72,9 +66,8 @@ export async function updateExhibitor(slug: string, id: string, _prev: SaveState
     return { error: `Another ${parsed.data.name} is already an exhibitor at that trade show.` };
   }
 
-  // An empty profile or contact may be looked up by AI again, e.g. after the website was corrected.
+  // An empty contact may be looked up by AI again, e.g. after the website was corrected.
   const retry = {
-    ...(!parsed.data.companyProfile && { profileTriedAt: null }),
     ...(!parsed.data.contactName && !parsed.data.email && { contactTriedAt: null, hunterTriedAt: null }),
   };
   // companyKey is worked out again, since the name or website may have changed.
@@ -128,36 +121,7 @@ export async function importExhibitorRows(
 /** How many contacts one call of findContactBatch looks up, side by side; a few at a time keeps the progress bar moving. */
 const CONTACTS_PER_CALL = 5;
 
-export type ProfileState = { profile?: string; error?: string };
-
-/** Writes a company profile with AI from the website typed in the form. Nothing is saved until the form is. */
-export async function generateExhibitorProfile(slug: string, name: string, site: string): Promise<ProfileState> {
-  await requirePlatformAdmin(slug);
-  if (!isCompanyProfileConfigured()) return { error: "Add ANTHROPIC_API_KEY in Vercel before AI can write profiles." };
-  const url = website.safeParse(site);
-  if (!url.success) return { error: firstError(url.error) };
-  if (!url.data) return { error: "Enter the company's website first." };
-  try {
-    const profile = await writeCompanyProfile({ name: name.trim() || url.data, website: url.data });
-    return profile ? { profile } : { error: "The website does not say what the company does, so no profile was written." };
-  } catch (error) {
-    return { error: describeProfileError(error) };
-  }
-}
-
 export type FillState = { message?: string } | undefined;
-
-/**
- * "Write company profile with AI" on a company's page. Every member may press
- * it; the profile is saved for everyone, so each company is written only once.
- */
-export async function writeCompanyProfileWithAi(slug: string, companyKey: string): Promise<CompanyProfileResult> {
-  await requireMembership(slug);
-  if (!isCompanyProfileConfigured()) return { error: "AI is not set up yet." };
-  const result = await writeProfileForCompany(companyKey);
-  if (result.profile) revalidatePath(`/a/${slug}/exhibitors`, "layout");
-  return result;
-}
 
 /** How many exhibitors at the show still wait for AI to look up a contact person. */
 export async function countMissingContacts(slug: string, tradeShowId: string): Promise<number> {
@@ -169,7 +133,7 @@ export async function countMissingContacts(slug: string, tradeShowId: string): P
 /** Looks up a few of the show's missing contacts, for the import page's progress bar. */
 export async function findContactBatch(slug: string, tradeShowId: string): Promise<ContactFillResult> {
   await requirePlatformAdmin(slug);
-  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS, limit: CONTACTS_PER_CALL });
+  const result = await fillMissingContacts({ tradeShowId, budgetMs: AI_BUDGET_MS, limit: CONTACTS_PER_CALL });
   revalidatePath(`/a/${slug}/exhibitors`);
   return result;
 }
@@ -277,7 +241,7 @@ export async function findOwnHunterContact(slug: string, exhibitorId: string): P
 export async function fillContacts(slug: string, tradeShowId: string | undefined): Promise<FillState> {
   await requirePlatformAdmin(slug);
   if (!isContactFinderConfigured()) return { message: "Add ANTHROPIC_API_KEY in Vercel before AI can look up contacts." };
-  const result = await fillMissingContacts({ tradeShowId, budgetMs: PROFILE_BUDGET_MS });
+  const result = await fillMissingContacts({ tradeShowId, budgetMs: AI_BUDGET_MS });
   revalidatePath(`/a/${slug}/exhibitors`);
   return { message: contactSummary(result) };
 }
@@ -295,7 +259,7 @@ export async function askAiSearch(slug: string, _prev: ActionState, formData: Fo
   await requireMembership(slug);
   const question = String(formData.get("question") ?? "").trim().slice(0, MAX_QUESTION);
   if (!question) return { error: "Write what you are looking for." };
-  if (!isCompanyProfileConfigured()) return { error: "AI search is not set up yet." };
+  if (!isAiConfigured()) return { error: "AI search is not set up yet." };
   let filters;
   try {
     filters = await askAiForFilters(question);

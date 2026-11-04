@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
-import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
+import { isAiConfigured } from "@/lib/ai-run";
 import { db } from "@/lib/db";
 import { isExhibitorFetchConfigured } from "@/lib/exhibitor-fetch-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
@@ -41,7 +41,7 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
           tradeShowId={show.id}
           directoryUrl={show.exhibitorDirectoryUrl}
           exhibitorCount={show._count.exhibitors}
-          writeProfiles={isCompanyProfileConfigured()}
+          findContacts={isAiConfigured()}
         />
       )}
       {!show.exhibitorDirectoryUrl && isExhibitorFetchConfigured() && <FindDirectory slug={slug} tradeShowId={show.id} />}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProgressBar } from "@/components/progress-bar";
 import { fetchSummary, MAX_PAGES } from "@/lib/exhibitor-fetch";
-import { findMissingContacts } from "../exhibitors/write-profiles";
+import { findMissingContacts } from "../exhibitors/contact-batches";
 import { readDirectory } from "./read-directory";
 
 type Progress = { phase: "pages"; read: number; known: number; added: number } | { phase: "contacts"; done: number; total: number };
@@ -14,21 +14,20 @@ type Result = { summary?: string; note?: string; error?: string };
 /**
  * "Fetch exhibitors": AI reads the show's exhibitor directory page by page
  * (following its page 2, 3 ... or A-Z links) and adds the exhibitors it finds
- * to the show; then it looks up a contact person on each website. Company
- * profiles are written only when someone asks for one on the company's page.
+ * to the show; then it looks up a contact person on each website.
  */
 export function FetchExhibitors({
   slug,
   tradeShowId,
   directoryUrl,
   exhibitorCount,
-  writeProfiles,
+  findContacts,
 }: {
   slug: string;
   tradeShowId: string;
   directoryUrl: string;
   exhibitorCount: number;
-  writeProfiles: boolean;
+  findContacts: boolean;
 }) {
   const [progress, setProgress] = useState<Progress>();
   const [result, setResult] = useState<Result>();
@@ -55,7 +54,7 @@ export function FetchExhibitors({
         return;
       }
       const notes: (string | undefined)[] = [];
-      if (writeProfiles && totals.added > 0) {
+      if (findContacts && totals.added > 0) {
         notes.push(await findMissingContacts(slug, tradeShowId, (done, total) => setProgress({ phase: "contacts", done, total })));
       }
       setResult({ summary: fetchSummary(totals), note: notes.filter(Boolean).join(" ") || undefined, error: firstError && `First problem: ${firstError}` });
@@ -79,7 +78,7 @@ export function FetchExhibitors({
               {directoryUrl.replace(/^https?:\/\/(www\.)?/, "")}
             </a>{" "}
             and its further pages, and adds the exhibitors it finds to this trade show. Companies already listed are skipped.
-            {writeProfiles && " Then AI finds a contact person on each new exhibitor's website."}
+            {findContacts && " Then AI finds a contact person on each new exhibitor's website."}
           </p>
           <p className="mt-1 text-sm text-muted">
             This trade show has {exhibitorCount} {exhibitorCount === 1 ? "exhibitor" : "exhibitors"} now.{" "}
