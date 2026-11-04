@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { favoriteRowsAt } from "@/lib/favorite-companies";
 import { byBooth, LEAD_LABEL, LEAD_PILL } from "@/lib/leads";
 import { hasRole } from "@/lib/permissions";
+import { withOwnContacts } from "@/lib/own-contacts-run";
 import { accountAccess, requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { TrialLockedButton } from "../../exhibitors/export-button";
@@ -32,7 +33,8 @@ export default async function MeetingPlanPage({ params, searchParams }: PageProp
   const ids = atShow.map((r) => r.id);
   const keys = [...new Set(atShow.flatMap((r) => (r.companyKey ? [r.companyKey] : [])))];
   const [exhibitors, items, visits] = await Promise.all([
-    db.exhibitor.findMany({ where: { id: { in: ids } } }),
+    // With the contacts this account found with its own Hunter.io key on top.
+    db.exhibitor.findMany({ where: { id: { in: ids } } }).then((found) => withOwnContacts(organization.id, found)),
     db.savedListItem.findMany({
       where: { list: { organizationId: organization.id, favorites: true }, exhibitor: { OR: [{ id: { in: ids } }, { companyKey: { in: keys } }] } },
       include: { exhibitor: { select: { id: true, companyKey: true } }, assignee: { select: { name: true, email: true } } },

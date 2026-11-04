@@ -7,9 +7,11 @@ import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
+import { withOwnContacts } from "@/lib/own-contacts-run";
 import { FAVORITES_NAME, MAX_LIST_NAME } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
 import { ExportButton } from "../../exhibitors/export-button";
+import { OwnContactTag } from "../../exhibitors/own-hunter-button";
 import { deleteList, renameList, setListMembership, toggleFavorite } from "../actions";
 
 const PAGE_SIZE = 50;
@@ -37,7 +39,7 @@ export default async function SavedListPage({ params, searchParams }: PageProps<
           orderBy: [{ name: "asc" }],
           skip: (page - 1) * PAGE_SIZE,
           take: PAGE_SIZE,
-        }),
+        }).then((found) => withOwnContacts(organization.id, found)),
         db.exhibitor.count({ where }),
       ])
     : [[], 0];
@@ -128,6 +130,7 @@ export default async function SavedListPage({ params, searchParams }: PageProps<
                         {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
                         {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
                         {e.phone && <p className="text-xs text-muted">{e.phone}</p>}
+                        {e.ownContact && <OwnContactTag />}
                       </div>
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">{e.country ? countryName(e.country) : <span className="text-faint">—</span>}</td>

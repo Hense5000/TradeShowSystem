@@ -2,6 +2,7 @@ import type { LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { companyDomain } from "@/lib/company";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { formatDateRange, isoDate, today } from "@/lib/dates";
@@ -10,10 +11,13 @@ import { standardEmail } from "@/lib/email-draft";
 import { canManageMembers } from "@/lib/permissions";
 import { countByShow, favoriteRowsAt } from "@/lib/favorite-companies";
 import { favoriteFilters, favoriteQuery, favoriteWhere, followUpState, LEAD_LABEL, LEAD_PILL, LEAD_STATUSES } from "@/lib/leads";
+import { hasOwnHunter, searchedDomains, withOwnContacts } from "@/lib/own-contacts-run";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { ExportButton } from "../exhibitors/export-button";
+import { findOwnHunterContact } from "../exhibitors/actions";
+import { OwnContactTag, OwnHunterButton } from "../exhibitors/own-hunter-button";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
 import { RemoveFavoriteStar } from "./remove-favorite";
@@ -44,7 +48,7 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
   const showCompanies = filters.show ? favoriteRows.filter((r) => r.tradeShowId === filters.show && r.companyKey).map((r) => r.companyKey!) : [];
   const where = favoriteWhere(listId, filters, { today: day, userId: user.id, showCompanies });
 
-  const [byStatus, shownCount, items, favoriteShows, memberships, myCount, recommended] = await Promise.all([
+  const [byStatus, shownCount, sharedItems, favoriteShows, memberships, myCount, recommended, ownHunter] = await Promise.all([
     db.savedListItem.groupBy({ by: ["leadStatus"], where: { listId }, _count: true }),
     db.savedListItem.count({ where }),
     tab === "exhibitors"
@@ -68,7 +72,14 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
     db.membership.findMany({ where: { organizationId: organization.id }, select: { user: { select: { id: true, name: true, email: true } } } }),
     db.savedListItem.count({ where: { listId, assigneeId: user.id } }),
     tab === "shows" ? recommendedShows(organization.id, day) : [],
+    hasOwnHunter(organization.id),
   ]);
+  // With the contacts this account found with its own Hunter.io key on top.
+  const [ownRows, searched] = await Promise.all([
+    withOwnContacts(organization.id, sharedItems.map((i) => i.exhibitor)),
+    ownHunter ? searchedDomains(organization.id, sharedItems.map((i) => i.exhibitor.website)) : new Set<string>(),
+  ]);
+  const items = sharedItems.map((item, i) => ({ ...item, exhibitor: ownRows[i] }));
   const members = memberships
     .map((m) => ({ id: m.user.id, name: m.user.id === user.id ? `${m.user.name ?? m.user.email} (you)` : (m.user.name ?? m.user.email) }))
     .sort((a, b) => (a.id === user.id ? -1 : b.id === user.id ? 1 : a.name.localeCompare(b.name)));
@@ -257,12 +268,17 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                                   {e.website.replace(/^https?:\/\/(www\.)?/, "")}
                                 </a>
                               )}
-                              {(e.contactName || e.email || e.phone) && (
+                              {(e.contactName || e.email || e.phone || (ownHunter && companyDomain(e.website))) && (
                                 <div className="mt-2 border-t border-line pt-2">
                                   {e.contactName && <p className="font-medium">{e.contactName}</p>}
                                   {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
                                   {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium break-all text-brand hover:underline">{e.email}</a>}
                                   {e.phone && <a href={`tel:${e.phone.replace(/\s/g, "")}`} className="block text-xs text-muted hover:text-brand">{e.phone}</a>}
+                                  {e.ownContact && <OwnContactTag />}
+                                  {/* Looked up once with the account's own Hunter.io; after that only on the company page, so credits are not spent by accident. */}
+                                  {ownHunter && companyDomain(e.website) && !searched.has(companyDomain(e.website)!) && (
+                                    <OwnHunterButton action={findOwnHunterContact.bind(null, slug, e.id)} compact />
+                                  )}
                                 </div>
                               )}
                             </div>

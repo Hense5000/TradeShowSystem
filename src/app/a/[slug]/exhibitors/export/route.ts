@@ -6,6 +6,7 @@ import { FREE_LIST_SIZE } from "@/lib/export-limit";
 import { claimExport } from "@/lib/export-limit-run";
 import { favoriteFilters, favoriteWhere, LEAD_LABEL } from "@/lib/leads";
 import { type Table, toCsv, toXlsx } from "@/lib/spreadsheet";
+import { withOwnContacts } from "@/lib/own-contacts-run";
 import { hasRole } from "@/lib/permissions";
 import { accountAccess, requireMembership } from "@/lib/tenant";
 import type { TrialLockInfo } from "@/lib/trial";
@@ -45,7 +46,7 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
   if (listId && !list) return new Response("Not found", { status: 404 });
 
   const leads = list?.favorites;
-  const exhibitors = await db.exhibitor.findMany({
+  const shared = await db.exhibitor.findMany({
     where: leads
       ? { savedIn: { some: favoriteWhere(list.id, favoriteFilters(url.searchParams), { userId: user.id }) } }
       : list
@@ -61,6 +62,8 @@ export async function GET(request: Request, { params }: RouteContext<"/a/[slug]/
     },
     orderBy: [{ name: "asc" }, { tradeShow: { startDate: "asc" } }],
   });
+  // With the contacts this account found with its own Hunter.io key on top.
+  const exhibitors = await withOwnContacts(organization.id, shared);
 
   // Small saved lists and Favorites are hand-picked leads and don't count.
   if (!list || exhibitors.length > FREE_LIST_SIZE) {
