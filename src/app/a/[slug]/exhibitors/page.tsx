@@ -12,6 +12,7 @@ import { formatDateRange } from "@/lib/dates";
 import { type ExhibitorFilters, exhibitorFilters, exhibitorQuery, exhibitorWhere, industryTerms, isFiltered } from "@/lib/exhibitor-list";
 import { companyPage } from "@/lib/exhibitor-list-run";
 import { isHunterConfigured } from "@/lib/hunter-run";
+import { withOwnContacts } from "@/lib/own-contacts-run";
 import { countCountriesFromPhones } from "@/lib/phone-country-run";
 import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
 import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
@@ -23,6 +24,7 @@ import { AiSearch } from "./ai-search";
 import { ExportButton } from "./export-button";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
+import { OwnContactTag } from "./own-hunter-button";
 import { tradeShowOptions } from "./show-select";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -64,11 +66,14 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   // filters match, and which of this account's saved lists each company is on.
   const pageRows = { companyKey: { in: pageKeys } };
   const [rows, matchedRows, saved] = await Promise.all([
-    db.exhibitor.findMany({
-      where: pageRows,
-      include: { tradeShow: { select: { id: true, name: true, startDate: true } } },
-      orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
-    }),
+    db.exhibitor
+      .findMany({
+        where: pageRows,
+        include: { tradeShow: { select: { id: true, name: true, startDate: true } } },
+        orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
+      })
+      // With the contacts this account found with its own Hunter.io key on top.
+      .then((found) => withOwnContacts(organization.id, found)),
     db.exhibitor.findMany({ where: { AND: [where, pageRows] }, select: { id: true } }),
     db.savedListItem.findMany({
       where: { exhibitor: pageRows, list: { organizationId: organization.id } },
@@ -293,6 +298,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                           {contact.contactTitle && <p className="text-xs text-muted">{contact.contactTitle}</p>}
                           {contact.email && <a href={`mailto:${contact.email}`} className="block text-xs font-medium text-brand hover:underline">{contact.email}</a>}
                           {contact.phone && <p className="text-xs text-muted">{contact.phone}</p>}
+                          {contact.ownContact && <OwnContactTag />}
                         </div>
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap">{country ? countryName(country) : <span className="text-faint">—</span>}</td>

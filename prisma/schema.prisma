@@ -40,18 +40,20 @@ model User {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  memberships     Membership[]
-  invitationsSent Invitation[]     @relation("InvitedBy")
-  savedListItems  SavedListItem[]
-  assignedLeads   SavedListItem[]  @relation("LeadAssignee")
-  boothVisits     BoothVisit[]
-  favoriteShows   FavoriteShow[]
-  trustedDevices  TrustedDevice[]
-  loginCodes      LoginCode[]
-  supportTickets  SupportTicket[]
-  supportMessages SupportMessage[]
-  exportedShows   ExportedShow[]
-  leadLinks       LeadLink[]
+  memberships       Membership[]
+  invitationsSent   Invitation[]       @relation("InvitedBy")
+  savedListItems    SavedListItem[]
+  assignedLeads     SavedListItem[]    @relation("LeadAssignee")
+  boothVisits       BoothVisit[]
+  favoriteShows     FavoriteShow[]
+  trustedDevices    TrustedDevice[]
+  loginCodes        LoginCode[]
+  supportTickets    SupportTicket[]
+  supportMessages   SupportMessage[]
+  exportedShows     ExportedShow[]
+  leadLinks         LeadLink[]
+  hunterConnections HunterConnection[] @relation("HunterConnectedBy")
+  ownContactsFound  OwnContact[]       @relation("OwnContactFoundBy")
 }
 
 // A browser that has confirmed a login code from the user's email. It can log
@@ -114,9 +116,9 @@ model Organization {
   // Free trial for accounts signed up on their own: the app can be used
   // without paying until this time, but nothing can be downloaded (see
   // src/lib/trial.ts). Null for accounts that never had a trial.
-  trialEndsAt        DateTime?
+  trialEndsAt       DateTime?
   // When the owners were emailed that the trial ended, so it is sent once.
-  trialEndedEmailAt  DateTime?
+  trialEndedEmailAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -134,6 +136,8 @@ model Organization {
   boothVisits           BoothVisit[]
   hiddenRecommendations HiddenShowRecommendation[]
   supportTickets        SupportTicket[]
+  hunterConnection      HunterConnection?
+  ownContacts           OwnContact[]
 }
 
 enum Currency {
@@ -687,4 +691,42 @@ model SupportMessage {
   author User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([ticketId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// The account's own Hunter.io connection
+// ---------------------------------------------------------------------------
+
+// The account's own Hunter.io API key, so its users can look up contacts with
+// the account's own Hunter credits. The key is stored encrypted (see
+// src/lib/secret-box.ts) and never shown again; only its last 4 characters are.
+model HunterConnection {
+  organizationId String   @id
+  keyCipher      String
+  keyHint        String // the key's last 4 characters, e.g. "…3f9a"
+  connectedById  String?
+  connectedAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy  User?        @relation("HunterConnectedBy", fields: [connectedById], references: [id], onDelete: SetNull)
+}
+
+// A contact an account found with its own Hunter.io key, for one company
+// domain (e.g. "acme.com", see companyDomain in src/lib/company.ts). Only that
+// account sees it, on top of the shared exhibitor rows of every show the
+// company is at. All fields null: Hunter.io was asked but knew no one.
+model OwnContact {
+  organizationId String
+  domain         String
+  contactName    String?
+  contactTitle   String?
+  email          String?
+  phone          String?
+  foundById      String?
+  searchedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  foundBy      User?        @relation("OwnContactFoundBy", fields: [foundById], references: [id], onDelete: SetNull)
+
+  @@id([organizationId, domain])
 }

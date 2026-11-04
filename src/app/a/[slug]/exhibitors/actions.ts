@@ -20,6 +20,7 @@ import { MAX_QUESTION } from "@/lib/exhibitor-ai-search";
 import { askAiForFilters } from "@/lib/exhibitor-ai-search-run";
 import { exhibitorQuery } from "@/lib/exhibitor-list";
 import { exhibitorKey, IMPORT_ROWS_PER_CALL, parseExhibitorRows } from "@/lib/exhibitors";
+import { findOwnContact, type OwnFindResult } from "@/lib/own-contacts-run";
 import { fillCountriesFromPhones } from "@/lib/phone-country-run";
 import { countryFromPhone, withPhoneCountry } from "@/lib/phone-country";
 import { canEditExhibitor } from "@/lib/platform-admin";
@@ -256,6 +257,20 @@ export async function findAndSaveExhibitorContact(slug: string, id: string, name
   await db.exhibitor.updateMany({ where: { id }, data: { ...data, ...(country && { country }) } });
   revalidatePath(`/a/${slug}/exhibitors`);
   return { ...result, saved: true };
+}
+
+/**
+ * "Find contact with Hunter.io": any member looks up the exhibitor's company
+ * with the account's own Hunter.io key. What is found is kept for this account
+ * only and shown on every show the company is at.
+ */
+export async function findOwnHunterContact(slug: string, exhibitorId: string): Promise<OwnFindResult> {
+  const { user, organization } = await requireMembership(slug);
+  const exhibitor = await db.exhibitor.findUnique({ where: { id: exhibitorId }, select: { website: true } });
+  if (!exhibitor) return { error: "This exhibitor no longer exists." };
+  const result = await findOwnContact(organization.id, user.id, exhibitor.website);
+  revalidatePath(`/a/${slug}`, "layout");
+  return result;
 }
 
 /** Looks up the missing contacts of one trade show (or all), as many as fit in the time. */

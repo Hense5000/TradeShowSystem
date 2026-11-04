@@ -2,19 +2,22 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { summarizeCompany } from "@/lib/company";
+import { companyDomain, summarizeCompany } from "@/lib/company";
 import { isCompanyProfileConfigured } from "@/lib/company-profile-run";
 import { syncCompanyKeys } from "@/lib/company-run";
 import { countryName } from "@/lib/countries";
 import { db } from "@/lib/db";
 import { formatDateRange } from "@/lib/dates";
+import { hasOwnHunter, searchedDomains, withOwnContacts } from "@/lib/own-contacts-run";
+import { canManageMembers } from "@/lib/permissions";
 import { canEditExhibitor } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { type ShowStatus, showStatus, STATUS_LABEL } from "@/lib/trade-shows";
 import { setListMembership } from "../../lists/actions";
-import { writeCompanyProfileWithAi } from "../actions";
+import { findOwnHunterContact, writeCompanyProfileWithAi } from "../actions";
 import { FavoriteStar } from "../favorite-star";
 import { ListMenu } from "../list-menu";
+import { OwnContactTag, OwnHunterButton } from "../own-hunter-button";
 import { ProfileButton } from "./profile-button";
 
 // "Write company profile with AI" waits for the AI on this page.
@@ -25,17 +28,23 @@ const STATUS_PILL: Record<ShowStatus, string> = { upcoming: "pill-soft", running
 /** One company and every trade show it exhibits at. */
 export default async function CompanyPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/company">) {
   const { slug } = await params;
-  const { user, organization } = await requireMembership(slug);
+  const { user, membership, organization } = await requireMembership(slug);
   const sp = await searchParams;
   const key = typeof sp.key === "string" ? sp.key : "";
   if (!key) notFound();
 
   await syncCompanyKeys();
-  const rows = await db.exhibitor.findMany({
+  const shared = await db.exhibitor.findMany({
     where: { companyKey: key },
     include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true, city: true, country: true } } },
     orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
   });
+  // With the contact this account found with its own Hunter.io key on top.
+  const [rows, ownHunter, searched] = await Promise.all([
+    withOwnContacts(organization.id, shared),
+    hasOwnHunter(organization.id),
+    searchedDomains(organization.id, shared.map((r) => r.website)),
+  ]);
   if (rows.length === 0) notFound();
   const { main, first, shows } = summarizeCompany(rows);
 
@@ -51,6 +60,8 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   const savedIn = new Set(saved.map((s) => `${s.listId}:${s.exhibitorId}`));
 
   const website = first("website");
+  const hunterRow = rows.find((r) => companyDomain(r.website));
+  const hunterDomainOf = hunterRow && companyDomain(hunterRow.website);
   const industry = first("industry");
   const country = first("country");
   const profile = first("companyProfile");
@@ -95,6 +106,28 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
         </div>
         {profile && <p className="text-sm whitespace-pre-line text-muted">{profile}</p>}
         {!profile && isCompanyProfileConfigured() && <ProfileButton action={writeCompanyProfileWithAi.bind(null, slug, key)} />}
+        {hunterRow && hunterDomainOf && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-subtle px-4 py-3 text-sm">
+            {ownHunter ? (
+              <>
+                <p className="min-w-56 flex-1 text-muted">
+                  Look up a contact person at {hunterDomainOf} with your own Hunter.io account (one credit). Only your account sees what is found.
+                </p>
+                <OwnHunterButton action={findOwnHunterContact.bind(null, slug, hunterRow.id)} again={searched.has(hunterDomainOf)} />
+              </>
+            ) : (
+              <p className="min-w-56 flex-1 text-muted">
+                Want the contact person here?{" "}
+                {canManageMembers(membership.role) ? (
+                  <Link href={`/a/${slug}/profile`} className="font-semibold text-brand hover:underline">Connect Hunter.io</Link>
+                ) : (
+                  "An owner or admin can connect Hunter.io on Company profile"
+                )}{" "}
+                to look up contacts with your own Hunter.io account. Only your account sees them.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="card overflow-hidden p-0">
@@ -142,6 +175,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                         {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
                         {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
                         {e.phone && <p className="text-xs text-muted">{e.phone}</p>}
+                        {e.ownContact && <OwnContactTag />}
                         {!e.contactName && !e.email && !e.phone && <span className="text-faint">—</span>}
                       </div>
                     </td>
