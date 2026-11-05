@@ -1,18 +1,40 @@
 import { MAX_PAGES, morePages } from "@/lib/exhibitor-fetch";
 
-// The nightly update starts at 03:00 Danish time. Vercel's clock runs on UTC
-// and a daily cron may start any time within its hour, so the cron is called
-// every hour from 01 to 04 UTC and only does work when it is between 03:00
-// and 06:59 in Copenhagen. That gives three or four rounds a night (winter or
-// summer time), each up to five minutes; work left over waits for the next round.
+// The update runs once a week, starting Sunday at 03:00 Danish time. Vercel's
+// clock runs on UTC and a daily cron may start any time within its hour, so
+// the cron is called every hour from 01 to 04 UTC and only works when it is
+// between 03:00 and 06:59 in Copenhagen: three or four rounds a night (winter
+// or summer time), each up to five minutes. Work not done on Sunday night is
+// carried on the following nights until the week's update is finished.
 
 export const NIGHT_FROM_HOUR = 3;
 export const NIGHT_UNTIL_HOUR = 7;
+/** The day the weekly update starts: 0 = Sunday. */
+export const START_WEEKDAY = 0;
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** The date, hour and weekday on the clock in Denmark. */
+function copenhagen(now: Date): { year: number; month: number; day: number; hour: number; weekday: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      weekday: "short",
+      timeZone: "Europe/Copenhagen",
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  return { year: +parts.year, month: +parts.month, day: +parts.day, hour: +parts.hour, weekday: WEEKDAYS.indexOf(parts.weekday) };
+}
 
 /** The hour (0-23) on the clock in Denmark. */
 export function copenhagenHour(now = new Date()): number {
-  const hour = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: "Europe/Copenhagen" }).format(now);
-  return Number(hour);
+  return copenhagen(now).hour;
 }
 
 /** Whether it is night in Denmark, between 03:00 and 06:59, when the update runs. */
@@ -21,7 +43,34 @@ export function isNightlyHour(now = new Date()): boolean {
   return hour >= NIGHT_FROM_HOUR && hour < NIGHT_UNTIL_HOUR;
 }
 
-/** Where the nightly update is in a show's exhibitor list, saved between rounds. */
+/** Whether this is the night the weekly update starts (Sunday, Danish time). */
+export function isStartNight(now = new Date()): boolean {
+  return copenhagen(now).weekday === START_WEEKDAY;
+}
+
+/** When this week's update started: the latest Sunday 03:00 Danish time, at or before now. */
+export function weekStart(now = new Date()): Date {
+  const c = copenhagen(now);
+  let back = (c.weekday - START_WEEKDAY + 7) % 7;
+  if (back === 0 && c.hour < NIGHT_FROM_HOUR) back = 7;
+  // 03:00 that day in UTC, moved by Denmark's offset from UTC on that day (1 or 2 hours).
+  const asUtc = Date.UTC(c.year, c.month - 1, c.day - back, NIGHT_FROM_HOUR);
+  const offset = copenhagen(new Date(asUtc)).hour - NIGHT_FROM_HOUR;
+  return new Date(asUtc - offset * 3_600_000);
+}
+
+/**
+ * Whether a round should work now: on Sunday night, and on the nights after
+ * while the week's update has started but is not finished.
+ */
+export function shouldRun(s: { lastRunAt: Date | null; weekDoneAt: Date | null } | null, now = new Date()): boolean {
+  if (!isNightlyHour(now)) return false;
+  const start = weekStart(now);
+  if (s?.weekDoneAt && s.weekDoneAt >= start) return false;
+  return isStartNight(now) || Boolean(s?.lastRunAt && s.lastRunAt >= start);
+}
+
+/** Where the update is in a show's exhibitor list, saved between rounds. */
 export type ListProgress = {
   /** Pages still to read. */
   queue: string[];
@@ -90,11 +139,13 @@ export type NightlyTotals = {
   /** Shows not reached, or only partly read, this round. */
   left: number;
   stoppedBy?: string;
+  /** Everything for this week is done. */
+  done?: boolean;
 };
 
 const shows = (n: number) => `${n} ${n === 1 ? "show" : "shows"}`;
 
-/** A short text on what one round of the nightly update did, for the Feature control page. */
+/** A short text on what one round of the update did, for the Feature control page. */
 export function nightlySummary(t: NightlyTotals): string {
   const parts: string[] = [];
   if (t.finder) parts.push(`Trade show finder: ${t.finder}`);
@@ -105,5 +156,6 @@ export function nightlySummary(t: NightlyTotals): string {
   if (t.failed) parts.push(`${shows(t.failed)} failed and will be tried again.`);
   if (t.stoppedBy) parts.push(`Stopped: ${t.stoppedBy}`);
   if (t.left) parts.push(`${shows(t.left)} still to go in the next round.`);
+  if (t.done) parts.push("This week's update is done.");
   return parts.join(" ");
 }

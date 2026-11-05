@@ -19,19 +19,21 @@ import {
   pageFailed,
   pageRead,
   takePage,
+  weekStart,
 } from "@/lib/nightly-update";
-import { isDue } from "@/lib/show-finder";
 import { runShowFinder } from "@/lib/show-finder-run";
 
-// One round of the nightly update. First the AI trade show finder checks the
-// chosen exhibition centers that are due (each once a month), then exhibitors
+// One round of the weekly update. First the AI trade show finder checks the
+// chosen exhibition centers not checked yet this week, then exhibitors
 // are fetched for upcoming trade shows that have none yet, soonest first, the
 // same way as the "Fetch exhibitors for all" button. A long exhibitor list
 // that is not finished when the round's time is up is carried on in the next
 // round, from where it stopped.
 
-/** The finder stops starting new centers after this long, so the exhibitors get most of the round. */
-const FINDER_BUDGET_MS = 60_000;
+/** The finder stops starting new centers after this long; the rest of the round goes to exhibitors. */
+const FINDER_BUDGET_MS = 150_000;
+/** Centers checked side by side. */
+const FINDER_PARALLEL = 6;
 /** A new page is only started when this much of the round is left; one page can take two minutes. */
 const PAGE_NEEDS_MS = 130_000;
 /** A missing exhibitor list is only looked for when this much is left. */
@@ -52,18 +54,22 @@ type Show = {
 
 class ServiceDown extends Error {}
 
-export async function runNightlyUpdate(roundMs: number): Promise<string> {
+export async function runNightlyUpdate(roundMs: number, now = new Date()): Promise<string> {
   const started = Date.now();
+  const start = weekStart(now);
   const timeLeft = () => roundMs - (Date.now() - started);
   const totals: NightlyTotals = { finder: null, filled: 0, added: 0, urlsFound: 0, noDirectory: 0, empty: 0, failed: 0, left: 0 };
 
-  // 1. New trade shows from the chosen exhibition centers.
+  // 1. New trade shows from the chosen exhibition centers not checked yet this week.
   const finder = await db.showFinderSettings.findUnique({ where: { id: 1 } });
-  if (finder?.enabled) {
-    const due = (await db.exhibitionCenter.findMany({ where: { findShows: true, eventsUrl: { not: null } }, select: { showsCheckedAt: true } })).some((c) =>
-      isDue(c.showsCheckedAt),
-    );
-    if (due) totals.finder = await runShowFinder({ onlyDue: true, timeBudgetMs: FINDER_BUDGET_MS });
+  const centersDue = () =>
+    finder?.enabled
+      ? db.exhibitionCenter.count({
+          where: { findShows: true, eventsUrl: { not: null }, OR: [{ showsCheckedAt: null }, { showsCheckedAt: { lt: start } }] },
+        })
+      : Promise.resolve(0);
+  if ((await centersDue()) > 0) {
+    totals.finder = await runShowFinder({ onlyDue: true, dueSince: start, timeBudgetMs: FINDER_BUDGET_MS, parallel: FINDER_PARALLEL });
   }
 
   // 2. Exhibitors for upcoming shows that have none yet, and lists left half read last round.
@@ -175,11 +181,11 @@ export async function runNightlyUpdate(roundMs: number): Promise<string> {
     totals.left += queue.length - Math.min(next, queue.length);
   }
 
+  // The week is done when every center is checked and no show was left unreached;
+  // shows that failed are tried again next week.
+  totals.done = !totals.stoppedBy && totals.left === 0 && (await centersDue()) === 0;
   const summary = nightlySummary(totals);
-  await db.nightlyUpdateSettings.upsert({
-    where: { id: 1 },
-    create: { id: 1, lastRunAt: new Date(), lastRunSummary: summary },
-    update: { lastRunAt: new Date(), lastRunSummary: summary },
-  });
+  const data = { lastRunAt: new Date(), lastRunSummary: summary, ...(totals.done && { weekDoneAt: new Date() }) };
+  await db.nightlyUpdateSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
   return summary;
 }

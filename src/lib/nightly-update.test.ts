@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { copenhagenHour, hasPagesLeft, isNightlyHour, listProgress, nightlySummary, pageFailed, pageRead, takePage } from "./nightly-update";
+import {
+  copenhagenHour,
+  hasPagesLeft,
+  isNightlyHour,
+  isStartNight,
+  listProgress,
+  nightlySummary,
+  pageFailed,
+  pageRead,
+  shouldRun,
+  takePage,
+  weekStart,
+} from "./nightly-update";
 
 describe("isNightlyHour", () => {
   it("runs at 03:00 Danish time in winter (02:00 UTC) but not at 01:00 UTC", () => {
@@ -53,5 +65,33 @@ describe("nightlySummary", () => {
     ).toBe(
       "Trade show finder: Checked 3 centers. Added 2 new trade shows. Exhibitors: 120 added to 2 shows. Found the exhibitor list of 1 show. 1 show had no exhibitor list to find. 4 shows still to go in the next round.",
     );
+  });
+});
+
+describe("weekly start", () => {
+  it("starts Sunday 03:00 Danish time, in winter and summer", () => {
+    // Thursday 5 Nov 2026 -> Sunday 1 Nov 03:00 CET = 02:00 UTC
+    expect(weekStart(new Date("2026-11-05T10:00:00Z")).toISOString()).toBe("2026-11-01T02:00:00.000Z");
+    // Wednesday 1 Jul 2026 -> Sunday 28 Jun 03:00 CEST = 01:00 UTC
+    expect(weekStart(new Date("2026-07-01T10:00:00Z")).toISOString()).toBe("2026-06-28T01:00:00.000Z");
+    // Sunday 02:30 Danish time still belongs to the week before
+    expect(weekStart(new Date("2026-11-08T01:30:00Z")).toISOString()).toBe("2026-11-01T02:00:00.000Z");
+    expect(weekStart(new Date("2026-11-08T02:10:00Z")).toISOString()).toBe("2026-11-08T02:00:00.000Z");
+  });
+
+  it("runs on Sunday night, and later nights only until the week is done", () => {
+    const sunday = new Date("2026-11-08T02:10:00Z");
+    const monday = new Date("2026-11-09T02:10:00Z");
+    expect(isStartNight(sunday)).toBe(true);
+    expect(shouldRun(null, sunday)).toBe(true);
+    expect(shouldRun(null, monday)).toBe(false);
+    const ranSunday = new Date("2026-11-08T02:15:00Z");
+    expect(shouldRun({ lastRunAt: ranSunday, weekDoneAt: null }, monday)).toBe(true);
+    expect(shouldRun({ lastRunAt: ranSunday, weekDoneAt: ranSunday }, monday)).toBe(false);
+    expect(shouldRun({ lastRunAt: ranSunday, weekDoneAt: ranSunday }, new Date("2026-11-08T03:10:00Z"))).toBe(false);
+    // Last week's finish doesn't stop this Sunday
+    expect(shouldRun({ lastRunAt: new Date("2026-11-02T02:15:00Z"), weekDoneAt: new Date("2026-11-02T02:15:00Z") }, sunday)).toBe(true);
+    // Not in the daytime
+    expect(shouldRun(null, new Date("2026-11-08T10:00:00Z"))).toBe(false);
   });
 });

@@ -77,7 +77,7 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
               {addedLately > 0 && <span className="pill pill-neutral">{addedLately} added in the last 30 days</span>}
             </span>
             <span className="block text-sm text-muted">
-              Checks chosen exhibition centers' events pages on the 1st of each month and adds new trade shows in the next 6 months to the list.
+              Checks chosen exhibition centers' events pages every Sunday night and adds new trade shows in the next 6 months to the list.
             </span>
             {groups.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-1 text-sm">
@@ -106,12 +106,13 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
           </span>
           <span>
             <span className="flex flex-wrap items-center gap-2 font-semibold">
-              Nightly update
+              Weekly update
               <span className={`pill ${nightlyOn ? "pill-ok" : "pill-neutral"}`}>{nightlyOn ? "On" : "Off"}</span>
             </span>
             <span className="block text-sm text-muted">
-              Every night from 03:00 Danish time: runs the AI trade show finder (when it is on) and fetches exhibitors for upcoming trade shows that
-              have none yet. What is not done by 07:00 carries on the next night.
+              Every Sunday from 03:00 Danish time: the AI trade show finder (when it is on) checks every chosen exhibition center for new trade
+              shows, and exhibitors are fetched for upcoming trade shows that have none yet. What is not done by 07:00 carries on the following
+              nights until the week's update is done.
             </span>
             <span className="mt-1 block text-sm">
               {showsWaiting === 0

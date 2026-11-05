@@ -82,7 +82,7 @@ export async function setCleanupEnabled(slug: string, enabled: boolean): Promise
   return undefined;
 }
 
-/** Switches the nightly update (new trade shows and their exhibitors, 03:00 Danish time) on or off. */
+/** Switches the weekly update (new trade shows and their exhibitors, Sunday 03:00 Danish time) on or off. */
 export async function setNightlyUpdateEnabled(slug: string, enabled: boolean): Promise<ActionState> {
   await requirePlatformAdmin(slug);
   await db.nightlyUpdateSettings.upsert({ where: { id: 1 }, create: { id: 1, enabled }, update: { enabled } });

@@ -250,12 +250,18 @@ export async function runShowFinder({
   centerIds,
   groupId,
   timeBudgetMs = TIME_BUDGET_MS,
+  dueSince,
+  parallel = PARALLEL,
 }: {
   onlyDue: boolean;
   centerIds?: string[];
   groupId?: string;
   /** Stop starting new centers after this long; the nightly update gives the finder less time. */
   timeBudgetMs?: number;
+  /** With onlyDue: a center is due when it was not checked since this time (the weekly update), instead of once a month. */
+  dueSince?: Date;
+  /** Centers checked side by side. */
+  parallel?: number;
 }): Promise<string> {
   if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
 
@@ -268,7 +274,8 @@ export async function runShowFinder({
     orderBy: [{ showsCheckedAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
     select: { id: true, name: true, eventsUrl: true, showsCheckedAt: true },
   });
-  const queue = onlyDue ? chosen.filter((c) => isDue(c.showsCheckedAt)) : chosen;
+  const due = (c: { showsCheckedAt: Date | null }) => (dueSince ? !c.showsCheckedAt || c.showsCheckedAt < dueSince : isDue(c.showsCheckedAt));
+  const queue = onlyDue ? chosen.filter(due) : chosen;
   // The daily run usually has nothing to do; keep the last real summary then.
   if (onlyDue && queue.length === 0 && waitingAdded === 0) return "No centers were due for a check.";
 
@@ -295,7 +302,7 @@ export async function runShowFinder({
       totals.checked++;
     }
   }
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  await Promise.all(Array.from({ length: parallel }, worker));
   totals.left = queue.length - totals.checked;
 
   const summary = chosen.length > 0 ? runSummary(totals) : groupId ? "The group has no ticked centers yet." : "No centers are chosen yet.";

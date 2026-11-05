@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
-import { isNightlyHour } from "@/lib/nightly-update";
+import { shouldRun } from "@/lib/nightly-update";
 import { runNightlyUpdate } from "@/lib/nightly-update-run";
 
 // Called by Vercel Cron every hour from 01 to 04 UTC (see vercel.json). It
-// only works between 03:00 and 06:59 Danish time, so the update starts at
-// 03:00 both in summer and winter time and gets a few rounds each night.
+// only works between 03:00 and 06:59 Danish time, on Sunday night and on the
+// nights after until the week's update is done (see shouldRun).
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export async function GET(request: Request) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isNightlyHour()) return Response.json({ skipped: "It is not between 03:00 and 06:59 in Denmark." });
   const settings = await db.nightlyUpdateSettings.findUnique({ where: { id: 1 } });
-  if (settings && !settings.enabled) return Response.json({ skipped: "The nightly update is switched off." });
+  if (settings && !settings.enabled) return Response.json({ skipped: "The weekly update is switched off." });
+  if (!shouldRun(settings)) return Response.json({ skipped: "Not a night the weekly update works." });
   return Response.json({ summary: await runNightlyUpdate(ROUND_MS) });
 }

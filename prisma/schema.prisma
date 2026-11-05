@@ -625,13 +625,14 @@ model SuggestedShow {
 // years ago are deleted, with their exhibitors. One row (id 1).
 // ---------------------------------------------------------------------------
 
-// One row (id 1): the nightly update at 03:00 Danish time, which runs the AI
-// trade show finder and fetches exhibitors for new trade shows on its own.
+// One row (id 1): the weekly update from Sunday 03:00 Danish time, which runs
+// the AI trade show finder and fetches exhibitors for new trade shows on its own.
 model NightlyUpdateSettings {
   id             Int       @id @default(1)
   enabled        Boolean   @default(true)
   lastRunAt      DateTime?
   lastRunSummary String?
+  weekDoneAt     DateTime? // when this week's update finished everything, so the following nights rest
   updatedAt      DateTime  @updatedAt
 }
 
