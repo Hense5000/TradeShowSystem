@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { emailSender, sendEmail } from "@/lib/email";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 import {
   createLoginCode,
   LOGIN_CODE_MINUTES,
@@ -50,6 +51,22 @@ export async function isTrustedDevice(userId: string): Promise<boolean> {
     select: { id: true },
   });
   return Boolean(device);
+}
+
+/**
+ * Only users of a customer account may log in. Someone whose company removed
+ * them from every account is refused, unless they have an open invitation to
+ * accept (or are a platform admin). Anyone else can only create a new account.
+ */
+export async function mayLogIn(user: { id: string; email: string }): Promise<boolean> {
+  if (isPlatformAdmin(user.email)) return true;
+  const member = await db.membership.findFirst({ where: { userId: user.id }, select: { id: true } });
+  if (member) return true;
+  const invitation = await db.invitation.findFirst({
+    where: { email: user.email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  return Boolean(invitation);
 }
 
 /** Remembers this browser for the user. Several users may share one browser. */
@@ -118,6 +135,8 @@ export async function redeemTicket(ticket: string) {
     data: { ticketUsedAt: new Date() },
   });
   if (claimed.count === 0) return null;
+  const user = await db.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true } });
+  if (!user || !(await mayLogIn(user))) return null;
   return db.user.update({
     where: { id: record.userId },
     data: { sessionVersion: { increment: 1 } },

@@ -91,7 +91,11 @@ export async function removeMember(slug: string, membershipId: string): Promise<
   if (!check.ok) return { error: check.error };
 
   await db.membership.delete({ where: { id: target.id } });
+  // Not in any account any more: log them out everywhere (see the jwt
+  // callback in src/auth.ts). They can't log in again until invited back.
+  const left = await db.membership.count({ where: { userId: target.userId } });
+  if (left === 0) await db.user.update({ where: { id: target.userId }, data: { sessionVersion: { increment: 1 } } });
   await syncSeats(organization.id);
-  if (isSelf) redirect("/accounts");
+  if (isSelf) redirect(left === 0 ? "/" : "/accounts");
   revalidatePath(`/a/${slug}`, "layout");
 }
