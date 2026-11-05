@@ -8,6 +8,7 @@ import { acceptInvitation, findInvitation } from "@/lib/invitations";
 import { issueTicket } from "@/lib/login-guard";
 import { createOrganization } from "@/lib/organizations";
 import { isPlatformAdmin } from "@/lib/platform-admin";
+import { notifyNewSignup } from "@/lib/signup-notify-run";
 import { syncSeats } from "@/lib/stripe";
 import { trialEnd } from "@/lib/trial";
 import { firstError, signupSchema } from "@/lib/validation";
@@ -65,6 +66,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
       return { user, organization: await createOrganization(tx, user.id, companyName, { trialEndsAt: trialEnd() }) };
     });
     userId = user.id;
+    await notifyNewSignup({ name, email, companyName: organization.name });
     // A new account starts with a free trial (src/lib/trial.ts): straight in,
     // no card needed until it ends.
     destination = `/a/${organization.slug}`;
