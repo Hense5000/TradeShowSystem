@@ -2,9 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
   "crons": [
-    { "path": "/api/cron/show-finder", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/nightly-update?round=1", "schedule": "0 1 * * *" },
+    { "path": "/api/cron/nightly-update?round=2", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/nightly-update?round=3", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/nightly-update?round=4", "schedule": "0 4 * * *" },
     { "path": "/api/cron/trade-show-cleanup", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/exhibitor-profiles", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/exhibitor-profiles", "schedule": "0 5 * * *" },
     { "path": "/api/cron/list-digest", "schedule": "0 6 * * *" },
     { "path": "/api/cron/trial-ended", "schedule": "0 7 * * *" }
   ]

@@ -4,7 +4,10 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { today } from "@/lib/dates";
-import { type FoundExhibitor, MIN_LIST_CHARS, splitText, withLoadedData } from "@/lib/exhibitor-fetch";
+import { db } from "@/lib/db";
+import { checkFoundExhibitors, type FoundExhibitor, MIN_LIST_CHARS, splitText, withLoadedData } from "@/lib/exhibitor-fetch";
+import { exhibitorKey } from "@/lib/exhibitors";
+import { withPhoneCountry } from "@/lib/phone-country";
 import { renderPage } from "@/lib/render-page";
 import { pageToText } from "@/lib/show-finder";
 import { BROWSER_HEADERS } from "@/lib/show-finder-run";
@@ -166,6 +169,24 @@ export async function readDirectoryPage(showName: string, url: string, client = 
     return { exhibitors: [], otherPages: [] };
   }
   return readText(client, showName, url, listing);
+}
+
+/**
+ * Reads one page of a show's exhibitor directory and adds the exhibitors on
+ * it that the show does not list yet. Used by the "Fetch exhibitors" buttons
+ * and by the nightly update.
+ */
+export async function addExhibitorsFromPage(
+  show: { id: string; name: string; exhibitorDirectoryUrl: string },
+  pageUrl: string,
+): Promise<{ found: number; added: number; otherPages: string[] }> {
+  const page = await readDirectoryPage(show.name, pageUrl);
+  const found = checkFoundExhibitors(page.exhibitors, show.exhibitorDirectoryUrl);
+  const existing = await db.exhibitor.findMany({ where: { tradeShowId: show.id }, select: { name: true } });
+  const known = new Set(existing.map(exhibitorKey));
+  const fresh = found.filter((e) => !known.has(exhibitorKey(e)));
+  if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...withPhoneCountry(e), tradeShowId: show.id })) });
+  return { found: found.length, added: fresh.length, otherPages: page.otherPages };
 }
 
 /** Whether the AI service itself turned the call away (bad key, no credit), so every further page would fail too. */

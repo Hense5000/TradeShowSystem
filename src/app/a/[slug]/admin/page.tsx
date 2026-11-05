@@ -1,16 +1,18 @@
-import type { FeatureRollout } from "@prisma/client";
+import { type FeatureRollout, Prisma } from "@prisma/client";
 import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { today } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { withoutExhibitorsWhere } from "@/lib/exhibitor-fetch-run";
 import { ROLLOUT_LABEL } from "@/lib/features";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { cleanupCutoff, oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
 import { emailSender } from "@/lib/email";
 import { deviceCheckOffReason } from "@/lib/login-guard";
 import { billingConfigured, stripeTestMode } from "@/lib/stripe";
-import { removeTestBillingData, sendTestEmail, setCleanupEnabled } from "./actions";
+import { removeTestBillingData, sendTestEmail, setCleanupEnabled, setNightlyUpdateEnabled } from "./actions";
 import { RemoveTestBillingButton } from "./remove-test-billing-button";
 import { TestEmailButton } from "./test-email-button";
 
@@ -24,10 +26,14 @@ const ROLLOUT_PILL: Record<FeatureRollout, string> = {
 const updated = (date: Date) =>
   new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Copenhagen" }).format(date);
 
+/** A run time as day/month/year hour:minute in Danish time, e.g. 05/11/2026 03:12. */
+const updatedTime = (date: Date) =>
+  new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Copenhagen" }).format(date);
+
 export default async function FeatureControlPage({ params }: PageProps<"/a/[slug]/admin">) {
   const { slug } = await params;
   await requirePlatformAdmin(slug);
-  const [features, finder, addedLately, groups, lastChecks, cleanup, oldShows, oldExhibitors] = await Promise.all([
+  const [features, finder, addedLately, groups, lastChecks, cleanup, oldShows, oldExhibitors, nightly, showsWaiting] = await Promise.all([
     db.feature.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { access: true } } } }),
     db.showFinderSettings.findUnique({ where: { id: 1 } }),
     db.suggestedShow.count({ where: { status: "APPROVED", decidedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } }),
@@ -37,7 +43,11 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
     db.tradeShowCleanupSettings.findUnique({ where: { id: 1 } }),
     db.tradeShow.count({ where: oldTradeShowsWhere() }),
     db.exhibitor.count({ where: { tradeShow: oldTradeShowsWhere() } }),
+    db.nightlyUpdateSettings.findUnique({ where: { id: 1 } }),
+    db.tradeShow.count({ where: { OR: [withoutExhibitorsWhere(), { endDate: { gte: today() }, exhibitorFetchState: { not: Prisma.AnyNull } }] } }),
   ]);
+  // On until it is switched off.
+  const nightlyOn = nightly?.enabled ?? true;
   const cleanupOn = Boolean(cleanup?.enabled);
   const cutoff = updated(cleanupCutoff());
   const codeOffReason = deviceCheckOffReason();
@@ -67,7 +77,7 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
               {addedLately > 0 && <span className="pill pill-neutral">{addedLately} added in the last 30 days</span>}
             </span>
             <span className="block text-sm text-muted">
-              Checks chosen exhibition centers' events pages on the 1st of each month and adds new trade shows in the next 6 months to the list.
+              Checks chosen exhibition centers' events pages every Sunday night and adds new trade shows in the next 6 months to the list.
             </span>
             {groups.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-1 text-sm">
@@ -87,6 +97,39 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
           </span>
         </div>
         <Link href={`/a/${slug}/admin/show-finder`} className="btn-secondary">Open</Link>
+      </section>
+
+      <section className="card flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-56 flex-1 items-start gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+            <Icon name="sparkle" className="size-4" />
+          </span>
+          <span>
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              Weekly update
+              <span className={`pill ${nightlyOn ? "pill-ok" : "pill-neutral"}`}>{nightlyOn ? "On" : "Off"}</span>
+            </span>
+            <span className="block text-sm text-muted">
+              Every Sunday from 03:00 Danish time: the AI trade show finder (when it is on) checks every chosen exhibition center for new trade
+              shows, and exhibitors are fetched for upcoming trade shows that have none yet. What is not done by 07:00 carries on the following
+              nights until the week's update is done.
+            </span>
+            <span className="mt-1 block text-sm">
+              {showsWaiting === 0
+                ? "No trade shows are waiting for exhibitors."
+                : `${showsWaiting} ${showsWaiting === 1 ? "trade show is" : "trade shows are"} waiting for exhibitors.`}
+              {!finder?.enabled && " The AI trade show finder is off, so no new trade shows are looked for."}
+            </span>
+            {nightly?.lastRunAt && (
+              <span className="mt-1 block text-sm text-muted">
+                Last run {updatedTime(nightly.lastRunAt)}: {nightly.lastRunSummary}
+              </span>
+            )}
+          </span>
+        </div>
+        <ActionForm action={setNightlyUpdateEnabled.bind(null, slug, !nightlyOn)}>
+          <button className={nightlyOn ? "btn-secondary" : "btn"}>{nightlyOn ? "Switch off" : "Switch on"}</button>
+        </ActionForm>
       </section>
 
       <section className="card flex flex-wrap items-center justify-between gap-3">

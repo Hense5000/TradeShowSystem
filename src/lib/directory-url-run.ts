@@ -139,8 +139,8 @@ async function searchForDirectory(client: Anthropic, show: ShowForSearch, deadli
 }
 
 /** The show's exhibitor directory address, or null when AI found none. */
-export async function findDirectoryUrl(show: ShowForSearch, client = new Anthropic()): Promise<string | null> {
-  const deadline = Date.now() + BUDGET_MS;
+export async function findDirectoryUrl(show: ShowForSearch, client = new Anthropic(), budgetMs = BUDGET_MS): Promise<string | null> {
+  const deadline = Date.now() + Math.min(budgetMs, BUDGET_MS);
   const website = show.website ? normalizeUrl(withScheme(show.website)) : null;
   if (website) {
     const links = await homepageLinks(website);

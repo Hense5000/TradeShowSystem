@@ -383,6 +383,7 @@ model TradeShow {
   organizerId           String? // who organizes it, if known
   organizerTriedAt      DateTime? // when AI last looked for the organizer, so it isn't searched again
   exhibitorsTriedAt     DateTime? // when "Fetch exhibitors for all shows" last tried this show, so it is not tried again on every run
+  exhibitorFetchState   Json? // the nightly update's place in a long exhibitor list it has not finished reading, so the next round carries on there
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -623,6 +624,17 @@ model SuggestedShow {
 // Old trade show cleanup: once a day, trade shows that ended more than three
 // years ago are deleted, with their exhibitors. One row (id 1).
 // ---------------------------------------------------------------------------
+
+// One row (id 1): the weekly update from Sunday 03:00 Danish time, which runs
+// the AI trade show finder and fetches exhibitors for new trade shows on its own.
+model NightlyUpdateSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(true)
+  lastRunAt      DateTime?
+  lastRunSummary String?
+  weekDoneAt     DateTime? // when this week's update finished everything, so the following nights rest
+  updatedAt      DateTime  @updatedAt
+}
 
 model TradeShowCleanupSettings {
   id             Int       @id @default(1)

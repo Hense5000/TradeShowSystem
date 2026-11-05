@@ -75,7 +75,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
     <>
       <PageHeader
         title="AI trade show finder"
-        description="Reads the events pages of the centers you choose once a month and adds the new trade shows starting in the next 6 months to the trade show list. Shows already in the system are skipped."
+        description="Reads the events pages of the centers you choose once a week and adds the new trade shows starting in the next 6 months to the trade show list. Shows already in the system are skipped."
         action={<Link href={`/a/${slug}/admin`} className="btn-secondary">Back to Feature control</Link>}
       />
 
@@ -87,8 +87,8 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
             </h2>
             <p className="mt-0.5 text-sm text-muted">
               {enabled
-                ? "Every chosen center is checked on the 1st of each month, and new shows are added to the trade show list at once. With many centers, the ones not reached on the 1st are checked on the following days."
-                : "Switch it on to check the chosen centers on the 1st of each month. You can still check by hand while it is off."}
+                ? "Every chosen center is checked each Sunday from 03:00 Danish time, and new shows are added to the trade show list at once. With many centers, the ones not reached on Sunday night are checked on the following nights."
+                : "Switch it on to check the chosen centers every Sunday night. You can still check by hand while it is off."}
             </p>
           </div>
           <ActionForm action={setFinderEnabled.bind(null, slug, !enabled)}>
@@ -101,7 +101,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
             <p className="font-semibold">Setup needed in Vercel (Settings → Environment Variables):</p>
             <ul className="mt-1 list-disc pl-5">
               {keyMissing && <li>ANTHROPIC_API_KEY: the key for the AI service. Without it nothing can be checked.</li>}
-              {cronMissing && <li>CRON_SECRET: any long random text. Without it the check on the 1st does not start by itself.</li>}
+              {cronMissing && <li>CRON_SECRET: any long random text. Without it the weekly check does not start by itself.</li>}
             </ul>
           </div>
         )}
@@ -203,7 +203,7 @@ export default async function ShowFinderPage({ params, searchParams }: PageProps
               {groupFilter ? `Centers in ${groupFilter.name}` : `Centers to check (${chosen} chosen)`}
             </h2>
             <p className="mt-0.5 text-sm text-muted">
-              Tick a center to check it automatically on the 1st of each month, and pick its group if you like. &quot;Check now&quot; checks one
+              Tick a center to check it automatically every Sunday night, and pick its group if you like. &quot;Check now&quot; checks one
               center right away, ticked or not.
             </p>
           </div>
