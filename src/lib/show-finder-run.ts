@@ -249,10 +249,13 @@ export async function runShowFinder({
   onlyDue,
   centerIds,
   groupId,
+  timeBudgetMs = TIME_BUDGET_MS,
 }: {
   onlyDue: boolean;
   centerIds?: string[];
   groupId?: string;
+  /** Stop starting new centers after this long; the nightly update gives the finder less time. */
+  timeBudgetMs?: number;
 }): Promise<string> {
   if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
 
@@ -273,7 +276,7 @@ export async function runShowFinder({
   const totals = { checked: 0, found: waitingAdded, failed: 0, left: 0 };
   let next = 0;
   async function worker() {
-    while (next < queue.length && Date.now() - started < TIME_BUDGET_MS) {
+    while (next < queue.length && Date.now() - started < timeBudgetMs) {
       const center = queue[next++];
       try {
         const { fresh, note } = await checkCenter(client, center);

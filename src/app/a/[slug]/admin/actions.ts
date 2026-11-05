@@ -82,6 +82,14 @@ export async function setCleanupEnabled(slug: string, enabled: boolean): Promise
   return undefined;
 }
 
+/** Switches the nightly update (new trade shows and their exhibitors, 03:00 Danish time) on or off. */
+export async function setNightlyUpdateEnabled(slug: string, enabled: boolean): Promise<ActionState> {
+  await requirePlatformAdmin(slug);
+  await db.nightlyUpdateSettings.upsert({ where: { id: 1 }, create: { id: 1, enabled }, update: { enabled } });
+  revalidatePath(`/a/${slug}/admin`);
+  return undefined;
+}
+
 export type TestEmailState = { sent?: string; error?: string } | undefined;
 
 /** Sends a test email to the admin, the same way login codes are sent, and shows what Resend answered. */

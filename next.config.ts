@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     // A glob over routes; written with * since [slug] would read as a character class.
     "/a/*/trade-shows/*": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/cron/nightly-update": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
 };
 

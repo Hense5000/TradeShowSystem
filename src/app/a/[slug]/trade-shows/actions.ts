@@ -11,16 +11,13 @@ import { findDirectoryUrl } from "@/lib/directory-url-run";
 import type { OrganizerFillResult } from "@/lib/organizer-finder";
 import { fillMissingOrganizers, isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
 import { findOrganizer } from "@/lib/organizers";
-import { withPhoneCountry } from "@/lib/phone-country";
-import { checkFoundExhibitors } from "@/lib/exhibitor-fetch";
 import {
+  addExhibitorsFromPage,
   describeFetchError,
   isExhibitorFetchConfigured,
   isServiceDown,
-  readDirectoryPage,
   withoutExhibitorsWhere,
 } from "@/lib/exhibitor-fetch-run";
-import { exhibitorKey } from "@/lib/exhibitors";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { parseTradeShowRows, tradeShowKey } from "@/lib/trade-shows";
 import { firstError, type TradeShowInput, tradeShowSchema } from "@/lib/validation";
@@ -145,7 +142,7 @@ export async function fetchExhibitorPage(slug: string, tradeShowId: string, page
   await requirePlatformAdmin(slug);
   const none = { found: 0, added: 0, otherPages: [] };
   if (!isExhibitorFetchConfigured()) return { ...none, stop: true, error: "Add ANTHROPIC_API_KEY in Vercel before exhibitors can be fetched." };
-  const show = await db.tradeShow.findUnique({ where: { id: tradeShowId }, select: { name: true, exhibitorDirectoryUrl: true } });
+  const show = await db.tradeShow.findUnique({ where: { id: tradeShowId }, select: { id: true, name: true, exhibitorDirectoryUrl: true } });
   if (!show?.exhibitorDirectoryUrl) return { ...none, stop: true, error: "The trade show has no Exhibitor directory URL." };
   // Only pages on the directory's own site are read.
   try {
@@ -155,14 +152,9 @@ export async function fetchExhibitorPage(slug: string, tradeShowId: string, page
   }
 
   try {
-    const page = await readDirectoryPage(show.name, pageUrl);
-    const found = checkFoundExhibitors(page.exhibitors, show.exhibitorDirectoryUrl);
-    const existing = await db.exhibitor.findMany({ where: { tradeShowId }, select: { name: true } });
-    const known = new Set(existing.map(exhibitorKey));
-    const fresh = found.filter((e) => !known.has(exhibitorKey(e)));
-    if (fresh.length > 0) await db.exhibitor.createMany({ data: fresh.map((e) => ({ ...withPhoneCountry(e), tradeShowId })) });
+    const result = await addExhibitorsFromPage({ ...show, exhibitorDirectoryUrl: show.exhibitorDirectoryUrl }, pageUrl);
     revalidatePath(`/a/${slug}/exhibitors`);
-    return { found: found.length, added: fresh.length, otherPages: page.otherPages };
+    return result;
   } catch (error) {
     return { ...none, stop: isServiceDown(error), error: describeFetchError(error) };
   }
