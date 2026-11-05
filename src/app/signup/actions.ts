@@ -1,11 +1,13 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import { acceptInvitation, findInvitation } from "@/lib/invitations";
 import { issueTicket } from "@/lib/login-guard";
 import { createOrganization } from "@/lib/organizations";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 import { syncSeats } from "@/lib/stripe";
 import { trialEnd } from "@/lib/trial";
 import { firstError, signupSchema } from "@/lib/validation";
@@ -26,10 +28,19 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
   if (!parsed.success) return fail(firstError(parsed.error));
   const { name, email, password, companyName, invite } = parsed.data;
 
-  const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) return fail("There is already a user with this email. Log in instead.");
+  // A user no longer in any account (removed by their company) can't log in,
+  // so they sign up again like someone new: the old user gets the new name and
+  // password. Users still in an account must log in instead.
+  const existing = await db.user.findUnique({ where: { email }, select: { id: true, _count: { select: { memberships: true } } } });
+  if (existing && (existing._count.memberships > 0 || isPlatformAdmin(email)))
+    return fail("There is already a user with this email. Log in instead.");
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const createOrReuseUser = async (tx: Prisma.TransactionClient) => {
+    if (!existing) return tx.user.create({ data: { name, email, passwordHash } });
+    await tx.trustedDevice.deleteMany({ where: { userId: existing.id } });
+    return tx.user.update({ where: { id: existing.id }, data: { name, passwordHash } });
+  };
   let destination: string;
   let userId: string;
 
@@ -40,7 +51,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     if (found.invitation.email !== email)
       return fail(`This invitation was sent to ${found.invitation.email}. Sign up with that email.`);
     userId = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { name, email, passwordHash } });
+      const user = await createOrReuseUser(tx);
       await acceptInvitation(tx, found.invitation, user.id);
       return user.id;
     });
@@ -50,7 +61,7 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     // Creating a brand new customer account.
     if (!companyName) return fail("Enter a company name.");
     const { user, organization } = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { name, email, passwordHash } });
+      const user = await createOrReuseUser(tx);
       return { user, organization: await createOrganization(tx, user.id, companyName, { trialEndsAt: trialEnd() }) };
     });
     userId = user.id;

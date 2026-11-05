@@ -5,7 +5,7 @@ import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
-import { deviceCheckEnabled, isTrustedDevice, issueTicket, sendLoginCode } from "@/lib/login-guard";
+import { deviceCheckEnabled, isTrustedDevice, issueTicket, mayLogIn, sendLoginCode } from "@/lib/login-guard";
 import { safeCallbackUrl } from "@/lib/redirect";
 import { firstError, loginSchema } from "@/lib/validation";
 
@@ -21,6 +21,9 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
   const user = await db.user.findUnique({ where: { email: parsed.data.email } });
   const valid = user?.passwordHash ? await bcrypt.compare(parsed.data.password, user.passwordHash) : false;
   if (!user || !valid) return { error: "Wrong email or password.", email };
+  if (!(await mayLogIn(user))) {
+    return { error: "This email is not a user on any company account. Create a new account, or ask your company to invite you.", email };
+  }
 
   // A browser this user hasn't logged in from: confirm with a code by email.
   // If the email can't be sent, log in without the code rather than lock
