@@ -41,12 +41,21 @@ function Block({ block }: { block: LegalBlock }) {
 }
 
 /** Public page with the Terms of Service, Privacy Policy and Cookie Notice. Linked from the footer on every page. */
-export default function LegalPage() {
+export default async function LegalPage({ searchParams }: { searchParams: Promise<{ back?: string | string[] }> }) {
+  const { back } = await searchParams;
+  // Only same-site paths ("/a/acme", not "//evil.com" or "https://..."); otherwise the front page,
+  // which sends logged-in users on to their account.
+  const backHref = typeof back === "string" && back.startsWith("/") && !back.startsWith("//") && !back.startsWith("/\\") ? back : "/";
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-10">
-      <Link href="/" className="self-start">
-        <Logo className="h-8 w-auto" />
-      </Link>
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/">
+          <Logo className="h-8 w-auto" />
+        </Link>
+        <Link href={backHref} className="btn-secondary">
+          ← Go back
+        </Link>
+      </div>
       <div className="card space-y-4">
         <h1 className="page-title">Terms, Privacy &amp; Cookie policies</h1>
         <p className="text-muted">Effective date: {LEGAL_EFFECTIVE_DATE}</p>
