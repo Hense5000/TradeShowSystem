@@ -24,6 +24,7 @@ import { AiSearch } from "./ai-search";
 import { ExportButton } from "./export-button";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
+import { AlsoAtShows } from "./other-shows";
 import { OwnContactTag } from "./own-hunter-button";
 import { tradeShowOptions } from "./show-select";
 import { SearchButton, SearchForm } from "@/components/search-form";
@@ -69,7 +70,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     db.exhibitor
       .findMany({
         where: pageRows,
-        include: { tradeShow: { select: { id: true, name: true, startDate: true } } },
+        include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } },
         orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
       })
       // With the contacts this account found with its own Hunter.io key on top.
@@ -285,10 +286,15 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                               {s.name}
                             </Link>
                           ))}
-                          {more > 0 && (
-                            <Link href={companyHref} className="block text-xs font-semibold text-brand hover:underline">
-                              {show ? `Also at ${more} other ${more === 1 ? "show" : "shows"}` : `+${more} more ${more === 1 ? "show" : "shows"}`}
-                            </Link>
+                          {/* Filtered to one show: the company's other shows are named under it. */}
+                          {show ? (
+                            <AlsoAtShows slug={slug} shows={companyShows.filter((s) => s.id !== show)} companyHref={companyHref} />
+                          ) : (
+                            more > 0 && (
+                              <Link href={companyHref} className="block text-xs font-semibold text-brand hover:underline">
+                                +{more} more {more === 1 ? "show" : "shows"}
+                              </Link>
+                            )
                           )}
                         </div>
                       </td>
