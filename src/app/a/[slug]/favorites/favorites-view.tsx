@@ -17,6 +17,7 @@ import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { ExportButton } from "../exhibitors/export-button";
 import { findOwnHunterContact } from "../exhibitors/actions";
+import { AlsoAtShows } from "../exhibitors/other-shows";
 import { OwnContactTag, OwnHunterButton } from "../exhibitors/own-hunter-button";
 import { FavoriteShowStar } from "../trade-shows/favorite-show-star";
 import { EmailDraftButton } from "./email-draft";
@@ -80,6 +81,20 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
     ownHunter ? searchedDomains(organization.id, sharedItems.map((i) => i.exhibitor.website)) : new Set<string>(),
   ]);
   const items = sharedItems.map((item, i) => ({ ...item, exhibitor: ownRows[i] }));
+  // The other trade shows each favorite company exhibits at, named under its show.
+  const itemKeys = [...new Set(items.map((i) => i.exhibitor.companyKey).filter((k): k is string => Boolean(k)))];
+  const companyShowRows = itemKeys.length
+    ? await db.exhibitor.findMany({
+        where: { companyKey: { in: itemKeys } },
+        select: { companyKey: true, tradeShow: { select: { id: true, name: true, startDate: true, endDate: true } } },
+      })
+    : [];
+  const otherShowsOf = (companyKey: string | null, showId: string) => {
+    const seen = new Set([showId]);
+    return companyShowRows
+      .filter((r) => r.companyKey === companyKey && !seen.has(r.tradeShow.id) && seen.add(r.tradeShow.id))
+      .map((r) => r.tradeShow);
+  };
   const members = memberships
     .map((m) => ({ id: m.user.id, name: m.user.id === user.id ? `${m.user.name ?? m.user.email} (you)` : (m.user.name ?? m.user.email) }))
     .sort((a, b) => (a.id === user.id ? -1 : b.id === user.id ? 1 : a.name.localeCompare(b.name)));
@@ -293,6 +308,13 @@ export async function FavoritesView({ slug, tab, sp }: { slug: string; tab: "exh
                               {formatDateRange(e.tradeShow.startDate, e.tradeShow.endDate)}
                               {e.boothNumber && ` · Booth ${e.boothNumber}`}
                             </p>
+                            {e.companyKey && (
+                              <AlsoAtShows
+                                slug={slug}
+                                shows={otherShowsOf(e.companyKey, e.tradeShow.id)}
+                                companyHref={`/a/${slug}/exhibitors/company?key=${encodeURIComponent(e.companyKey)}`}
+                              />
+                            )}
                           </div>
                         </td>
                         <td className="px-5 py-3">

@@ -34,7 +34,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   await syncCompanyKeys();
   const shared = await db.exhibitor.findMany({
     where: { companyKey: key },
-    include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true, city: true, country: true } } },
+    include: { tradeShow: { select: { id: true, name: true, startDate: true, endDate: true, city: true, country: true, center: { select: { name: true } } } } },
     orderBy: [{ tradeShow: { startDate: "desc" } }, { name: "asc" }],
   });
   // With the contact this account found with its own Hunter.io key on top.
@@ -126,12 +126,17 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
       </section>
 
       <section className="card overflow-hidden p-0">
+        <div className="px-5 py-4">
+          <h2 className="font-bold">Trade shows ({shows.length})</h2>
+          <p className="mt-0.5 text-sm text-muted">Every trade show this company exhibits at, newest first.</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
+              <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
                 <th className="px-5 py-2.5">Trade show</th>
                 <th className="px-5 py-2.5">Dates</th>
+                <th className="px-5 py-2.5">Exhibition center</th>
                 <th className="px-5 py-2.5">Status</th>
                 <th className="px-5 py-2.5">Booth</th>
                 <th className="px-5 py-2.5">Contact</th>
@@ -153,6 +158,9 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                       </div>
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap tabular-nums">{formatDateRange(e.tradeShow.startDate, e.tradeShow.endDate)}</td>
+                    <td className="px-5 py-3">
+                      {e.tradeShow.center ? <span className="block min-w-40">{e.tradeShow.center.name}</span> : <span className="text-faint">—</span>}
+                    </td>
                     <td className="px-5 py-3">
                       <span className={`pill ${STATUS_PILL[status]}`}>{STATUS_LABEL[status]}</span>
                     </td>

@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
+import { syncCompanyKeys } from "@/lib/company-run";
 import { db } from "@/lib/db";
 import { isAiConfigured } from "@/lib/ai-run";
 import { canEditExhibitor, isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { deleteExhibitor, findAndSaveExhibitorContact, updateExhibitor } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
+import { OtherShowsCard } from "../other-shows-card";
 import { tradeShowOptions } from "../show-select";
 
 // Finding a contact with AI can take up to a minute or two.
@@ -21,6 +23,9 @@ export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]
   // Customers may only edit the exhibitors their own account added.
   if (!exhibitor || !canEditExhibitor(user.email, organization.id, exhibitor)) notFound();
   const useAi = isPlatformAdmin(user.email) && isAiConfigured();
+  // The same company at other trade shows (see src/lib/company.ts).
+  if (!exhibitor.companyKey) await syncCompanyKeys();
+  const companyKey = exhibitor.companyKey ?? (await db.exhibitor.findUnique({ where: { id }, select: { companyKey: true } }))?.companyKey;
 
   return (
     <>
@@ -32,6 +37,7 @@ export default async function EditExhibitorPage({ params }: PageProps<"/a/[slug]
       <SaveForm action={updateExhibitor.bind(null, slug, id)} title="Exhibitor details" description="Company name and trade show are required." submitLabel="Save changes" readOnly={false}>
         <ExhibitorFields findContact={useAi ? findAndSaveExhibitorContact.bind(null, slug, id) : undefined} exhibitor={exhibitor} shows={shows} />
       </SaveForm>
+      {companyKey && <OtherShowsCard slug={slug} companyKey={companyKey} exceptShowId={exhibitor.tradeShowId} />}
       <section className="card flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-bold">Delete exhibitor</h2>
