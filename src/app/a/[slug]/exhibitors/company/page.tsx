@@ -134,37 +134,40 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-line bg-subtle text-left text-[0.7rem] font-semibold tracking-wider text-muted uppercase">
-                <th className="px-5 py-2.5">Trade show</th>
-                <th className="px-5 py-2.5">Dates</th>
-                <th className="px-5 py-2.5">Exhibition center</th>
-                <th className="px-5 py-2.5">Status</th>
-                <th className="px-5 py-2.5">Booth</th>
-                <th className="px-5 py-2.5">Contact</th>
-                <th className="px-5 py-2.5"><span className="sr-only">Actions</span></th>
+                <th className="px-4 py-2.5">Company</th>
+                <th className="px-4 py-2.5">Trade show</th>
+                <th className="px-4 py-2.5">Dates</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Booth</th>
+                <th className="px-4 py-2.5">Contact</th>
+                <th className="px-4 py-2.5"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {rows.map((e) => {
                 const status = showStatus(e.tradeShow);
-                const place = [e.tradeShow.city, e.tradeShow.country && countryName(e.tradeShow.country)].filter(Boolean).join(", ");
+                const place = [e.tradeShow.center?.name, [e.tradeShow.city, e.tradeShow.country && countryName(e.tradeShow.country)].filter(Boolean).join(", ")]
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <tr key={e.id} className="align-top">
-                    <td className="px-5 py-3">
-                      <div className="min-w-48">
-                        <Link href={`/a/${slug}/exhibitors?show=${e.tradeShow.id}`} className="font-semibold hover:text-brand">
+                    {/* The name as listed at that show, which can differ a little between shows. */}
+                    <td className="px-4 py-3">
+                      <p className="min-w-36 font-semibold">{e.name}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="min-w-40">
+                        <Link href={`/a/${slug}/exhibitors?show=${e.tradeShow.id}`} className="font-medium hover:text-brand">
                           {e.tradeShow.name}
                         </Link>
                         {place && <p className="text-xs text-muted">{place}</p>}
                       </div>
                     </td>
-                    <td className="px-5 py-3 whitespace-nowrap tabular-nums">{formatDateRange(e.tradeShow.startDate, e.tradeShow.endDate)}</td>
-                    <td className="px-5 py-3">
-                      {e.tradeShow.center ? <span className="block min-w-40">{e.tradeShow.center.name}</span> : <span className="text-faint">—</span>}
-                    </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">{formatDateRange(e.tradeShow.startDate, e.tradeShow.endDate)}</td>
+                    <td className="px-4 py-3">
                       <span className={`pill ${STATUS_PILL[status]}`}>{STATUS_LABEL[status]}</span>
                     </td>
-                    <td className="px-5 py-3 whitespace-nowrap">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {e.boothNumber ?? (!e.standLocationUrl && <span className="text-faint">—</span>)}
                       {e.standLocationUrl && (
                         <a href={e.standLocationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-brand hover:underline">
@@ -172,8 +175,8 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                         </a>
                       )}
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="min-w-44">
+                    <td className="px-4 py-3">
+                      <div className="min-w-36">
                         {e.contactName && <p className="font-medium">{e.contactName}</p>}
                         {e.contactTitle && <p className="text-xs text-muted">{e.contactTitle}</p>}
                         {e.email && <a href={`mailto:${e.email}`} className="block text-xs font-medium text-brand hover:underline">{e.email}</a>}
@@ -182,7 +185,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                         {!e.contactName && !e.email && !e.phone && <span className="text-faint">—</span>}
                       </div>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <FavoriteStar slug={slug} exhibitorIds={e.id} name={`${e.name} at ${e.tradeShow.name}`} on={savedIn.has(`${favoritesId}:${e.id}`)} />
                         <ListMenu
