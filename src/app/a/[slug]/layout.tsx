@@ -35,7 +35,6 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
     <AccountFrame
       base={`/a/${slug}`}
       accountName={organization.name}
-      accountInitials={initials(organization.name)}
       userName={userName}
       userInitials={initials(userName)}
       roleLabel={ROLE_LABEL[membership.role]}
@@ -77,6 +76,8 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
                 title: "Super admin",
                 items: [
                   { label: "Feature control", icon: "shield" as const, path: "admin" },
+                  // Opens the list of accounts (moved here from the top of the menu).
+                  { label: "Switch account", icon: "switch" as const, path: "switch-account", href: "/accounts?choose=1" },
                   { label: "Speed check", icon: "dashboard" as const, path: "admin/speed" },
                   { label: "Dashboard ads", icon: "grid" as const, path: "admin/ads" },
                   {
