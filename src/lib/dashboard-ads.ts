@@ -1,0 +1,107 @@
+// The 3 ad spaces on the dashboard. A platform admin uploads an image and a
+// link per space on Super admin → Dashboard ads. An empty space shows
+// "Your ad here!" and a "Get this ad space" button, whose form is emailed to
+// AD_NOTIFY_EMAIL (Henrik's address when not set).
+
+export const AD_SLOTS = [1, 2, 3] as const;
+export type AdSlot = (typeof AD_SLOTS)[number];
+
+/** The images an ad may be. SVG is left out, since it can carry scripts. */
+export const AD_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+export const MAX_AD_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** The slot number from a form or URL, or null when it is not 1, 2 or 3. */
+export function adSlot(value: unknown): AdSlot | null {
+  const n = Number(value);
+  return AD_SLOTS.find((s) => s === n) ?? null;
+}
+
+/** Where the image of an ad is served; the version makes browsers fetch a new image after an upload. */
+export function adImageUrl(slot: AdSlot, updatedAt: Date): string {
+  return `/api/ads/${slot}?v=${updatedAt.getTime()}`;
+}
+
+/** Checks an uploaded ad image: one of AD_IMAGE_TYPES and at most 2 MB. */
+export function checkAdImage(file: { type: string; size: number }): { error: string } | null {
+  if (!(AD_IMAGE_TYPES as readonly string[]).includes(file.type)) return { error: "The image must be a PNG, JPG, WebP or GIF file." };
+  if (file.size > MAX_AD_IMAGE_BYTES) return { error: "The image is larger than 2 MB. Please use a smaller image." };
+  return null;
+}
+
+/** The advertiser's website as a full http(s) link: "acme.com" becomes "https://acme.com". */
+export function checkAdLink(value: unknown): { url: string } | { error: string } {
+  let text = String(value ?? "").trim();
+  if (!text) return { error: "Enter the link to the advertiser's website." };
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(text)) text = `https://${text}`;
+  try {
+    const url = new URL(text);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") || !url.hostname.includes(".")) throw new Error();
+    return { url: url.toString() };
+  } catch {
+    return { error: "The link is not a valid website address." };
+  }
+}
+
+/** Who gets "Get this ad space" requests: AD_NOTIFY_EMAIL, or Henrik's address. */
+export function adNotifyEmail(value = process.env.AD_NOTIFY_EMAIL): string {
+  return (value ?? "").trim() || "hn@vivolead.com";
+}
+
+export const MAX_AD_REQUEST_MESSAGE = 2000;
+
+export type AdRequest = { name: string; company: string; email: string; phone: string; website: string; message: string; slot: AdSlot | null };
+
+const field = (formData: FormData, key: string, max = 200) => String(formData.get(key) ?? "").trim().slice(0, max);
+
+/** Reads and checks the "Get this ad space" form. */
+export function checkAdRequest(formData: FormData): AdRequest | { error: string } {
+  const request: AdRequest = {
+    name: field(formData, "name"),
+    company: field(formData, "company"),
+    email: field(formData, "email"),
+    phone: field(formData, "phone", 50),
+    website: field(formData, "website"),
+    message: field(formData, "message", MAX_AD_REQUEST_MESSAGE),
+    slot: adSlot(formData.get("slot")),
+  };
+  if (!request.name) return { error: "Enter your name." };
+  if (!request.company) return { error: "Enter your company." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(request.email)) return { error: "Enter a valid email address." };
+  return request;
+}
+
+const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/** The email to the platform owner about a company that wants an ad space. */
+export function adRequestEmailContent(request: AdRequest, account: { name: string; userEmail: string }) {
+  const rows: [string, string][] = [
+    ["Name", request.name],
+    ["Company", request.company],
+    ["Email", request.email],
+    ["Phone", request.phone],
+    ["Website", request.website],
+    ["Ad space", request.slot ? `${request.slot} of 3` : "Any"],
+    ["Sent from account", `${account.name} (${account.userEmail})`],
+  ];
+  const shown = rows.filter(([, v]) => v);
+  const intro = `${request.company} would like to advertise on the Trade Show System dashboard.`;
+  return {
+    subject: `Ad space request: ${request.company}`,
+    text: `${intro}\n\n${shown.map(([k, v]) => `${k}: ${v}`).join("\n")}${request.message ? `\n\nMessage:\n${request.message}` : ""}`,
+    html:
+      `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">` +
+      `<p>${escape(intro)}</p>` +
+      `<table style="border-collapse:collapse">` +
+      shown
+        .map(
+          ([k, v]) =>
+            `<tr><td style="padding:4px 16px 4px 0;color:#64748b">${k}</td><td style="padding:4px 0;font-weight:bold">${
+              k === "Email" ? `<a href="mailto:${escape(v)}" style="color:#287bbf">${escape(v)}</a>` : escape(v)
+            }</td></tr>`,
+        )
+        .join("") +
+      `</table>` +
+      (request.message ? `<p style="margin-top:16px;color:#64748b">Message</p><p style="white-space:pre-wrap">${escape(request.message)}</p>` : "") +
+      `</div>`,
+  };
+}

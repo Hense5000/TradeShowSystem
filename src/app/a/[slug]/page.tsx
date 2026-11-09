@@ -9,6 +9,8 @@ import { formatMoney } from "@/lib/project-value";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
+import { isPlatformAdmin } from "@/lib/platform-admin";
+import { DashboardAds } from "./dashboard-ads";
 import { RecommendedShows } from "./favorites/recommended-shows";
 
 // The follow-ups card under "Lead retrieval active" lists at most this many.
@@ -68,7 +70,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
   // The follow-ups card shows the user's own leads and the ones no one is responsible for.
   const myLeads = { list: { organizationId: organization.id, favorites: true }, ...mineOrUnassigned(user.id) };
   const followUpWhere = { ...myLeads, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
-  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended, values] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended, values, ads] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
@@ -99,6 +101,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       _sum: { projectValue: true },
       _count: true,
     }),
+    db.dashboardAd.findMany({ select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
   ]);
 
   // Running projects are the leads still being worked on; won ones are shown apart.
@@ -192,69 +195,78 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           {openLeads + favoriteShows > 0 && <RecommendedShows slug={slug} items={recommended} compact />}
         </div>
 
-        <section className="card xl:col-span-3 xl:col-start-1 xl:row-start-1">
-          <h2 className="text-lg font-bold">Upcoming trade shows</h2>
-          <nav className="mt-3 flex flex-wrap gap-2" aria-label="Period">
-            {RANGES.map((r) => (
-              <Link
-                key={r}
-                href={r === RANGES[0] ? `/a/${slug}` : `/a/${slug}?months=${r}`}
-                aria-current={r === range ? "page" : undefined}
-                scroll={false}
-                className={`${tab} ${r === range ? "border-brand bg-brand text-white" : "border-line-strong bg-surface text-ink hover:bg-subtle"}`}
-              >
-                Next {r} months
+        {/* The 3 ad spaces sit under Total trade shows, Exhibitors and Exhibition centers, as wide and high as them. */}
+        <div className="flex flex-col gap-3.5 xl:col-span-3 xl:col-start-1 xl:row-start-1">
+          <DashboardAds
+            slug={slug}
+            ads={ads}
+            platformAdmin={isPlatformAdmin(user.email)}
+            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
+          />
+          <section className="card">
+            <h2 className="text-lg font-bold">Upcoming trade shows</h2>
+            <nav className="mt-3 flex flex-wrap gap-2" aria-label="Period">
+              {RANGES.map((r) => (
+                <Link
+                  key={r}
+                  href={r === RANGES[0] ? `/a/${slug}` : `/a/${slug}?months=${r}`}
+                  aria-current={r === range ? "page" : undefined}
+                  scroll={false}
+                  className={`${tab} ${r === range ? "border-brand bg-brand text-white" : "border-line-strong bg-surface text-ink hover:bg-subtle"}`}
+                >
+                  Next {r} months
+                </Link>
+              ))}
+              <Link href={`/a/${slug}/trade-shows`} className={`${tab} border-line-strong bg-surface text-ink hover:bg-subtle`}>
+                View all trade shows
               </Link>
-            ))}
-            <Link href={`/a/${slug}/trade-shows`} className={`${tab} border-line-strong bg-surface text-ink hover:bg-subtle`}>
-              View all trade shows
-            </Link>
-          </nav>
+            </nav>
 
-          <p className="mt-4 text-sm text-muted">
-            {upcoming.length === 0
-              ? `No trade shows in the next ${range} months.`
-              : `${upcoming.length} ${upcoming.length === 1 ? "trade show" : "trade shows"} in the next ${range} months`}
-          </p>
+            <p className="mt-4 text-sm text-muted">
+              {upcoming.length === 0
+                ? `No trade shows in the next ${range} months.`
+                : `${upcoming.length} ${upcoming.length === 1 ? "trade show" : "trade shows"} in the next ${range} months`}
+            </p>
 
-          {upcoming.length > 0 && (
-            <ul className="mt-3 flex flex-col gap-2.5">
-              {upcoming.map((s) => {
-                const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
-                const running = showStatus(s) === "running";
-                return (
-                  <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
-                    <div className="min-w-48 flex-1">
-                      <p className="flex flex-wrap items-center gap-2 font-semibold">
-                        {s.name}
-                        {running && <span className="pill pill-ok">Running</span>}
-                      </p>
-                      {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-muted">Exhibitors</p>
-                      {s._count.exhibitors > 0 ? (
-                        <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
-                          {s._count.exhibitors}
-                        </Link>
-                      ) : (
-                        <p className="font-bold tabular-nums">0</p>
-                      )}
-                    </div>
-                    <div className="w-20">
-                      {s.website && (
-                        <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
-                          <Icon name="globe" className="size-3.5" /> Website
-                        </a>
-                      )}
-                    </div>
-                    <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+            {upcoming.length > 0 && (
+              <ul className="mt-3 flex flex-col gap-2.5">
+                {upcoming.map((s) => {
+                  const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
+                  const running = showStatus(s) === "running";
+                  return (
+                    <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
+                      <div className="min-w-48 flex-1">
+                        <p className="flex flex-wrap items-center gap-2 font-semibold">
+                          {s.name}
+                          {running && <span className="pill pill-ok">Running</span>}
+                        </p>
+                        {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted">Exhibitors</p>
+                        {s._count.exhibitors > 0 ? (
+                          <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
+                            {s._count.exhibitors}
+                          </Link>
+                        ) : (
+                          <p className="font-bold tabular-nums">0</p>
+                        )}
+                      </div>
+                      <div className="w-20">
+                        {s.website && (
+                          <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
+                            <Icon name="globe" className="size-3.5" /> Website
+                          </a>
+                        )}
+                      </div>
+                      <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
     </>
   );
