@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { ShowExhibitorsNote } from "@/components/show-exhibitors-note";
 import { summarizeCompany } from "@/lib/company";
 import { isAiConfigured } from "@/lib/ai-run";
 import { syncCompanyKeys } from "@/lib/company-run";
@@ -137,6 +138,9 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           </div>
         }
       />
+
+      {/* Filtered to one trade show: tell where its list comes from and how often it is updated. */}
+      {show && <ShowExhibitorsNote />}
 
       {missingContacts > 0 && (
         <AiFillCard
