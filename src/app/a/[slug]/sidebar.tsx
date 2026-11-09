@@ -7,7 +7,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { logout } from "../../logout-action";
 
-type NavItem = { label: string; icon: IconName; path: string; soon?: boolean; badge?: React.ReactNode; children?: NavItem[] };
+type NavItem = { label: string; icon: IconName; path: string; href?: string; soon?: boolean; badge?: React.ReactNode; children?: NavItem[] };
 type NavGroup = { title?: string; items: NavItem[] };
 
 /** Which navigation item a path belongs to ("" is the dashboard): the longest item path it starts with, e.g. "favorites/calendar". */
@@ -20,7 +20,6 @@ function currentPath(pathname: string, base: string, paths: string[]): string {
 export function AccountFrame({
   base,
   accountName,
-  accountInitials,
   userName,
   userInitials,
   roleLabel,
@@ -29,7 +28,6 @@ export function AccountFrame({
 }: {
   base: string;
   accountName: string;
-  accountInitials: string;
   userName: string;
   userInitials: string;
   roleLabel: string;
@@ -65,17 +63,6 @@ export function AccountFrame({
         <Link href="/accounts?choose=1" className="px-2">
           <Logo className="h-9 w-auto" />
         </Link>
-        <Link
-          href="/accounts?choose=1"
-          className="flex items-center gap-2.5 rounded-lg border border-line bg-subtle p-2 hover:border-line-strong"
-        >
-          <span className="avatar rounded-lg">{accountInitials}</span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-bold">{accountName}</span>
-            <span className="block text-xs text-muted">Switch account</span>
-          </span>
-          <Icon name="chevron" className="size-4 text-muted" />
-        </Link>
 
         <nav className="flex flex-col gap-1">
           {groups.map((group, gi) => (
@@ -109,7 +96,7 @@ export function AccountFrame({
                 return (
                   <Link
                     key={item.path}
-                    href={item.path ? `${base}/${item.path}` : base}
+                    href={item.href ?? (item.path ? `${base}/${item.path}` : base)}
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => setOpen(false)}
                     className={`${cls} ${
