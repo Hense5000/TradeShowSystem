@@ -18,6 +18,7 @@ import {
   isServiceDown,
   withoutExhibitorsWhere,
 } from "@/lib/exhibitor-fetch-run";
+import { type FinderTotals, runShowFinderWithTotals } from "@/lib/show-finder-run";
 import { requirePlatformAdmin } from "@/lib/tenant";
 import { parseTradeShowRows, tradeShowKey } from "@/lib/trade-shows";
 import { firstError, type TradeShowInput, tradeShowSchema } from "@/lib/validation";
@@ -221,4 +222,27 @@ export async function findOrganizerBatch(slug: string): Promise<OrganizerFillRes
   revalidatePath(`/a/${slug}/trade-shows`);
   revalidatePath(`/a/${slug}/organizers`);
   return result;
+}
+
+export type NewShowsRound = { totals: FinderTotals; startedAt: string; error?: undefined } | { error: string; totals?: undefined };
+
+/**
+ * One round of the "Fetch all new trade shows" button: the AI trade show
+ * finder checks the chosen exhibition centers not checked since the button
+ * was pressed, the same check the weekly update makes. The first round is
+ * called without startedAt and answers with the server's start time; the
+ * page passes it back and calls again until no centers are left.
+ */
+export async function fetchNewShowsRound(slug: string, startedAt?: string): Promise<NewShowsRound> {
+  await requirePlatformAdmin(slug);
+  const since = startedAt ? new Date(startedAt) : new Date();
+  if (Number.isNaN(since.getTime()) || since.getTime() > Date.now()) return { error: "The start time was not valid. Reload the page and try again." };
+  try {
+    const { totals } = await runShowFinderWithTotals({ onlyDue: true, dueSince: since, parallel: 6 });
+    revalidatePath(`/a/${slug}/trade-shows`);
+    revalidatePath(`/a/${slug}/admin/show-finder`);
+    return { totals, startedAt: since.toISOString() };
+  } catch {
+    return { error: "The check stopped unexpectedly. Try again in a moment." };
+  }
 }
