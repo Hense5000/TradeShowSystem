@@ -245,7 +245,15 @@ async function checkCenter(client: Anthropic, center: Center): Promise<CheckResu
  * it is given. Centers not reached within the time budget are first in line
  * the next day.
  */
-export async function runShowFinder({
+export async function runShowFinder(options: Parameters<typeof runShowFinderWithTotals>[0]): Promise<string> {
+  return (await runShowFinderWithTotals(options)).summary;
+}
+
+/** What one run of the finder did, for a page that adds up several runs. */
+export type FinderTotals = { checked: number; found: number; failed: number; left: number };
+
+/** Like runShowFinder, but also tells how many centers it checked and how many are left. */
+export async function runShowFinderWithTotals({
   onlyDue,
   centerIds,
   groupId,
@@ -262,8 +270,9 @@ export async function runShowFinder({
   dueSince?: Date;
   /** Centers checked side by side. */
   parallel?: number;
-}): Promise<string> {
-  if (!isShowFinderConfigured()) return "Add ANTHROPIC_API_KEY in Vercel before the finder can run.";
+}): Promise<{ summary: string; totals: FinderTotals }> {
+  const none: FinderTotals = { checked: 0, found: 0, failed: 0, left: 0 };
+  if (!isShowFinderConfigured()) return { summary: "Add ANTHROPIC_API_KEY in Vercel before the finder can run.", totals: none };
 
   const started = Date.now();
   const waitingAdded = await addWaitingFinds();
@@ -277,10 +286,10 @@ export async function runShowFinder({
   const due = (c: { showsCheckedAt: Date | null }) => (dueSince ? !c.showsCheckedAt || c.showsCheckedAt < dueSince : isDue(c.showsCheckedAt));
   const queue = onlyDue ? chosen.filter(due) : chosen;
   // The daily run usually has nothing to do; keep the last real summary then.
-  if (onlyDue && queue.length === 0 && waitingAdded === 0) return "No centers were due for a check.";
+  if (onlyDue && queue.length === 0 && waitingAdded === 0) return { summary: "No centers were due for a check.", totals: none };
 
   const client = new Anthropic();
-  const totals = { checked: 0, found: waitingAdded, failed: 0, left: 0 };
+  const totals: FinderTotals = { checked: 0, found: waitingAdded, failed: 0, left: 0 };
   let next = 0;
   async function worker() {
     while (next < queue.length && Date.now() - started < timeBudgetMs) {
@@ -311,5 +320,5 @@ export async function runShowFinder({
     create: { id: 1, lastRunAt: new Date(), lastRunSummary: summary },
     update: { lastRunAt: new Date(), lastRunSummary: summary },
   });
-  return summary;
+  return { summary, totals };
 }

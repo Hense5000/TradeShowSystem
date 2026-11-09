@@ -12,6 +12,8 @@ import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
 import { FavoriteShowStar } from "./favorite-show-star";
 import { FetchAllCard } from "./fetch-all-card";
+import { FetchNewShowsHeader } from "./fetch-new-shows";
+import { isShowFinderConfigured } from "@/lib/show-finder-run";
 import { OrganizerCard } from "./organizer-card";
 import { SearchButton, SearchForm } from "@/components/search-form";
 
@@ -74,7 +76,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     }),
   };
   const useAi = canEdit && isExhibitorFetchConfigured();
-  const [shows, total, countries, withoutExhibitors, withoutOrganizer, favorites] = await Promise.all([
+  const useFinder = canEdit && isShowFinderConfigured();
+  const [shows, total, countries, withoutExhibitors, withoutOrganizer, favorites, finderCenters] = await Promise.all([
     db.tradeShow.findMany({
       where,
       include: { center: { select: { name: true } }, organizer: { select: { id: true, name: true } }, _count: { select: { exhibitors: true } } },
@@ -86,6 +89,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     useAi ? db.tradeShow.count({ where: withoutExhibitorsWhere(day) }) : 0,
     canEdit && isOrganizerFinderConfigured() ? db.tradeShow.count({ where: missingOrganizerWhere }) : 0,
     db.favoriteShow.findMany({ where: { organizationId: organization.id }, select: { tradeShowId: true } }),
+    useFinder ? db.exhibitionCenter.count({ where: { findShows: true, eventsUrl: { not: null } } }) : 0,
   ]);
   const favoriteIds = new Set(favorites.map((f) => f.tradeShowId));
   const countryOptions = countries
@@ -93,25 +97,28 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     .map((code) => ({ code, name: countryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   const narrowed = Boolean(q || country || view !== "all");
+  const title = "Trade shows";
+  const description = "Trade shows around the world, shared by every account.";
+  const adminButtons = (
+    <>
+      <Link href={`/a/${slug}/trade-shows/import`} className="btn-secondary py-2">
+        <Icon name="upload" className="size-4" /> Import
+      </Link>
+      <Link href={`/a/${slug}/trade-shows/new`} className="btn">
+        <Icon name="plus" className="size-4" /> Add trade show
+      </Link>
+    </>
+  );
 
   return (
     <>
-      <PageHeader
-        title="Trade shows"
-        description="Trade shows around the world, shared by every account."
-        action={
-          canEdit && (
-            <div className="flex gap-2">
-              <Link href={`/a/${slug}/trade-shows/import`} className="btn-secondary py-2">
-                <Icon name="upload" className="size-4" /> Import
-              </Link>
-              <Link href={`/a/${slug}/trade-shows/new`} className="btn">
-                <Icon name="plus" className="size-4" /> Add trade show
-              </Link>
-            </div>
-          )
-        }
-      />
+      {useFinder ? (
+        <FetchNewShowsHeader slug={slug} title={title} description={description} centers={finderCenters}>
+          {adminButtons}
+        </FetchNewShowsHeader>
+      ) : (
+        <PageHeader title={title} description={description} action={canEdit && <div className="flex gap-2">{adminButtons}</div>} />
+      )}
 
       {withoutExhibitors > 0 && <FetchAllCard slug={slug} missing={withoutExhibitors} />}
       {withoutOrganizer > 0 && <OrganizerCard slug={slug} missing={withoutOrganizer} />}
