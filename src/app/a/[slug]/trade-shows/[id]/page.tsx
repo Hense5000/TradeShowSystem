@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
+import { ShowExhibitorsNote } from "@/components/show-exhibitors-note";
 import { isAiConfigured } from "@/lib/ai-run";
 import { db } from "@/lib/db";
 import { isExhibitorFetchConfigured } from "@/lib/exhibitor-fetch-run";
@@ -32,6 +33,7 @@ export default async function EditTradeShowPage({ params }: PageProps<"/a/[slug]
         description="Changes are seen by every account in the system."
         action={<Link href={`/a/${slug}/trade-shows`} className="btn-secondary">Back to list</Link>}
       />
+      <ShowExhibitorsNote />
       <SaveForm action={updateTradeShow.bind(null, slug, id)} title="Trade show details" description="Name and dates are required." submitLabel="Save changes" readOnly={false}>
         <TradeShowFields show={show} options={options} />
       </SaveForm>
