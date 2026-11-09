@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { currentSubscription } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { shouldShowHunterPopup } from "@/lib/hunter-popup";
 import { initials } from "@/lib/initials";
+import { hasOwnHunter } from "@/lib/own-contacts-run";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { isProfileComplete } from "@/lib/profile";
 import { accountAccess, requireMembership } from "@/lib/tenant";
 import { daysLeftLabel, TRIAL_DAYS, trialDaysLeft } from "@/lib/trial";
+import { HunterPopup } from "./hunter-popup";
 import { AccountFrame } from "./sidebar";
 
 export default async function AccountLayout({ children, params }: LayoutProps<"/a/[slug]">) {
@@ -18,10 +21,13 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
   const access = accountAccess(organization, user.email);
   const hasAccess = access !== "none";
   const isOwner = membership.role === "OWNER";
-  const [primaryContact, ticketsWaiting] = await Promise.all([
+  const [primaryContact, ticketsWaiting, hunterConnected] = await Promise.all([
     db.contact.findFirst({ where: { organizationId: organization.id, isPrimary: true } }),
     platformAdmin ? db.supportTicket.count({ where: { status: "OPEN", waitingOnSupport: true } }) : 0,
+    // Only asked when the Hunter.io popup could show at all.
+    hasAccess && !user.hideHunterPopup ? hasOwnHunter(organization.id) : true,
   ]);
+  const showHunterPopup = shouldShowHunterPopup({ hunterConnected, hasAccess, hidden: user.hideHunterPopup, lastShownDay: user.hunterPopupDay });
   const paymentFailed = currentSubscription(subscriptions)?.status === "past_due";
   const profileMissing = !isProfileComplete(organization, primaryContact);
 
@@ -84,6 +90,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
           : []),
       ]}
     >
+      {showHunterPopup && <HunterPopup slug={slug} />}
       {access === "trial" && organization.trialEndsAt && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-brand-soft px-3 py-2.5 text-sm print:hidden">
           <p>

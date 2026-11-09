@@ -144,23 +144,26 @@ export default async function ProfilePage({ params }: PageProps<"/a/[slug]/profi
         </section>
       ) : null}
       {(!hunter.connected || hunter.broken) && (
-        <SaveForm
-          action={connectHunter.bind(null, slug)}
-          title={hunter.connected ? "Connect Hunter.io again" : "Connect Hunter.io"}
-          description="Hunter.io finds the names and email addresses of people at a company. Connect your own Hunter.io account, and your users can look up contacts for exhibitors with your own Hunter.io credits. The contacts found are only shown to your account."
-          submitLabel="Connect Hunter.io"
-          readOnly={!canEdit}
-        >
-          <Field
-            id="hunterKey"
-            label="Hunter.io API key"
-            type="password"
-            autoComplete="off"
-            maxLength={100}
-            placeholder="Paste your API key"
-            hint="Log in at hunter.io, open API in the menu and copy your API key. Hunter.io has a free plan with a few searches a month. The key is stored encrypted and never shown again."
-          />
-        </SaveForm>
+        // The Hunter.io popup's "Add it on Company profile" link jumps here.
+        <div id="hunter" className="scroll-mt-6">
+          <SaveForm
+            action={connectHunter.bind(null, slug)}
+            title={hunter.connected ? "Connect Hunter.io again" : "Connect Hunter.io"}
+            description="Hunter.io finds the names and email addresses of people at a company. Connect your own Hunter.io account, and your users can look up contacts for exhibitors with your own Hunter.io credits. The contacts found are only shown to your account."
+            submitLabel="Connect Hunter.io"
+            readOnly={!canEdit}
+          >
+            <Field
+              id="hunterKey"
+              label="Hunter.io API key"
+              type="password"
+              autoComplete="off"
+              maxLength={100}
+              placeholder="Paste your API key"
+              hint="Log in at hunter.io, open API in the menu and copy your API key. Hunter.io has a free plan with a few searches a month. The key is stored encrypted and never shown again."
+            />
+          </SaveForm>
+        </div>
       )}
 
       <SaveForm

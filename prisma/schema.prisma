@@ -34,6 +34,11 @@ model User {
   emailShowChanges      Boolean   @default(true) // favorite trade shows changed or got new exhibitors
   emailFollowUps        Boolean   @default(true) // follow-ups due today or overdue
   emailSuggestions      Boolean   @default(true) // new exhibitors you may like
+  // The Hunter.io popup shows at most once a day (Danish date, e.g. "2026-11-09")
+  // until the account connects Hunter.io, or never again once the user ticks
+  // "Don't show this popup again".
+  hunterPopupDay        String?
+  hideHunterPopup       Boolean   @default(false)
   // Goes up by one on every login. A session made before the latest login no
   // longer matches and is logged out, so one login can't be used in two places.
   sessionVersion        Int       @default(0)
