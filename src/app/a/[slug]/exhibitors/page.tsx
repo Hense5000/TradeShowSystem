@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { ShowExhibitorsNote } from "@/components/show-exhibitors-note";
 import { summarizeCompany } from "@/lib/company";
 import { isAiConfigured } from "@/lib/ai-run";
@@ -347,13 +348,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
               </tbody>
             </table>
           </div>
-          {pages > 1 && (
-            <nav className="flex items-center justify-between border-t border-line px-5 py-3 text-sm" aria-label="Pages">
-              {page > 1 ? <Link href={pageHref(page - 1)} className="btn-secondary">Previous</Link> : <span />}
-              <span className="text-muted">Page {page} of {pages}</span>
-              {page < pages ? <Link href={pageHref(page + 1)} className="btn-secondary">Next</Link> : <span />}
-            </nav>
-          )}
+          <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
     </>
