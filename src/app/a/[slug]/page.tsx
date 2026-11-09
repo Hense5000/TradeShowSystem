@@ -9,6 +9,8 @@ import { formatMoney } from "@/lib/project-value";
 import { recommendedShows } from "@/lib/show-recommendations-run";
 import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
+import { isPlatformAdmin } from "@/lib/platform-admin";
+import { DashboardAds } from "./dashboard-ads";
 import { RecommendedShows } from "./favorites/recommended-shows";
 
 // The follow-ups card under "Lead retrieval active" lists at most this many.
@@ -68,7 +70,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
   // The follow-ups card shows the user's own leads and the ones no one is responsible for.
   const myLeads = { list: { organizationId: organization.id, favorites: true }, ...mineOrUnassigned(user.id) };
   const followUpWhere = { ...myLeads, followUpAt: { lte: new Date(day.getTime() + FOLLOW_UP_SOON_DAYS * 86_400_000) } };
-  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended, values] = await Promise.all([
+  const [showCount, runningCount, exhibitorCount, centerCount, openLeads, favoriteShows, followUps, followUpCount, dueCount, upcoming, recommended, values, ads] = await Promise.all([
     db.tradeShow.count(),
     db.tradeShow.count({ where: { startDate: { lte: day }, endDate: { gte: day } } }),
     db.exhibitor.count(),
@@ -99,6 +101,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       _sum: { projectValue: true },
       _count: true,
     }),
+    db.dashboardAd.findMany({ select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
   ]);
 
   // Running projects are the leads still being worked on; won ones are shown apart.
@@ -112,7 +115,18 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Overview of your trade show operations." />
+      {/* The 3 ad spaces sit above Exhibitors, Exhibition centers and Lead retrieval active, as wide and high as them. */}
+      <div className="grid items-center gap-3.5 xl:grid-cols-4">
+        <PageHeader title="Dashboard" description="Overview of your trade show operations." />
+        <div className="xl:col-span-3">
+          <DashboardAds
+            slug={slug}
+            ads={ads}
+            platformAdmin={isPlatformAdmin(user.email)}
+            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
+          />
+        </div>
+      </div>
 
       <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon="calendar" label="Total trade shows" value={showCount} note={`${runningCount} currently running`} href={`/a/${slug}/trade-shows`} />

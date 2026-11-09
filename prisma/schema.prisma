@@ -747,3 +747,15 @@ model OwnContact {
 
   @@id([organizationId, domain])
 }
+
+// One of the 3 ad spaces on the dashboard, set by a platform admin on
+// Super admin → Dashboard ads: an image and the advertiser's website. A slot
+// without a row shows "Your ad here!" with a "Get this ad space" button.
+model DashboardAd {
+  slot      Int      @id // 1, 2 or 3, left to right
+  image     Bytes
+  imageType String // e.g. "image/png"
+  linkUrl   String
+  name      String? // the advertiser, used as the image's alt text
+  updatedAt DateTime @updatedAt
+}

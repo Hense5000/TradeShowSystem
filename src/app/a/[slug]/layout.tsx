@@ -78,6 +78,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
                 items: [
                   { label: "Feature control", icon: "shield" as const, path: "admin" },
                   { label: "Speed check", icon: "dashboard" as const, path: "admin/speed" },
+                  { label: "Dashboard ads", icon: "grid" as const, path: "admin/ads" },
                   {
                     label: "Support requests",
                     icon: "help" as const,
