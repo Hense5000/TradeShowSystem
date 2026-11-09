@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { SearchButton, SearchForm } from "@/components/search-form";
+import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
 
 export default async function OrganizersPage({ params, searchParams }: PageProps<"/a/[slug]/organizers">) {
   const { slug } = await params;
@@ -16,13 +17,15 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const country = typeof sp.country === "string" && isCountryCode(sp.country) ? sp.country : "";
+  const page = pageParam(sp.page);
 
   const where: Prisma.ExhibitionOrganizerWhereInput = {
     ...(country && { country }),
     ...(q && { name: { contains: q, mode: "insensitive" } }),
   };
-  const [organizers, total, countries] = await Promise.all([
-    db.exhibitionOrganizer.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { tradeShows: true } } } }),
+  const [organizers, matching, total, countries] = await Promise.all([
+    db.exhibitionOrganizer.findMany({ where, orderBy: [{ name: "asc" }, { id: "asc" }], include: { _count: { select: { tradeShows: true } } }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+    db.exhibitionOrganizer.count({ where }),
     db.exhibitionOrganizer.count(),
     db.exhibitionOrganizer.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
   ]);
@@ -31,6 +34,8 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
     .map((code) => ({ code, name: countryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   const filtered = Boolean(q || country);
+  const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const pageHref = (p: number) => pageLink(`/a/${slug}/organizers`, { q, country }, p);
 
   return (
     <>
@@ -87,7 +92,8 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
             )}
           </SearchForm>
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
-            {filtered ? `${organizers.length} of ${total} organizers match` : `${total} ${total === 1 ? "organizer" : "organizers"}`}
+            {filtered ? `${matching} of ${total} organizers match` : `${total} ${total === 1 ? "organizer" : "organizers"}`}
+            {pages > 1 && ` · page ${page} of ${pages}`}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -147,6 +153,7 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
               </tbody>
             </table>
           </div>
+          <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
     </>

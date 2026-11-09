@@ -9,6 +9,7 @@ import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { EventsPageCard } from "./events-page-card";
 import { SearchButton, SearchForm } from "@/components/search-form";
+import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
 
 // "Find missing events pages" runs on this page, a few centers per call.
 export const maxDuration = 300;
@@ -30,6 +31,7 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const country = typeof sp.country === "string" && isCountryCode(sp.country) ? sp.country : "";
+  const page = pageParam(sp.page);
 
   const where: Prisma.ExhibitionCenterWhereInput = {
     ...(country && { country }),
@@ -38,8 +40,9 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
     }),
   };
   const useAi = canEdit && isEventsPageFinderConfigured();
-  const [centers, total, countries, missingEvents] = await Promise.all([
-    db.exhibitionCenter.findMany({ where, orderBy: { name: "asc" } }),
+  const [centers, matching, total, countries, missingEvents] = await Promise.all([
+    db.exhibitionCenter.findMany({ where, orderBy: [{ name: "asc" }, { id: "asc" }], skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+    db.exhibitionCenter.count({ where }),
     db.exhibitionCenter.count(),
     db.exhibitionCenter.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
     useAi ? db.exhibitionCenter.count({ where: missingEventsPageWhere }) : 0,
@@ -49,6 +52,8 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
     .map((code) => ({ code, name: countryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   const filtered = Boolean(q || country);
+  const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const pageHref = (p: number) => pageLink(`/a/${slug}/centers`, { q, country }, p);
 
   return (
     <>
@@ -107,7 +112,8 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
             )}
           </SearchForm>
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
-            {filtered ? `${centers.length} of ${total} centers match` : `${total} ${total === 1 ? "center" : "centers"}`}
+            {filtered ? `${matching} of ${total} centers match` : `${total} ${total === 1 ? "center" : "centers"}`}
+            {pages > 1 && ` · page ${page} of ${pages}`}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -161,6 +167,7 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
               </tbody>
             </table>
           </div>
+          <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
     </>

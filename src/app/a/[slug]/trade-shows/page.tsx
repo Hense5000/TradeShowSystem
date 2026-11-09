@@ -16,6 +16,7 @@ import { FetchNewShowsHeader } from "./fetch-new-shows";
 import { isShowFinderConfigured } from "@/lib/show-finder-run";
 import { OrganizerCard } from "./organizer-card";
 import { SearchButton, SearchForm } from "@/components/search-form";
+import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
 
 // "Fetch exhibitors for all" reads one page of an exhibitor directory per call to this page.
 export const maxDuration = 300;
@@ -62,6 +63,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const country = typeof sp.country === "string" && isCountryCode(sp.country) ? sp.country : "";
   const view: View = VIEWS.find((v) => v.value === sp.view)?.value ?? "";
+  const page = pageParam(sp.page);
   const day = today();
 
   const where: Prisma.TradeShowWhereInput = {
@@ -77,13 +79,16 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
   };
   const useAi = canEdit && isExhibitorFetchConfigured();
   const useFinder = canEdit && isShowFinderConfigured();
-  const [shows, total, countries, withoutExhibitors, withoutOrganizer, favorites, finderCenters] = await Promise.all([
+  const [shows, matching, total, countries, withoutExhibitors, withoutOrganizer, favorites, finderCenters] = await Promise.all([
     db.tradeShow.findMany({
       where,
       include: { center: { select: { name: true } }, organizer: { select: { id: true, name: true } }, _count: { select: { exhibitors: true } } },
       // Finished shows: most recent first. Everything else: soonest first.
-      orderBy: view === "finished" ? [{ startDate: "desc" }, { name: "asc" }] : [{ startDate: "asc" }, { name: "asc" }],
+      orderBy: view === "finished" ? [{ startDate: "desc" }, { name: "asc" }, { id: "asc" }] : [{ startDate: "asc" }, { name: "asc" }, { id: "asc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
+    db.tradeShow.count({ where }),
     db.tradeShow.count(),
     db.tradeShow.findMany({ where: { country: { not: null } }, distinct: ["country"], select: { country: true } }),
     useAi ? db.tradeShow.count({ where: withoutExhibitorsWhere(day) }) : 0,
@@ -97,6 +102,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     .map((code) => ({ code, name: countryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   const narrowed = Boolean(q || country || view !== "all");
+  const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const pageHref = (p: number) => pageLink(`/a/${slug}/trade-shows`, { q, view, country }, p);
   const title = "Trade shows";
   const description = "Trade shows around the world, shared by every account.";
   const adminButtons = (
@@ -166,7 +173,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
           <p className="border-t border-line px-5 py-2.5 text-sm text-muted">
             {view === "all" && !q && !country
               ? `${total} ${total === 1 ? "trade show" : "trade shows"}`
-              : `Showing ${shows.length} of ${total} trade shows`}
+              : `Showing ${matching} of ${total} trade shows`}
+            {pages > 1 && ` · page ${page} of ${pages}`}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -240,6 +248,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
               </tbody>
             </table>
           </div>
+          <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
     </>
