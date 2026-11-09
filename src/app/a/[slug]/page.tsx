@@ -115,7 +115,18 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Overview of your trade show operations." />
+      {/* The 3 ad spaces sit above Exhibitors, Exhibition centers and Lead retrieval active, as wide and high as them. */}
+      <div className="grid items-center gap-3.5 xl:grid-cols-4">
+        <PageHeader title="Dashboard" description="Overview of your trade show operations." />
+        <div className="xl:col-span-3">
+          <DashboardAds
+            slug={slug}
+            ads={ads}
+            platformAdmin={isPlatformAdmin(user.email)}
+            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
+          />
+        </div>
+      </div>
 
       <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon="calendar" label="Total trade shows" value={showCount} note={`${runningCount} currently running`} href={`/a/${slug}/trade-shows`} />
@@ -195,78 +206,69 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
           {openLeads + favoriteShows > 0 && <RecommendedShows slug={slug} items={recommended} compact />}
         </div>
 
-        {/* The 3 ad spaces sit under Total trade shows, Exhibitors and Exhibition centers, as wide and high as them. */}
-        <div className="flex flex-col gap-3.5 xl:col-span-3 xl:col-start-1 xl:row-start-1">
-          <DashboardAds
-            slug={slug}
-            ads={ads}
-            platformAdmin={isPlatformAdmin(user.email)}
-            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
-          />
-          <section className="card">
-            <h2 className="text-lg font-bold">Upcoming trade shows</h2>
-            <nav className="mt-3 flex flex-wrap gap-2" aria-label="Period">
-              {RANGES.map((r) => (
-                <Link
-                  key={r}
-                  href={r === RANGES[0] ? `/a/${slug}` : `/a/${slug}?months=${r}`}
-                  aria-current={r === range ? "page" : undefined}
-                  scroll={false}
-                  className={`${tab} ${r === range ? "border-brand bg-brand text-white" : "border-line-strong bg-surface text-ink hover:bg-subtle"}`}
-                >
-                  Next {r} months
-                </Link>
-              ))}
-              <Link href={`/a/${slug}/trade-shows`} className={`${tab} border-line-strong bg-surface text-ink hover:bg-subtle`}>
-                View all trade shows
+        <section className="card xl:col-span-3 xl:col-start-1 xl:row-start-1">
+          <h2 className="text-lg font-bold">Upcoming trade shows</h2>
+          <nav className="mt-3 flex flex-wrap gap-2" aria-label="Period">
+            {RANGES.map((r) => (
+              <Link
+                key={r}
+                href={r === RANGES[0] ? `/a/${slug}` : `/a/${slug}?months=${r}`}
+                aria-current={r === range ? "page" : undefined}
+                scroll={false}
+                className={`${tab} ${r === range ? "border-brand bg-brand text-white" : "border-line-strong bg-surface text-ink hover:bg-subtle"}`}
+              >
+                Next {r} months
               </Link>
-            </nav>
+            ))}
+            <Link href={`/a/${slug}/trade-shows`} className={`${tab} border-line-strong bg-surface text-ink hover:bg-subtle`}>
+              View all trade shows
+            </Link>
+          </nav>
 
-            <p className="mt-4 text-sm text-muted">
-              {upcoming.length === 0
-                ? `No trade shows in the next ${range} months.`
-                : `${upcoming.length} ${upcoming.length === 1 ? "trade show" : "trade shows"} in the next ${range} months`}
-            </p>
+          <p className="mt-4 text-sm text-muted">
+            {upcoming.length === 0
+              ? `No trade shows in the next ${range} months.`
+              : `${upcoming.length} ${upcoming.length === 1 ? "trade show" : "trade shows"} in the next ${range} months`}
+          </p>
 
-            {upcoming.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-2.5">
-                {upcoming.map((s) => {
-                  const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
-                  const running = showStatus(s) === "running";
-                  return (
-                    <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
-                      <div className="min-w-48 flex-1">
-                        <p className="flex flex-wrap items-center gap-2 font-semibold">
-                          {s.name}
-                          {running && <span className="pill pill-ok">Running</span>}
-                        </p>
-                        {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted">Exhibitors</p>
-                        {s._count.exhibitors > 0 ? (
-                          <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
-                            {s._count.exhibitors}
-                          </Link>
-                        ) : (
-                          <p className="font-bold tabular-nums">0</p>
-                        )}
-                      </div>
-                      <div className="w-20">
-                        {s.website && (
-                          <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
-                            <Icon name="globe" className="size-3.5" /> Website
-                          </a>
-                        )}
-                      </div>
-                      <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </div>
+          {upcoming.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {upcoming.map((s) => {
+                const place = [s.center?.name, s.city, s.country && countryName(s.country)].filter(Boolean).join(" · ");
+                const running = showStatus(s) === "running";
+                return (
+                  <li key={s.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line px-4 py-3">
+                    <div className="min-w-48 flex-1">
+                      <p className="flex flex-wrap items-center gap-2 font-semibold">
+                        {s.name}
+                        {running && <span className="pill pill-ok">Running</span>}
+                      </p>
+                      {place && <p className="mt-0.5 text-sm text-muted">{place}</p>}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted">Exhibitors</p>
+                      {s._count.exhibitors > 0 ? (
+                        <Link href={`/a/${slug}/exhibitors?show=${s.id}`} className="font-bold tabular-nums text-brand hover:underline">
+                          {s._count.exhibitors}
+                        </Link>
+                      ) : (
+                        <p className="font-bold tabular-nums">0</p>
+                      )}
+                    </div>
+                    <div className="w-20">
+                      {s.website && (
+                        <a href={s.website} target="_blank" rel="noopener noreferrer" className="pill pill-soft gap-1 hover:underline">
+                          <Icon name="globe" className="size-3.5" /> Website
+                        </a>
+                      )}
+                    </div>
+                    <p className="w-44 text-right text-sm font-semibold whitespace-nowrap tabular-nums">{formatDateRange(s.startDate, s.endDate)}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </div>
     </>
   );
