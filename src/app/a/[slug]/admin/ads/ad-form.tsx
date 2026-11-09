@@ -1,24 +1,38 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { AD_IMAGE_TYPES } from "@/lib/dashboard-ads";
+import { AD_IMAGE_TYPES, trimBounds } from "@/lib/dashboard-ads";
 import { removeAd, saveAd } from "./actions";
 
-// Big photos are made smaller in the browser before the upload: an ad space is
-// about 350 x 120 pixels on screen, so 1500 pixels wide is plenty, also on sharp screens.
+// Before the upload the image is prepared in the browser: a plain white or
+// transparent frame around the ad is cut away, so the ad fills the whole space,
+// and big photos are made smaller. An ad space is about 350 x 120 pixels on
+// screen, so 1500 pixels wide is plenty, also on sharp screens.
 const MAX_WIDTH = 1500;
 const SHRINK_ABOVE_BYTES = 1024 * 1024;
 
-async function shrink(file: File): Promise<File> {
+async function prepare(file: File): Promise<File> {
   if (file.type === "image/gif") return file; // keeps animated GIFs moving
   const bitmap = await createImageBitmap(file);
-  if (bitmap.width <= MAX_WIDTH && file.size <= SHRINK_ABOVE_BYTES) return file;
-  const scale = Math.min(1, MAX_WIDTH / bitmap.width);
+  const full = document.createElement("canvas");
+  full.width = bitmap.width;
+  full.height = bitmap.height;
+  const ctx = full.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(bitmap, 0, 0);
+  const crop = trimBounds(ctx.getImageData(0, 0, full.width, full.height).data, full.width, full.height) ?? {
+    x: 0,
+    y: 0,
+    width: full.width,
+    height: full.height,
+  };
+  const trimmed = crop.width !== full.width || crop.height !== full.height;
+  if (!trimmed && bitmap.width <= MAX_WIDTH && file.size <= SHRINK_ABOVE_BYTES) return file;
+  const scale = Math.min(1, MAX_WIDTH / crop.width);
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+  canvas.width = Math.round(crop.width * scale);
+  canvas.height = Math.round(crop.height * scale);
+  canvas.getContext("2d")!.drawImage(full, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.92));
   return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".webp", { type: "image/webp" }) : file;
 }
 
@@ -47,7 +61,7 @@ export function AdForm({
     if (!file) return;
     setPreparing(true);
     try {
-      const ready = await shrink(file);
+      const ready = await prepare(file);
       setImage(ready);
       setPreview(URL.createObjectURL(ready));
     } catch {
@@ -69,11 +83,11 @@ export function AdForm({
         <span className={`pill ${ad ? "pill-ok" : "pill-neutral"}`}>{ad ? "Showing ad" : "Free: shows “Your ad here!”"}</span>
       </div>
 
-      {/* The preview has the size of the space on the dashboard. */}
-      <div className={`grid place-items-center overflow-hidden rounded-xl border border-dashed border-line-strong bg-surface ${boxClass}`}>
+      {/* The preview has the size of the space on a wide screen's dashboard. */}
+      <div className={`mx-auto grid w-full max-w-[21rem] place-items-center overflow-hidden rounded-xl border border-dashed border-line-strong bg-surface ${boxClass}`}>
         {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={shown} alt="" className="size-full object-contain" />
+          <img src={shown} alt="" className="size-full object-cover" />
         ) : (
           <p className="text-2xl font-extrabold tracking-tight text-faint">Your ad here!</p>
         )}
@@ -98,7 +112,7 @@ export function AdForm({
               onChange={(e) => choose(e.target.files?.[0])}
               className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-line-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold hover:file:bg-subtle"
             />
-            <p className="hint">PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels (about 3 : 1).</p>
+            <p className="hint">PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels (about 3 : 1). The image always fills the whole space: a white or transparent frame around it is cut away, and on some screens a thin strip at the edges is hidden, so keep text a little away from the edges.</p>
           </div>
           <div>
             <label htmlFor={`ad-link-${slot}`} className="label">Link to the advertiser&apos;s website</label>

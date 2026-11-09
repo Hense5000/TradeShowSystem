@@ -2,8 +2,10 @@ import Link from "next/link";
 import { AD_SLOTS, adImageUrl } from "@/lib/dashboard-ads";
 import { AdSpaceRequest } from "./ad-space-request";
 
-// The same height as the count cards above them (Exhibitors, Exhibition centers...).
-export const AD_BOX = "h-[7.5rem]";
+// On wide screens the same height as the count cards below them (Exhibitors,
+// Exhibition centers...). On smaller screens the spaces keep the 3 : 1 shape
+// of the ad images, so an image is never cut much.
+export const AD_BOX = "aspect-[3/1] xl:aspect-auto xl:h-[7.5rem]";
 
 type Ad = { slot: number; linkUrl: string; name: string | null; updatedAt: Date };
 
@@ -34,11 +36,11 @@ export function DashboardAds({
                 title={ad.name ?? undefined}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={adImageUrl(slot, ad.updatedAt)} alt={ad.name ?? "Advertisement"} className="size-full object-contain" />
+                <img src={adImageUrl(slot, ad.updatedAt)} alt={ad.name ?? "Advertisement"} className="size-full object-cover" />
               </a>
             ) : (
-              <div className={`card flex flex-col items-center justify-center gap-2.5 py-3 text-center ${AD_BOX}`}>
-                <p className="text-2xl font-extrabold tracking-tight">Your ad here!</p>
+              <div className={`card flex flex-col items-center justify-center gap-2 px-3 py-2 text-center xl:gap-2.5 xl:py-3 ${AD_BOX}`}>
+                <p className="text-xl font-extrabold tracking-tight xl:text-2xl">Your ad here!</p>
                 <AdSpaceRequest slug={slug} slot={slot} defaults={requester} />
               </div>
             )}

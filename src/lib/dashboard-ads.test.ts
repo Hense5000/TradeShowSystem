@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adNotifyEmail, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest } from "./dashboard-ads";
+import { adNotifyEmail, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
   it("accepts 1, 2 and 3 only", () => {
@@ -78,5 +78,31 @@ describe("adRequestEmailContent", () => {
     expect(mail.text).toContain("Message:\nCall me");
     expect(mail.html).toContain("Anna &lt;Hansen&gt;");
     expect(mail.html).toContain("Acme &amp; Co");
+  });
+});
+
+describe("trimBounds", () => {
+  // A w x h RGBA image of colour `bg` with a block of colour `fg` at x0..x1, y0..y1.
+  function image(w: number, h: number, bg: number[], fg: number[], [x0, y0, x1, y1]: number[]) {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) data.set(x >= x0 && x <= x1 && y >= y0 && y <= y1 ? fg : bg, (y * w + x) * 4);
+    return data;
+  }
+  const white = [255, 255, 255, 255];
+  const green = [58, 166, 128, 255];
+
+  it("cuts a white frame around the ad", () => {
+    expect(trimBounds(image(30, 12, white, green, [5, 2, 24, 9]), 30, 12)).toEqual({ x: 5, y: 2, width: 20, height: 8 });
+  });
+  it("cuts a transparent frame", () => {
+    expect(trimBounds(image(30, 12, [0, 0, 0, 0], green, [3, 1, 26, 10]), 30, 12)).toEqual({ x: 3, y: 1, width: 24, height: 10 });
+  });
+  it("leaves an image without a frame alone", () => {
+    expect(trimBounds(image(30, 12, green, white, [0, 0, 29, 11]), 30, 12)).toBeNull();
+    expect(trimBounds(image(30, 12, white, white, [0, 0, 0, 0]), 30, 12)).toBeNull();
+  });
+  it("ignores a frame of a pixel or two", () => {
+    expect(trimBounds(image(30, 12, white, green, [1, 1, 28, 10]), 30, 12)).toBeNull();
   });
 });

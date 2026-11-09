@@ -105,3 +105,29 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
       `</div>`,
   };
 }
+
+/**
+ * The part of an image inside a plain frame: a border of one colour (e.g. white
+ * or transparent, taken from the top-left pixel) around the real ad is left out,
+ * so the ad fills the whole space on the dashboard. `data` is RGBA, 4 bytes a pixel.
+ * Returns null when there is no such border to cut.
+ */
+export function trimBounds(data: ArrayLike<number>, width: number, height: number, tolerance = 24) {
+  const px = (x: number, y: number) => (y * width + x) * 4;
+  const bg = [data[0], data[1], data[2], data[3]];
+  const differs = (i: number) =>
+    bg[3] < 16 ? data[i + 3] >= 16 : data[i + 3] < 16 || Math.max(Math.abs(data[i] - bg[0]), Math.abs(data[i + 1] - bg[1]), Math.abs(data[i + 2] - bg[2])) > tolerance;
+  let top = height, bottom = -1, left = width, right = -1;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      if (differs(px(x, y))) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+  if (bottom < 0) return null; // one colour only
+  const box = { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+  // A frame of a pixel or two is not worth a new image.
+  return box.width >= width - 2 && box.height >= height - 2 ? null : box;
+}
