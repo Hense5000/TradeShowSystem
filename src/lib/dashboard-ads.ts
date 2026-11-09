@@ -107,14 +107,16 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
 }
 
 /**
- * The part of an image inside a plain frame: a border of one colour (e.g. white
- * or transparent, taken from the top-left pixel) around the real ad is left out,
- * so the ad fills the whole space on the dashboard. `data` is RGBA, 4 bytes a pixel.
- * Returns null when there is no such border to cut.
+ * The part of an image inside a white or transparent frame (judged from the
+ * top-left pixel), so the ad fills the whole space on the dashboard. A coloured
+ * edge is part of the ad's design and is kept. `data` is RGBA, 4 bytes a pixel.
+ * Returns null when there is no such frame to cut.
  */
 export function trimBounds(data: ArrayLike<number>, width: number, height: number, tolerance = 24) {
   const px = (x: number, y: number) => (y * width + x) * 4;
   const bg = [data[0], data[1], data[2], data[3]];
+  const whiteOrClear = bg[3] < 16 || (bg[0] >= 240 && bg[1] >= 240 && bg[2] >= 240);
+  if (!whiteOrClear) return null;
   const differs = (i: number) =>
     bg[3] < 16 ? data[i + 3] >= 16 : data[i + 3] < 16 || Math.max(Math.abs(data[i] - bg[0]), Math.abs(data[i + 1] - bg[1]), Math.abs(data[i + 2] - bg[2])) > tolerance;
   let top = height, bottom = -1, left = width, right = -1;

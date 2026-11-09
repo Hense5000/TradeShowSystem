@@ -98,6 +98,9 @@ describe("trimBounds", () => {
   it("cuts a transparent frame", () => {
     expect(trimBounds(image(30, 12, [0, 0, 0, 0], green, [3, 1, 26, 10]), 30, 12)).toEqual({ x: 3, y: 1, width: 24, height: 10 });
   });
+  it("keeps a coloured edge, which is part of the ad", () => {
+    expect(trimBounds(image(30, 12, green, white, [5, 2, 24, 9]), 30, 12)).toBeNull();
+  });
   it("leaves an image without a frame alone", () => {
     expect(trimBounds(image(30, 12, green, white, [0, 0, 29, 11]), 30, 12)).toBeNull();
     expect(trimBounds(image(30, 12, white, white, [0, 0, 0, 0]), 30, 12)).toBeNull();

@@ -112,7 +112,7 @@ export function AdForm({
               onChange={(e) => choose(e.target.files?.[0])}
               className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-line-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold hover:file:bg-subtle"
             />
-            <p className="hint">PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels (about 3 : 1). The image always fills the whole space: a white or transparent frame around it is cut away, and on some screens a thin strip at the edges is hidden, so keep text a little away from the edges.</p>
+            <p className="hint">PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels (about 3 : 1). The space has this shape on every screen. A white or transparent frame around the ad is cut away; other sizes fill the space and have their edges cut.</p>
           </div>
           <div>
             <label htmlFor={`ad-link-${slot}`} className="label">Link to the advertiser&apos;s website</label>

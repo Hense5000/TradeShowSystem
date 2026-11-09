@@ -9,7 +9,7 @@ export function AdSpaceRequest({ slug, slot, defaults }: { slug: string; slot: n
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="btn py-1 xl:py-1.5">
+      <button type="button" onClick={() => setOpen(true)} className="btn py-1">
         Get this ad space
       </button>
       {/* A new form each time it opens, so a sent request starts over. */}
