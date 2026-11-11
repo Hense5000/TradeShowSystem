@@ -67,7 +67,7 @@ export function useFetchNewShows(slug: string, centers: number) {
   const button = (
     <button
       type="button"
-      className="btn py-1.5"
+      className="btn px-3 py-1.5"
       onClick={() => void run()}
       disabled={running || centers === 0}
       title={centers === 0 ? "Choose exhibition centers in the AI trade show finder first." : `Check the events pages of all ${centers} chosen exhibition centers now`}

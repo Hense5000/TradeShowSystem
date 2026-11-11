@@ -5,11 +5,14 @@ import { Icon } from "@/components/icons";
 import { useFetchAllExhibitors } from "./fetch-exhibitors-all";
 import { useFetchNewShows } from "./fetch-new-shows";
 
+// The column of admin buttons on a wide screen.
+const BUTTONS_WIDTH = "xl:w-44 xl:shrink-0";
+
 type Admin = { finderCenters: number | null; withoutExhibitors: number | null };
 
 /**
- * The Trade shows page under its title: a row of 4 ad spaces, each as big as
- * one on the dashboard, then the notices, then the table. For a platform admin
+ * The Trade shows page under its title: a row of 4 ad spaces as wide as the
+ * table, then the notices, then the table. For a platform admin
  * the buttons Add event, Import, Fetch events and Fetch exhibitors stand in a
  * column to the right of the table, the first one level with the table's top
  * edge; on a narrow screen they come above the table. The progress of a fetch
@@ -51,16 +54,20 @@ function AdminLayout({ slug, ads, notices, admin, children }: { slug: string; ad
   const exhibitors = useFetchAllExhibitors(slug, admin.withoutExhibitors ?? 0);
   return (
     <>
-      {ads}
+      {/* The ads span the table's width: the same column, with an empty space as wide as the buttons beside them. */}
+      <div className="flex gap-3.5">
+        <div className="min-w-0 flex-1">{ads}</div>
+        <div className={`hidden xl:block ${BUTTONS_WIDTH}`} />
+      </div>
       {notices}
       {events.panel}
       {exhibitors.panel}
       <div className="flex flex-col gap-3.5 xl:flex-row xl:items-start">
-        <div className="flex flex-wrap gap-2 xl:order-2 xl:w-52 xl:shrink-0 xl:flex-col">
-          <Link href={`/a/${slug}/trade-shows/new`} className="btn py-1.5">
+        <div className={`flex flex-wrap gap-2 xl:order-2 xl:flex-col ${BUTTONS_WIDTH}`}>
+          <Link href={`/a/${slug}/trade-shows/new`} className="btn px-3 py-1.5">
             <Icon name="plus" className="size-4" /> Add event
           </Link>
-          <Link href={`/a/${slug}/trade-shows/import`} className="btn py-1.5">
+          <Link href={`/a/${slug}/trade-shows/import`} className="btn px-3 py-1.5">
             <Icon name="upload" className="size-4" /> Import
           </Link>
           {admin.finderCenters !== null && events.button}
