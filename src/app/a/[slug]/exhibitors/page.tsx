@@ -23,6 +23,7 @@ import { addShownToList, setListMembership } from "../lists/actions";
 import { askAiSearch, fillContacts, fillCountries } from "./actions";
 import { AiFillCard } from "./ai-fill-card";
 import { AiSearch } from "./ai-search";
+import { ExhibitorsLayout } from "./exhibitors-layout";
 import { ExportButton } from "./export-button";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
@@ -30,6 +31,8 @@ import { AlsoAtShows } from "./other-shows";
 import { OwnContactTag } from "./own-hunter-button";
 import { tradeShowOptions } from "./show-select";
 import { SearchButton, SearchForm } from "@/components/search-form";
+import { AD_PAGES } from "@/lib/dashboard-ads";
+import { DashboardAds } from "../dashboard-ads";
 
 const PAGE_SIZE = 50;
 // Filters set only by Ask AI (and the question itself); the search form keeps them as hidden fields.
@@ -54,8 +57,9 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
   await syncCompanyKeys();
   const where = exhibitorWhere(filters);
   const useAi = canEdit && isAiConfigured();
+  const adSlots = AD_PAGES[2].slots;
   // Everything that doesn't depend on the companies on this page is read at once.
-  const [{ keys: pageKeys, companies: matching, rows: matchingRows }, total, shows, countries, lists, missingContacts, missingCountries] = await Promise.all([
+  const [{ keys: pageKeys, companies: matching, rows: matchingRows }, total, shows, countries, lists, missingContacts, missingCountries, ads] = await Promise.all([
     companyPage(filters, page, PAGE_SIZE),
     db.$queryRaw<{ n: number }[]>`SELECT COUNT(DISTINCT "companyKey")::int AS n FROM "Exhibitor"`.then((r) => r[0]?.n ?? 0),
     tradeShowOptions(),
@@ -64,6 +68,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     db.savedList.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, favorites: true }, orderBy: { name: "asc" } }),
     useAi ? db.exhibitor.count({ where: missingContactWhere(show || undefined) }) : 0,
     canEdit ? countCountriesFromPhones() : 0,
+    db.dashboardAd.findMany({ where: { slot: { in: [...adSlots] } }, select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
   ]);
   // Every row of the companies on this page, latest trade show first, which of them the
   // filters match, and which of this account's saved lists each company is on.
@@ -112,34 +117,43 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
 
   return (
     <>
-      <PageHeader
-        title="Exhibitors"
-        description="Companies exhibiting at trade shows, shared by every account."
-        action={
-          <div className="flex flex-wrap gap-2">
+      <PageHeader title="Exhibitors" description="Companies exhibiting at trade shows, shared by every account." />
+
+      <ExhibitorsLayout
+        ads={
+          <DashboardAds
+            slug={slug}
+            slots={adSlots}
+            ads={ads}
+            platformAdmin={canEdit}
+            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
+          />
+        }
+        buttons={
+          <>
             {matchingRows > 0 && (
               <>
-                <ExportButton slug={slug} href={exportHref("xlsx")} title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
+                <ExportButton slug={slug} href={exportHref("xlsx")} className="btn px-3 py-1.5" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
                   Excel
                 </ExportButton>
-                <ExportButton slug={slug} href={exportHref("csv")} title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
+                <ExportButton slug={slug} href={exportHref("csv")} className="btn px-3 py-1.5" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
                   CSV
                 </ExportButton>
               </>
             )}
             {canEdit && (
-              <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn-secondary py-2">
+              <Link href={`/a/${slug}/exhibitors/import${showParam}`} className="btn px-3 py-1.5">
                 <Icon name="upload" className="size-4" /> Import
               </Link>
             )}
             {/* Every account may add an exhibitor, and then edit or delete it. */}
-            <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn">
+            <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn px-3 py-1.5">
               <Icon name="plus" className="size-4" /> Add exhibitor
             </Link>
-          </div>
+          </>
         }
-      />
-
+        notices={
+          <>
       {/* Filtered to one trade show: tell where its list comes from and how often it is updated. */}
       {show && <ShowExhibitorsNote />}
 
@@ -166,7 +180,9 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           action={fillCountries.bind(null, slug)}
         />
       )}
-
+          </>
+        }
+      >
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
           <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -351,6 +367,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
+      </ExhibitorsLayout>
     </>
   );
 }

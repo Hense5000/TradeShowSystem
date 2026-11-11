@@ -1,17 +1,19 @@
-// The ad spaces: 3 at the top of the dashboard (slots 1-3) and 4 at the top
-// of the Trade shows page (slots 4-7). A platform admin uploads an image and a
+// The ad spaces: 3 at the top of the dashboard (slots 1-3), 4 at the top of
+// the Trade shows page (slots 4-7) and 4 at the top of the Exhibitors page
+// (slots 8-11). A platform admin uploads an image and a
 // link per space on Super admin → Ads. An empty space shows "Your ad here!"
 // and a "Get this ad space" button, whose form is emailed to AD_NOTIFY_EMAIL
 // (Henrik's address when not set).
 
-export const AD_SLOTS = [1, 2, 3, 4, 5, 6, 7] as const;
+export const AD_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 export type AdSlot = (typeof AD_SLOTS)[number];
 
-/** The pages with ad spaces, each with its slots from left to right. */
+/** The pages with ad spaces, each with its slots from left to right; `where` is how a sentence names the page. */
 export const AD_PAGES = [
-  { key: "dashboard", label: "Dashboard", slots: [1, 2, 3] },
-  { key: "tradeShows", label: "Trade shows page", slots: [4, 5, 6, 7] },
-] as const satisfies readonly { key: string; label: string; slots: readonly AdSlot[] }[];
+  { key: "dashboard", label: "Dashboard", where: "dashboard", slots: [1, 2, 3] },
+  { key: "tradeShows", label: "Trade shows page", where: "Trade shows page", slots: [4, 5, 6, 7] },
+  { key: "exhibitors", label: "Exhibitors page", where: "Exhibitors page", slots: [8, 9, 10, 11] },
+] as const satisfies readonly { key: string; label: string; where: string; slots: readonly AdSlot[] }[];
 export type AdPageKey = (typeof AD_PAGES)[number]["key"];
 
 /** The page a slot is on, and its place there (1 = leftmost). */
@@ -98,7 +100,7 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
     ["Sent from account", `${account.name} (${account.userEmail})`],
   ];
   const shown = rows.filter(([, v]) => v);
-  const where = request.slot && adPlace(request.slot).page.key === "tradeShows" ? "Trade shows page" : "dashboard";
+  const where = request.slot ? adPlace(request.slot).page.where : "dashboard";
   const intro = `${request.company} would like to advertise on the Trade Show System ${where}.`;
   return {
     subject: `Ad space request: ${request.company}`,

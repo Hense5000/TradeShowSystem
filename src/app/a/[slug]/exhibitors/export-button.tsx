@@ -13,7 +13,19 @@ import { upgradePlan } from "../billing/actions";
  * file, and a dialog explains it, with an Upgrade button for the owner.
  * During the free trial it answers that downloads need a subscription.
  */
-export function ExportButton({ slug, href, title, children }: { slug: string; href: string; title: string; children: React.ReactNode }) {
+export function ExportButton({
+  slug,
+  href,
+  title,
+  className = "btn-secondary py-2",
+  children,
+}: {
+  slug: string;
+  href: string;
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState<ExportLimitInfo | null>(null);
   const [trial, setTrial] = useState<TrialLockInfo | null>(null);
@@ -54,7 +66,7 @@ export function ExportButton({ slug, href, title, children }: { slug: string; hr
 
   return (
     <>
-      <button type="button" className="btn-secondary py-2" title={title} onClick={download} disabled={busy}>
+      <button type="button" className={className} title={title} onClick={download} disabled={busy}>
         <Icon name="download" className="size-4" /> {busy ? "Preparing…" : children}
       </button>
       {limit && <LimitDialog slug={slug} info={limit} onClose={() => setLimit(null)} />}
