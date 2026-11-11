@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { adNotifyEmail, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
-  it("accepts 1 to 6 only (3 on the dashboard, 3 on the Trade shows page)", () => {
+  it("accepts 1 to 7 only (3 on the dashboard, 4 on the Trade shows page)", () => {
     expect(adSlot("1")).toBe(1);
     expect(adSlot(3)).toBe(3);
-    expect(adSlot("6")).toBe(6);
-    expect(adSlot("7")).toBeNull();
+    expect(adSlot("7")).toBe(7);
+    expect(adSlot("8")).toBeNull();
     expect(adSlot(0)).toBeNull();
     expect(adSlot("x")).toBeNull();
     expect(adSlot(null)).toBeNull();
@@ -88,7 +88,7 @@ describe("adPlace", () => {
   it("tells the page and the place on it", () => {
     expect(adPlace(2)).toMatchObject({ page: { key: "dashboard" }, position: 2 });
     expect(adPlace(4)).toMatchObject({ page: { key: "tradeShows" }, position: 1 });
-    expect(adPlace(6)).toMatchObject({ page: { key: "tradeShows" }, position: 3 });
+    expect(adPlace(7)).toMatchObject({ page: { key: "tradeShows" }, position: 4 });
   });
   it("names the Trade shows page in a request for one of its spaces", () => {
     const mail = adRequestEmailContent(
@@ -96,7 +96,7 @@ describe("adPlace", () => {
       { name: "Buyer Ltd", userEmail: "anna@buyer.com" },
     );
     expect(mail.text).toContain("advertise on the Trade Show System Trade shows page");
-    expect(mail.text).toContain("Ad space: Trade shows page, space 2 of 3");
+    expect(mail.text).toContain("Ad space: Trade shows page, space 2 of 4");
   });
 });
 

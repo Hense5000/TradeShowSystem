@@ -1,20 +1,20 @@
-// The ad spaces: 3 at the top of the dashboard (slots 1-3) and 3 at the top
-// of the Trade shows page (slots 4-6). A platform admin uploads an image and a
+// The ad spaces: 3 at the top of the dashboard (slots 1-3) and 4 at the top
+// of the Trade shows page (slots 4-7). A platform admin uploads an image and a
 // link per space on Super admin → Ads. An empty space shows "Your ad here!"
 // and a "Get this ad space" button, whose form is emailed to AD_NOTIFY_EMAIL
 // (Henrik's address when not set).
 
-export const AD_SLOTS = [1, 2, 3, 4, 5, 6] as const;
+export const AD_SLOTS = [1, 2, 3, 4, 5, 6, 7] as const;
 export type AdSlot = (typeof AD_SLOTS)[number];
 
-/** The pages with ad spaces, each with its 3 slots from left to right. */
+/** The pages with ad spaces, each with its slots from left to right. */
 export const AD_PAGES = [
   { key: "dashboard", label: "Dashboard", slots: [1, 2, 3] },
-  { key: "tradeShows", label: "Trade shows page", slots: [4, 5, 6] },
+  { key: "tradeShows", label: "Trade shows page", slots: [4, 5, 6, 7] },
 ] as const satisfies readonly { key: string; label: string; slots: readonly AdSlot[] }[];
 export type AdPageKey = (typeof AD_PAGES)[number]["key"];
 
-/** The page a slot is on, and its place there (1, 2 or 3). */
+/** The page a slot is on, and its place there (1 = leftmost). */
 export function adPlace(slot: AdSlot) {
   const page = AD_PAGES.find((p) => (p.slots as readonly number[]).includes(slot))!;
   return { page, position: (page.slots as readonly number[]).indexOf(slot) + 1 };
@@ -94,7 +94,7 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
     ["Email", request.email],
     ["Phone", request.phone],
     ["Website", request.website],
-    ["Ad space", request.slot ? `${adPlace(request.slot).page.label}, space ${adPlace(request.slot).position} of 3` : "Any"],
+    ["Ad space", request.slot ? `${adPlace(request.slot).page.label}, space ${adPlace(request.slot).position} of ${adPlace(request.slot).page.slots.length}` : "Any"],
     ["Sent from account", `${account.name} (${account.userEmail})`],
   ];
   const shown = rows.filter(([, v]) => v);

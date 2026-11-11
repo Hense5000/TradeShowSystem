@@ -11,7 +11,7 @@ import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
 import { FavoriteShowStar } from "./favorite-show-star";
-import { TradeShowsTopRow } from "./top-row";
+import { TradeShowsLayout } from "./trade-shows-layout";
 import { DashboardAds } from "../dashboard-ads";
 import { AD_PAGES } from "@/lib/dashboard-ads";
 import { isShowFinderConfigured } from "@/lib/show-finder-run";
@@ -112,7 +112,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     <>
       <PageHeader title="Trade shows" description="Trade shows around the world, shared by every account." />
 
-      <TradeShowsTopRow
+      <TradeShowsLayout
         slug={slug}
         ads={
           <DashboardAds
@@ -123,11 +123,9 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
             requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
           />
         }
+        notices={withoutOrganizer > 0 && <OrganizerCard slug={slug} missing={withoutOrganizer} />}
         admin={canEdit ? { finderCenters: useFinder ? finderCenters : null, withoutExhibitors: useAi ? withoutExhibitors : null } : null}
-      />
-
-      {withoutOrganizer > 0 && <OrganizerCard slug={slug} missing={withoutOrganizer} />}
-
+      >
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
           <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -249,6 +247,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
           <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
+      </TradeShowsLayout>
     </>
   );
 }

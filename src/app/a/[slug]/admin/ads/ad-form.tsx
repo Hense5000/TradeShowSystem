@@ -47,7 +47,7 @@ export function AdForm({
 }: {
   slug: string;
   slot: number;
-  /** 1, 2 or 3: the space's place on its page, from the left. */
+  /** The space's place on its page, 1 = leftmost. */
   position: number;
   /** Where the ad is shown, e.g. "dashboard". */
   pageName: string;

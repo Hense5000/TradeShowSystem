@@ -10,8 +10,8 @@ export const AD_BOX = "aspect-[1050/360]";
 type Ad = { slot: number; linkUrl: string; name: string | null; updatedAt: Date };
 
 /**
- * 3 ad spaces in a row: the advertiser's image, or "Your ad here!" while the
- * space is free. Used on the dashboard (slots 1-3) and the Trade shows page (4-6).
+ * A row of ad spaces: the advertiser's image, or "Your ad here!" while the
+ * space is free. Used on the dashboard (slots 1-3) and the Trade shows page (4-7).
  */
 export function DashboardAds({
   slug,
@@ -27,7 +27,7 @@ export function DashboardAds({
   requester: { name: string; company: string; email: string };
 }) {
   return (
-    <div className="grid gap-3.5 sm:grid-cols-3">
+    <div className={`grid gap-3.5 ${slots.length === 4 ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
       {slots.map((slot) => {
         const ad = ads.find((a) => a.slot === slot);
         return (
