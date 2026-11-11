@@ -14,12 +14,12 @@ export default async function AdsPage({ params }: PageProps<"/a/[slug]/admin/ads
     <>
       <PageHeader
         title="Ads"
-        description={`3 ad spaces at the top of every user's dashboard and 3 at the top of the Trade shows page. Upload an image and the link to the advertiser's website. A free space shows “Your ad here!” and a “Get this ad space” button; those requests are emailed to ${adNotifyEmail()}.`}
+        description={`3 ad spaces at the top of every user's dashboard and 4 at the top of the Trade shows page. Upload an image and the link to the advertiser's website. A free space shows “Your ad here!” and a “Get this ad space” button; those requests are emailed to ${adNotifyEmail()}.`}
       />
       {AD_PAGES.map((page) => (
         <section key={page.key} id={page.key} className="flex scroll-mt-6 flex-col gap-3">
           <h2 className="text-lg font-bold">{page.label}</h2>
-          <div className="grid items-start gap-3.5 xl:grid-cols-3">
+          <div className={`grid items-start gap-3.5 ${page.slots.length === 4 ? "md:grid-cols-2 2xl:grid-cols-4" : "xl:grid-cols-3"}`}>
             {page.slots.map((slot, i) => {
               const ad = ads.find((a) => a.slot === slot);
               return (
