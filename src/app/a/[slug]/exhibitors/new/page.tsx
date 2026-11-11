@@ -2,8 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { SaveForm } from "@/components/save-form";
 import { isAiConfigured } from "@/lib/ai-run";
-import { isPlatformAdmin } from "@/lib/platform-admin";
-import { requireMembership } from "@/lib/tenant";
+import { requirePlatformAdmin } from "@/lib/tenant";
 import { createExhibitor, findExhibitorContact } from "../actions";
 import { ExhibitorFields } from "../exhibitor-fields";
 import { tradeShowOptions } from "../show-select";
@@ -13,9 +12,9 @@ export const maxDuration = 300;
 
 export default async function NewExhibitorPage({ params, searchParams }: PageProps<"/a/[slug]/exhibitors/new">) {
   const { slug } = await params;
-  const { user } = await requireMembership(slug);
-  // The AI buttons are for platform admins only, like their actions.
-  const useAi = isPlatformAdmin(user.email) && isAiConfigured();
+  // Only the platform admin (system owner) adds exhibitors.
+  await requirePlatformAdmin(slug);
+  const useAi = isAiConfigured();
   const { show } = await searchParams;
   const shows = await tradeShowOptions();
 

@@ -147,10 +147,12 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
                 <Icon name="upload" className="size-4" /> Import
               </Link>
             )}
-            {/* Every account may add an exhibitor, and then edit or delete it. */}
-            <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn px-3 py-1.5">
-              <Icon name="plus" className="size-4" /> Add exhibitor
-            </Link>
+            {/* Only the platform admin (system owner) adds exhibitors. */}
+            {canEdit && (
+              <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn px-3 py-1.5">
+                <Icon name="plus" className="size-4" /> Add exhibitor
+              </Link>
+            )}
             {missingContacts > 0 && (
               <AiFillButton
                 count={missingContacts}
@@ -185,11 +187,13 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           </span>
           <h2 className="mt-1 font-bold">No exhibitors yet</h2>
           <p className="text-sm text-muted">
-            {canEdit ? "Add the first exhibitor, or import a trade show's exhibitor list." : "Add the first exhibitor."}
+            {canEdit ? "Add the first exhibitor, or import a trade show's exhibitor list." : "Exhibitors will show up here once they are added."}
           </p>
-          <Link href={`/a/${slug}/exhibitors/new`} className="btn mt-2">
-            <Icon name="plus" className="size-4" /> Add exhibitor
-          </Link>
+          {canEdit && (
+            <Link href={`/a/${slug}/exhibitors/new`} className="btn mt-2">
+              <Icon name="plus" className="size-4" /> Add exhibitor
+            </Link>
+          )}
         </section>
       ) : (
         <section className="card overflow-hidden p-0">

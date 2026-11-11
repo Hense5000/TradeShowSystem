@@ -42,9 +42,10 @@ async function editableExhibitor(slug: string, id: string) {
   return exhibitor && canEditExhibitor(user.email, organization.id, exhibitor) ? exhibitor : null;
 }
 
-/** Every member may add an exhibitor; their account may then edit and delete it. */
+/** Adds an exhibitor. Only the platform admin (system owner) may; exhibitors customer accounts added earlier stay editable by them. */
 export async function createExhibitor(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  const { organization } = await requireMembership(slug);
+  // Only the platform admin (system owner) adds exhibitors.
+  const { organization } = await requirePlatformAdmin(slug);
   const parsed = exhibitorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   if (!(await showExists(parsed.data.tradeShowId))) return { error: "Choose the trade show." };
