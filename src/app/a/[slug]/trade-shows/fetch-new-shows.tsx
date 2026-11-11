@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
-import { PageHeader } from "@/components/page-header";
 import { ProgressBar } from "@/components/progress-bar";
 import { runSummary } from "@/lib/show-finder";
 import { fetchNewShowsRound } from "./actions";
@@ -11,28 +10,13 @@ import { fetchNewShowsRound } from "./actions";
 type Totals = { checked: number; found: number; failed: number; left: number };
 
 /**
- * The Trade shows page header for a platform admin, with a "Fetch all new
- * trade shows" button next to Import and Add trade show. It runs the AI trade
- * show finder on every chosen exhibition center right away, the same check
- * the weekly update makes. The server checks as many centers as it can per
- * call; the page keeps calling until all are done and shows the progress
- * under the header.
+ * "Fetch events" on the Trade shows page (platform admin). It runs the AI
+ * trade show finder on every chosen exhibition center right away, the same
+ * check the weekly update makes. The server checks as many centers as it can
+ * per call; the page keeps calling until all are done. Gives the button and
+ * the progress card, which the page places apart.
  */
-export function FetchNewShowsHeader({
-  slug,
-  title,
-  description,
-  centers,
-  children,
-}: {
-  slug: string;
-  title: string;
-  description: string;
-  /** Chosen centers with an events page: what the finder will check. */
-  centers: number;
-  /** The other header buttons (Import, Add trade show). */
-  children: React.ReactNode;
-}) {
+export function useFetchNewShows(slug: string, centers: number) {
   const router = useRouter();
   const [progress, setProgress] = useState<Totals>();
   const [message, setMessage] = useState<{ text: string; ok: boolean }>();
@@ -80,49 +64,41 @@ export function FetchNewShowsHeader({
   const total = progress ? Math.max(centers, progress.checked + progress.left) : centers;
   const percent = progress && total > 0 ? Math.min(99, Math.floor((progress.checked / total) * 100)) : 0;
 
-  return (
-    <>
-      <PageHeader
-        title={title}
-        description={description}
-        action={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn-secondary py-2"
-              onClick={() => void run()}
-              disabled={running || centers === 0}
-              title={centers === 0 ? "Choose exhibition centers in the AI trade show finder first." : `Check the events pages of all ${centers} chosen exhibition centers now`}
-            >
-              <Icon name="sparkle" className="size-4" /> {running ? "Fetching new trade shows…" : "Fetch all new trade shows"}
-            </button>
-            {children}
-          </div>
-        }
-      />
-      {(progress || message) && (
-        <section className="card flex flex-col gap-3 py-4" aria-live="polite">
-          <div className="flex items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-              <Icon name="sparkle" className="size-5" />
-            </span>
-            <div className="min-w-56 flex-1 text-sm">
-              <p className="font-semibold">{running ? "Fetching new trade shows" : "New trade shows fetched"}</p>
-              <p className={message && !message.ok ? "text-bad" : "text-muted"}>
-                {message?.text ??
-                  "AI reads the events page of each chosen exhibition center and adds the trade shows in the next 6 months that are not in the list yet. With many centers this takes a while."}
-              </p>
-            </div>
-          </div>
-          {progress && (
-            <ProgressBar
-              label={`Checked ${progress.checked} of ${total} centers · ${progress.found} new ${progress.found === 1 ? "trade show" : "trade shows"} added`}
-              percent={percent}
-              ariaLabel="Progress"
-            />
-          )}
-        </section>
-      )}
-    </>
+  const button = (
+    <button
+      type="button"
+      className="btn py-1.5"
+      onClick={() => void run()}
+      disabled={running || centers === 0}
+      title={centers === 0 ? "Choose exhibition centers in the AI trade show finder first." : `Check the events pages of all ${centers} chosen exhibition centers now`}
+    >
+      <Icon name="sparkle" className="size-4" /> {running ? "Fetching events…" : "Fetch events"}
+    </button>
   );
+
+  const panel = (progress || message) && (
+    <section className="card flex flex-col gap-3 py-4" aria-live="polite">
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+          <Icon name="sparkle" className="size-5" />
+        </span>
+        <div className="min-w-56 flex-1 text-sm">
+          <p className="font-semibold">{running ? "Fetching new trade shows" : "New trade shows fetched"}</p>
+          <p className={message && !message.ok ? "text-bad" : "text-muted"}>
+            {message?.text ??
+              "AI reads the events page of each chosen exhibition center and adds the trade shows in the next 6 months that are not in the list yet. With many centers this takes a while."}
+          </p>
+        </div>
+      </div>
+      {progress && (
+        <ProgressBar
+          label={`Checked ${progress.checked} of ${total} centers · ${progress.found} new ${progress.found === 1 ? "trade show" : "trade shows"} added`}
+          percent={percent}
+          ariaLabel="Progress"
+        />
+      )}
+    </section>
+  );
+
+  return { button, panel };
 }

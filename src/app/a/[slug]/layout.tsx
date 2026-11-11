@@ -79,7 +79,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
                   // Opens the list of accounts (moved here from the top of the menu).
                   { label: "Switch account", icon: "switch" as const, path: "switch-account", href: "/accounts?choose=1" },
                   { label: "Speed check", icon: "dashboard" as const, path: "admin/speed" },
-                  { label: "Dashboard ads", icon: "grid" as const, path: "admin/ads" },
+                  { label: "Ads", icon: "grid" as const, path: "admin/ads" },
                   {
                     label: "Support requests",
                     icon: "help" as const,

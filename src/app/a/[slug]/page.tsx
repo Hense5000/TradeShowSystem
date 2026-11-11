@@ -11,6 +11,7 @@ import { requireMembership } from "@/lib/tenant";
 import { showStatus } from "@/lib/trade-shows";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { DashboardAds } from "./dashboard-ads";
+import { AD_PAGES } from "@/lib/dashboard-ads";
 import { RecommendedShows } from "./favorites/recommended-shows";
 
 // The follow-ups card under "Lead retrieval active" lists at most this many.
@@ -101,7 +102,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
       _sum: { projectValue: true },
       _count: true,
     }),
-    db.dashboardAd.findMany({ select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
+    db.dashboardAd.findMany({ where: { slot: { in: [...AD_PAGES[0].slots] } }, select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
   ]);
 
   // Running projects are the leads still being worked on; won ones are shown apart.
@@ -121,6 +122,7 @@ export default async function Dashboard({ params, searchParams }: PageProps<"/a/
         <div className="xl:col-span-3">
           <DashboardAds
             slug={slug}
+            slots={AD_PAGES[0].slots}
             ads={ads}
             platformAdmin={isPlatformAdmin(user.email)}
             requester={{ name: user.name ?? "", company: organization.name, email: user.email }}

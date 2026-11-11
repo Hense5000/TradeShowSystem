@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { MAX_AD_REQUEST_MESSAGE } from "@/lib/dashboard-ads";
+import { adPlace, adSlot, MAX_AD_REQUEST_MESSAGE } from "@/lib/dashboard-ads";
 import { requestAdSpace } from "./ad-actions";
 
 /** The "Get this ad space" button on an empty ad space, and its form popup. */
@@ -64,7 +64,7 @@ function RequestDialog({
           <>
             <h2 id="ad-request-title" className="pr-6 text-xl font-bold">Get this ad space</h2>
             <p className="mt-1 text-sm text-muted">
-              Show your company on the dashboard of every Trade Show System user. Fill in the form and we will contact you with prices and details.
+              Show your company on the {where(slot)} of every Trade Show System user. Fill in the form and we will contact you with prices and details.
             </p>
             <form action={action} className="mt-4 flex flex-col gap-3">
               <input type="hidden" name="slot" value={slot} />
@@ -118,4 +118,10 @@ function RequestDialog({
       </div>
     </div>
   );
+}
+
+/** Where the space is, in the words of the form: "dashboard" or "Trade shows page". */
+function where(slot: number) {
+  const s = adSlot(slot);
+  return s && adPlace(s).page.key === "tradeShows" ? "Trade shows page" : "dashboard";
 }

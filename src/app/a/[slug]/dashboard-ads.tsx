@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AD_SLOTS, adImageUrl } from "@/lib/dashboard-ads";
+import { type AdSlot, adImageUrl } from "@/lib/dashboard-ads";
 import { AdSpaceRequest } from "./ad-space-request";
 
 // The spaces have the shape of a 1050 x 360 ad image, so such an image is shown
@@ -9,21 +9,26 @@ export const AD_BOX = "aspect-[1050/360]";
 
 type Ad = { slot: number; linkUrl: string; name: string | null; updatedAt: Date };
 
-/** The 3 ad spaces on the dashboard: the advertiser's image, or "Your ad here!" while the space is free. */
+/**
+ * 3 ad spaces in a row: the advertiser's image, or "Your ad here!" while the
+ * space is free. Used on the dashboard (slots 1-3) and the Trade shows page (4-6).
+ */
 export function DashboardAds({
   slug,
+  slots,
   ads,
   platformAdmin,
   requester,
 }: {
   slug: string;
+  slots: readonly AdSlot[];
   ads: Ad[];
   platformAdmin: boolean;
   requester: { name: string; company: string; email: string };
 }) {
   return (
     <div className="grid gap-3.5 sm:grid-cols-3">
-      {AD_SLOTS.map((slot) => {
+      {slots.map((slot) => {
         const ad = ads.find((a) => a.slot === slot);
         return (
           <div key={slot} className="relative">

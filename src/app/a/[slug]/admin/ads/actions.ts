@@ -9,7 +9,7 @@ import { requirePlatformAdmin } from "@/lib/tenant";
 export type SaveAdState = ActionState | { saved: true };
 
 /**
- * Saves the ad in one of the 3 dashboard spaces. A new image is needed for an
+ * Saves the ad in one of the ad spaces (dashboard or Trade shows page). A new image is needed for an
  * empty space; on a filled one the image may be left out to change only the link.
  */
 export async function saveAd(slug: string, _prev: SaveAdState, formData: FormData): Promise<SaveAdState> {
@@ -36,6 +36,7 @@ export async function saveAd(slug: string, _prev: SaveAdState, formData: FormDat
     if (count === 0) return { error: "Choose an image for the ad." };
   }
   revalidatePath("/a/[slug]", "page");
+  revalidatePath("/a/[slug]/trade-shows", "page");
   revalidatePath(`/a/${slug}/admin/ads`);
   return { saved: true };
 }
@@ -47,6 +48,7 @@ export async function removeAd(slug: string, slotValue: number): Promise<ActionS
   if (!slot) return { error: "Unknown ad space." };
   await db.dashboardAd.deleteMany({ where: { slot } });
   revalidatePath("/a/[slug]", "page");
+  revalidatePath("/a/[slug]/trade-shows", "page");
   revalidatePath(`/a/${slug}/admin/ads`);
   return undefined;
 }
