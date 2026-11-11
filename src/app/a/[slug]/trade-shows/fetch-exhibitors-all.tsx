@@ -135,7 +135,7 @@ export function useFetchAllExhibitors(slug: string, missing: number) {
   const button = (
     <button
       type="button"
-      className="btn py-1.5"
+      className="btn px-3 py-1.5"
       onClick={() => void run()}
       disabled={running || missing === 0}
       title={missing === 0 ? "Every upcoming trade show has exhibitors." : `${waiting}. ${about}`}
