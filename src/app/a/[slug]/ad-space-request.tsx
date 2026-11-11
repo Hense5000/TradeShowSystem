@@ -120,8 +120,8 @@ function RequestDialog({
   );
 }
 
-/** Where the space is, in the words of the form: "dashboard" or "Trade shows page". */
+/** Where the space is, in the words of the form: "dashboard", "Trade shows page" or "Exhibitors page". */
 function where(slot: number) {
   const s = adSlot(slot);
-  return s && adPlace(s).page.key === "tradeShows" ? "Trade shows page" : "dashboard";
+  return s ? adPlace(s).page.where : "dashboard";
 }

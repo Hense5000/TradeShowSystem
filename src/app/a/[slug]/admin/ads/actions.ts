@@ -9,7 +9,7 @@ import { requirePlatformAdmin } from "@/lib/tenant";
 export type SaveAdState = ActionState | { saved: true };
 
 /**
- * Saves the ad in one of the ad spaces (dashboard or Trade shows page). A new image is needed for an
+ * Saves the ad in one of the ad spaces (dashboard, Trade shows page or Exhibitors page). A new image is needed for an
  * empty space; on a filled one the image may be left out to change only the link.
  */
 export async function saveAd(slug: string, _prev: SaveAdState, formData: FormData): Promise<SaveAdState> {
