@@ -82,7 +82,7 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
           </p>
         )}
       </section>
-      </AdsTableLayout>
+      {/* Inside the table column, so it is as wide as the table and the ad row above. */}
 
       {isEmailConfigured() && (
         <section className="card">
@@ -123,6 +123,7 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
           )}
         </section>
       )}
+      </AdsTableLayout>
     </>
   );
 }
