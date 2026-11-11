@@ -1,10 +1,10 @@
-// The column of buttons on a wide screen, as on the Trade shows page.
-const BUTTONS_WIDTH = "xl:w-44 xl:shrink-0";
+// The column of buttons on a wide screen; a little wider than on the Trade shows page so "Find missing contacts" fits.
+const BUTTONS_WIDTH = "xl:w-52 xl:shrink-0";
 
 /**
  * The Exhibitors page under its title: a row of 4 ad spaces as wide as the
  * table, then the notices, then the table with the page's buttons (Excel,
- * CSV, Import, Add exhibitor) in a column to its right, the first one level
+ * CSV, Import, Add exhibitor, Find missing contacts) in a column to its right, the first one level
  * with the table's top edge. On a narrow screen the buttons come above the
  * table. The same layout as the Trade shows page.
  */
@@ -15,7 +15,7 @@ export function ExhibitorsLayout({
   children,
 }: {
   ads: React.ReactNode;
-  /** Cards between the ads and the table, e.g. "exhibitors have no contact person". */
+  /** A note between the ads and the table, e.g. where a trade show's list comes from. */
   notices?: React.ReactNode;
   buttons: React.ReactNode;
   /** The table (or the "No exhibitors yet" card). */

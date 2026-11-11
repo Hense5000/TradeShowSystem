@@ -21,7 +21,7 @@ import { MAX_ADD_AT_ONCE } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
 import { addShownToList, setListMembership } from "../lists/actions";
 import { askAiSearch, fillContacts, fillCountries } from "./actions";
-import { AiFillCard } from "./ai-fill-card";
+import { AiFillButton } from "./ai-fill-button";
 import { AiSearch } from "./ai-search";
 import { ExhibitorsLayout } from "./exhibitors-layout";
 import { ExportButton } from "./export-button";
@@ -133,10 +133,10 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           <>
             {matchingRows > 0 && (
               <>
-                <ExportButton slug={slug} href={exportHref("xlsx")} className="btn px-3 py-1.5" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
+                <ExportButton slug={slug} href={exportHref("xlsx")} className="btn-secondary text-muted hover:text-ink" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as an Excel file, one row per trade show`}>
                   Excel
                 </ExportButton>
-                <ExportButton slug={slug} href={exportHref("csv")} className="btn px-3 py-1.5" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
+                <ExportButton slug={slug} href={exportHref("csv")} className="btn-secondary text-muted hover:text-ink" title={`Download the ${matching} ${matching === 1 ? "company" : "companies"} shown below as a CSV file, one row per trade show`}>
                   CSV
                 </ExportButton>
               </>
@@ -150,38 +150,32 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
             <Link href={`/a/${slug}/exhibitors/new${showParam}`} className="btn px-3 py-1.5">
               <Icon name="plus" className="size-4" /> Add exhibitor
             </Link>
+            {missingContacts > 0 && (
+              <AiFillButton
+                count={missingContacts}
+                text={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email. ${
+                  isHunterConfigured()
+                    ? "AI looks for a contact person, position, email and phone on each company's own website, and Hunter.io fills in names and emails the website does not show (one Hunter credit per company it finds addresses for). Only empty fields are filled. The websites are also read automatically during the night; Hunter.io is only asked when you press the button."
+                    : "AI looks for a contact person, position, email and phone on each company's own website and fills in only the empty fields. This also happens automatically during the night."
+                }`}
+                button="Find missing contacts"
+                pendingButton="Finding contacts…"
+                action={fillContacts.bind(null, slug, show || undefined)}
+              />
+            )}
+            {missingCountries > 0 && (
+              <AiFillButton
+                count={missingCountries}
+                text={`${missingCountries} ${missingCountries === 1 ? "exhibitor has" : "exhibitors have"} no country, but a phone number that shows it. The country is read from the phone number's international prefix, for example +45 or 0045 for Denmark. New exhibitors get it automatically.`}
+                button="Fill countries"
+                pendingButton="Filling countries…"
+                action={fillCountries.bind(null, slug)}
+              />
+            )}
           </>
         }
-        notices={
-          <>
-      {/* Filtered to one trade show: tell where its list comes from and how often it is updated. */}
-      {show && <ShowExhibitorsNote />}
-
-      {missingContacts > 0 && (
-        <AiFillCard
-          title={`${missingContacts} ${missingContacts === 1 ? "exhibitor has" : "exhibitors have"} a website but no contact person or email`}
-          text={
-            isHunterConfigured()
-              ? "AI looks for a contact person, position, email and phone on each company's own website, and Hunter.io fills in names and emails the website does not show (one Hunter credit per company it finds addresses for). Only empty fields are filled. The websites are also read automatically during the night; Hunter.io is only asked when you press the button."
-              : "AI looks for a contact person, position, email and phone on each company's own website and fills in only the empty fields. This also happens automatically during the night."
-          }
-          button="Find missing contacts"
-          pendingButton="Finding contacts…"
-          action={fillContacts.bind(null, slug, show || undefined)}
-        />
-      )}
-
-      {missingCountries > 0 && (
-        <AiFillCard
-          title={`${missingCountries} ${missingCountries === 1 ? "exhibitor has" : "exhibitors have"} no country, but a phone number that shows it`}
-          text="The country is read from the phone number's international prefix, for example +45 or 0045 for Denmark. New exhibitors get it automatically."
-          button="Fill countries"
-          pendingButton="Filling countries…"
-          action={fillCountries.bind(null, slug)}
-        />
-      )}
-          </>
-        }
+        /* Filtered to one trade show: tell where its list comes from and how often it is updated. */
+        notices={show && <ShowExhibitorsNote />}
       >
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
