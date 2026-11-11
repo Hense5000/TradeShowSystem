@@ -4,9 +4,13 @@ import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
 import { isEmailConfigured } from "@/lib/email";
-import { FAVORITES_NAME, MAX_LIST_NAME } from "@/lib/saved-lists";
+import { isPlatformAdmin } from "@/lib/platform-admin";
+import { FAVORITES_NAME } from "@/lib/saved-lists";
 import { requireMembership } from "@/lib/tenant";
+import { AdsTableLayout } from "../ads-table-layout";
+import { PageAds } from "../page-ads";
 import { createList, setEmailParts, setListEmails } from "./actions";
+import { NewListButton } from "./new-list-button";
 
 const emailParts = [
   { name: "exhibitors", field: "emailExhibitorChanges", title: "Changes to favorite exhibitors", text: "New contact person, email, phone, booth and other details, and exhibitors other users starred." },
@@ -38,19 +42,10 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
         description={`Lists of exhibitors you want to contact. Everyone in ${organization.name} sees the same lists.`}
       />
 
-      <section className="card">
-        <h2 className="font-bold">New list</h2>
-        <p className="mt-0.5 text-sm text-muted">
-          Then add exhibitors from the Exhibitors page with the <span className="font-semibold text-ink">Save</span> button, or save all the exhibitors a search shows at once.
-        </p>
-        <ActionForm action={createList.bind(null, slug)} className="mt-4 flex flex-wrap gap-2">
-          <input className="input max-w-md flex-1" name="name" required maxLength={MAX_LIST_NAME} placeholder="For example: Contact before Medica 2026" aria-label="List name" />
-          <button className="btn">
-            <Icon name="plus" className="size-4" /> Create list
-          </button>
-        </ActionForm>
-      </section>
-
+      <AdsTableLayout
+        ads={<PageAds slug={slug} page="savedLists" platformAdmin={isPlatformAdmin(user.email)} requester={{ name: user.name ?? "", company: organization.name, email: user.email }} />}
+        buttons={<NewListButton action={createList.bind(null, slug)} />}
+      >
       <section className="card overflow-hidden p-0">
         <table className="w-full text-sm">
           <thead>
@@ -83,10 +78,11 @@ export default async function SavedListsPage({ params }: PageProps<"/a/[slug]/li
         </table>
         {rows.length === 1 && (
           <p className="border-t border-line px-5 py-4 text-sm text-muted">
-            Click the star next to an exhibitor to add it to {FAVORITES_NAME}, or create your own lists above.
+            Click the star next to an exhibitor to add it to {FAVORITES_NAME}, or create your own lists with the New list button.
           </p>
         )}
       </section>
+      </AdsTableLayout>
 
       {isEmailConfigured() && (
         <section className="card">

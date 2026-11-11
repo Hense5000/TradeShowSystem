@@ -23,7 +23,7 @@ import { addShownToList, setListMembership } from "../lists/actions";
 import { askAiSearch, fillContacts, fillCountries } from "./actions";
 import { AiFillButton } from "./ai-fill-button";
 import { AiSearch } from "./ai-search";
-import { ExhibitorsLayout } from "./exhibitors-layout";
+import { AdsTableLayout } from "../ads-table-layout";
 import { ExportButton } from "./export-button";
 import { FavoriteStar } from "./favorite-star";
 import { ListMenu } from "./list-menu";
@@ -119,7 +119,8 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
     <>
       <PageHeader title="Exhibitors" description="Companies exhibiting at trade shows, shared by every account." />
 
-      <ExhibitorsLayout
+      <AdsTableLayout
+        buttonsWidth="xl:w-52"
         ads={
           <DashboardAds
             slug={slug}
@@ -361,7 +362,7 @@ export default async function ExhibitorsPage({ params, searchParams }: PageProps
           <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
-      </ExhibitorsLayout>
+      </AdsTableLayout>
     </>
   );
 }

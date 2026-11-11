@@ -11,7 +11,7 @@ type Ad = { slot: number; linkUrl: string; name: string | null; updatedAt: Date 
 
 /**
  * A row of ad spaces: the advertiser's image, or "Your ad here!" while the
- * space is free. Used on the dashboard (slots 1-3) and the Trade shows page (4-7).
+ * space is free. Used on the dashboard (slots 1-3) and the list pages (4 each, see AD_PAGES).
  */
 export function DashboardAds({
   slug,
