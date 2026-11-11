@@ -8,10 +8,12 @@ import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
 import { SearchButton, SearchForm } from "@/components/search-form";
 import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
+import { AdsTableLayout } from "../ads-table-layout";
+import { PageAds } from "../page-ads";
 
 export default async function OrganizersPage({ params, searchParams }: PageProps<"/a/[slug]/organizers">) {
   const { slug } = await params;
-  const { user } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const canEdit = isPlatformAdmin(user.email);
 
   const sp = await searchParams;
@@ -39,23 +41,24 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
 
   return (
     <>
-      <PageHeader
-        title="Exhibition organizers"
-        description="Companies that organize trade shows, shared by every account."
-        action={
+      <PageHeader title="Exhibition organizers" description="Companies that organize trade shows, shared by every account." />
+
+      <AdsTableLayout
+        ads={<PageAds slug={slug} page="organizers" platformAdmin={canEdit} requester={{ name: user.name ?? "", company: organization.name, email: user.email }} />}
+        buttons={
+          /* Only the platform admin edits the shared list: blue buttons. */
           canEdit && (
-            <div className="flex gap-2">
-              <Link href={`/a/${slug}/organizers/import`} className="btn-secondary py-2">
-                <Icon name="upload" className="size-4" /> Import
-              </Link>
-              <Link href={`/a/${slug}/organizers/new`} className="btn">
+            <>
+              <Link href={`/a/${slug}/organizers/new`} className="btn px-3 py-1.5">
                 <Icon name="plus" className="size-4" /> Add organizer
               </Link>
-            </div>
+              <Link href={`/a/${slug}/organizers/import`} className="btn px-3 py-1.5">
+                <Icon name="upload" className="size-4" /> Import
+              </Link>
+            </>
           )
         }
-      />
-
+      >
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
           <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -156,6 +159,7 @@ export default async function OrganizersPage({ params, searchParams }: PageProps
           <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
+      </AdsTableLayout>
     </>
   );
 }

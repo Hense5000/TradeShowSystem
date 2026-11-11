@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { adNotifyEmail, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
+import { adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
-  it("accepts 1 to 11 only (3 on the dashboard, 4 on the Trade shows page, 4 on the Exhibitors page)", () => {
+  it("accepts 1 to 23 only (3 on the dashboard, 4 on each of 5 other pages)", () => {
     expect(adSlot("1")).toBe(1);
     expect(adSlot(3)).toBe(3);
     expect(adSlot("7")).toBe(7);
     expect(adSlot("11")).toBe(11);
-    expect(adSlot("12")).toBeNull();
+    expect(adSlot("23")).toBe(23);
+    expect(adSlot("24")).toBeNull();
     expect(adSlot(0)).toBeNull();
     expect(adSlot("x")).toBeNull();
     expect(adSlot(null)).toBeNull();
@@ -92,6 +93,20 @@ describe("adPlace", () => {
     expect(adPlace(7)).toMatchObject({ page: { key: "tradeShows" }, position: 4 });
     expect(adPlace(8)).toMatchObject({ page: { key: "exhibitors" }, position: 1 });
     expect(adPlace(11)).toMatchObject({ page: { key: "exhibitors" }, position: 4 });
+  });
+  it("puts the Saved lists, centers and organizers pages after the Exhibitors page", () => {
+    expect(adPlace(12)).toMatchObject({ page: { key: "savedLists" }, position: 1 });
+    expect(adPlace(19)).toMatchObject({ page: { key: "centers" }, position: 4 });
+    expect(adPlace(20)).toMatchObject({ page: { key: "organizers" }, position: 1 });
+    expect(adPageSlots("organizers")).toEqual([20, 21, 22, 23]);
+  });
+  it("names the Exhibition centers page in a request for one of its spaces", () => {
+    const mail = adRequestEmailContent(
+      { name: "Anna", company: "Acme", email: "a@acme.com", phone: "", website: "", message: "", slot: 17 },
+      { name: "Buyer Ltd", userEmail: "anna@buyer.com" },
+    );
+    expect(mail.text).toContain("advertise on the Trade Show System Exhibition centers page");
+    expect(mail.text).toContain("Ad space: Exhibition centers page, space 2 of 4");
   });
   it("names the Exhibitors page in a request for one of its spaces", () => {
     const mail = adRequestEmailContent(

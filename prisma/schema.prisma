@@ -752,7 +752,7 @@ model OwnContact {
 // Super admin → Dashboard ads: an image and the advertiser's website. A slot
 // without a row shows "Your ad here!" with a "Get this ad space" button.
 model DashboardAd {
-  slot      Int      @id // 1, 2 or 3, left to right
+  slot      Int      @id // AD_PAGES in src/lib/dashboard-ads.ts: 1-3 dashboard, then 4 per page
   image     Bytes
   imageType String // e.g. "image/png"
   linkUrl   String

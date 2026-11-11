@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import { isEventsPageFinderConfigured, missingEventsPageWhere } from "@/lib/events-page-run";
 import { isPlatformAdmin } from "@/lib/platform-admin";
 import { requireMembership } from "@/lib/tenant";
-import { EventsPageCard } from "./events-page-card";
+import { PageAds } from "../page-ads";
+import { CentersLayout } from "./centers-layout";
 import { SearchButton, SearchForm } from "@/components/search-form";
 import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
 
@@ -25,7 +26,7 @@ function ExternalLink({ href, children }: { href: string | null; children: React
 
 export default async function CentersPage({ params, searchParams }: PageProps<"/a/[slug]/centers">) {
   const { slug } = await params;
-  const { user } = await requireMembership(slug);
+  const { user, organization } = await requireMembership(slug);
   const canEdit = isPlatformAdmin(user.email);
 
   const sp = await searchParams;
@@ -57,25 +58,13 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
 
   return (
     <>
-      <PageHeader
-        title="Exhibition centers"
-        description="Exhibition venues around the world, shared by every account."
-        action={
-          canEdit && (
-            <div className="flex gap-2">
-              <Link href={`/a/${slug}/centers/import`} className="btn-secondary py-2">
-                <Icon name="upload" className="size-4" /> Import
-              </Link>
-              <Link href={`/a/${slug}/centers/new`} className="btn">
-                <Icon name="plus" className="size-4" /> Add center
-              </Link>
-            </div>
-          )
-        }
-      />
+      <PageHeader title="Exhibition centers" description="Exhibition venues around the world, shared by every account." />
 
-      {missingEvents > 0 && <EventsPageCard slug={slug} missing={missingEvents} />}
-
+      <CentersLayout
+        slug={slug}
+        ads={<PageAds slug={slug} page="centers" platformAdmin={canEdit} requester={{ name: user.name ?? "", company: organization.name, email: user.email }} />}
+        admin={canEdit ? { missingEvents: useAi ? missingEvents : null } : null}
+      >
       {total === 0 ? (
         <section className="card flex flex-col items-center gap-2 py-12 text-center">
           <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -170,6 +159,7 @@ export default async function CentersPage({ params, searchParams }: PageProps<"/
           <Pagination page={page} pages={pages} href={pageHref} />
         </section>
       )}
+      </CentersLayout>
     </>
   );
 }
