@@ -1,16 +1,30 @@
-// The 3 ad spaces on the dashboard. A platform admin uploads an image and a
-// link per space on Super admin → Dashboard ads. An empty space shows
-// "Your ad here!" and a "Get this ad space" button, whose form is emailed to
-// AD_NOTIFY_EMAIL (Henrik's address when not set).
+// The ad spaces: 3 at the top of the dashboard (slots 1-3) and 3 at the top
+// of the Trade shows page (slots 4-6). A platform admin uploads an image and a
+// link per space on Super admin → Ads. An empty space shows "Your ad here!"
+// and a "Get this ad space" button, whose form is emailed to AD_NOTIFY_EMAIL
+// (Henrik's address when not set).
 
-export const AD_SLOTS = [1, 2, 3] as const;
+export const AD_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 export type AdSlot = (typeof AD_SLOTS)[number];
+
+/** The pages with ad spaces, each with its 3 slots from left to right. */
+export const AD_PAGES = [
+  { key: "dashboard", label: "Dashboard", slots: [1, 2, 3] },
+  { key: "tradeShows", label: "Trade shows page", slots: [4, 5, 6] },
+] as const satisfies readonly { key: string; label: string; slots: readonly AdSlot[] }[];
+export type AdPageKey = (typeof AD_PAGES)[number]["key"];
+
+/** The page a slot is on, and its place there (1, 2 or 3). */
+export function adPlace(slot: AdSlot) {
+  const page = AD_PAGES.find((p) => (p.slots as readonly number[]).includes(slot))!;
+  return { page, position: (page.slots as readonly number[]).indexOf(slot) + 1 };
+}
 
 /** The images an ad may be. SVG is left out, since it can carry scripts. */
 export const AD_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 export const MAX_AD_IMAGE_BYTES = 2 * 1024 * 1024;
 
-/** The slot number from a form or URL, or null when it is not 1, 2 or 3. */
+/** The slot number from a form or URL, or null when it is not one of AD_SLOTS. */
 export function adSlot(value: unknown): AdSlot | null {
   const n = Number(value);
   return AD_SLOTS.find((s) => s === n) ?? null;
@@ -80,11 +94,12 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
     ["Email", request.email],
     ["Phone", request.phone],
     ["Website", request.website],
-    ["Ad space", request.slot ? `${request.slot} of 3` : "Any"],
+    ["Ad space", request.slot ? `${adPlace(request.slot).page.label}, space ${adPlace(request.slot).position} of 3` : "Any"],
     ["Sent from account", `${account.name} (${account.userEmail})`],
   ];
   const shown = rows.filter(([, v]) => v);
-  const intro = `${request.company} would like to advertise on the Trade Show System dashboard.`;
+  const where = request.slot && adPlace(request.slot).page.key === "tradeShows" ? "Trade shows page" : "dashboard";
+  const intro = `${request.company} would like to advertise on the Trade Show System ${where}.`;
   return {
     subject: `Ad space request: ${request.company}`,
     text: `${intro}\n\n${shown.map(([k, v]) => `${k}: ${v}`).join("\n")}${request.message ? `\n\nMessage:\n${request.message}` : ""}`,

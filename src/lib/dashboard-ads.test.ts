@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { adNotifyEmail, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
+import { adNotifyEmail, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
-  it("accepts 1, 2 and 3 only", () => {
+  it("accepts 1 to 6 only (3 on the dashboard, 3 on the Trade shows page)", () => {
     expect(adSlot("1")).toBe(1);
     expect(adSlot(3)).toBe(3);
-    expect(adSlot("4")).toBeNull();
+    expect(adSlot("6")).toBe(6);
+    expect(adSlot("7")).toBeNull();
+    expect(adSlot(0)).toBeNull();
     expect(adSlot("x")).toBeNull();
     expect(adSlot(null)).toBeNull();
   });
@@ -72,12 +74,29 @@ describe("adRequestEmailContent", () => {
       { name: "Buyer Ltd", userEmail: "anna@buyer.com" },
     );
     expect(mail.subject).toBe("Ad space request: Acme & Co");
-    expect(mail.text).toContain("Ad space: 1 of 3");
+    expect(mail.text).toContain("Ad space: Dashboard, space 1 of 3");
+    expect(mail.text).toContain("on the Trade Show System dashboard");
     expect(mail.text).toContain("Sent from account: Buyer Ltd (anna@buyer.com)");
     expect(mail.text).not.toContain("Phone:");
     expect(mail.text).toContain("Message:\nCall me");
     expect(mail.html).toContain("Anna &lt;Hansen&gt;");
     expect(mail.html).toContain("Acme &amp; Co");
+  });
+});
+
+describe("adPlace", () => {
+  it("tells the page and the place on it", () => {
+    expect(adPlace(2)).toMatchObject({ page: { key: "dashboard" }, position: 2 });
+    expect(adPlace(4)).toMatchObject({ page: { key: "tradeShows" }, position: 1 });
+    expect(adPlace(6)).toMatchObject({ page: { key: "tradeShows" }, position: 3 });
+  });
+  it("names the Trade shows page in a request for one of its spaces", () => {
+    const mail = adRequestEmailContent(
+      { name: "Anna", company: "Acme", email: "a@acme.com", phone: "", website: "", message: "", slot: 5 },
+      { name: "Buyer Ltd", userEmail: "anna@buyer.com" },
+    );
+    expect(mail.text).toContain("advertise on the Trade Show System Trade shows page");
+    expect(mail.text).toContain("Ad space: Trade shows page, space 2 of 3");
   });
 });
 

@@ -11,14 +11,15 @@ import { requireMembership } from "@/lib/tenant";
 import { showStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/trade-shows";
 import { isOrganizerFinderConfigured, missingOrganizerWhere } from "@/lib/organizer-finder-run";
 import { FavoriteShowStar } from "./favorite-show-star";
-import { FetchAllCard } from "./fetch-all-card";
-import { FetchNewShowsHeader } from "./fetch-new-shows";
+import { TradeShowsTopRow } from "./top-row";
+import { DashboardAds } from "../dashboard-ads";
+import { AD_PAGES } from "@/lib/dashboard-ads";
 import { isShowFinderConfigured } from "@/lib/show-finder-run";
 import { OrganizerCard } from "./organizer-card";
 import { SearchButton, SearchForm } from "@/components/search-form";
 import { PAGE_SIZE, pageLink, pageParam, Pagination } from "@/components/pagination";
 
-// "Fetch exhibitors for all" reads one page of an exhibitor directory per call to this page.
+// "Fetch exhibitors" reads one page of an exhibitor directory per call to this page.
 export const maxDuration = 300;
 
 // "" (the default) hides finished shows, which is what people look for most.
@@ -79,7 +80,8 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
   };
   const useAi = canEdit && isExhibitorFetchConfigured();
   const useFinder = canEdit && isShowFinderConfigured();
-  const [shows, matching, total, countries, withoutExhibitors, withoutOrganizer, favorites, finderCenters] = await Promise.all([
+  const adSlots = AD_PAGES[1].slots;
+  const [shows, matching, total, countries, withoutExhibitors, withoutOrganizer, favorites, finderCenters, ads] = await Promise.all([
     db.tradeShow.findMany({
       where,
       include: { center: { select: { name: true } }, organizer: { select: { id: true, name: true } }, _count: { select: { exhibitors: true } } },
@@ -95,6 +97,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
     canEdit && isOrganizerFinderConfigured() ? db.tradeShow.count({ where: missingOrganizerWhere }) : 0,
     db.favoriteShow.findMany({ where: { organizationId: organization.id }, select: { tradeShowId: true } }),
     useFinder ? db.exhibitionCenter.count({ where: { findShows: true, eventsUrl: { not: null } } }) : 0,
+    db.dashboardAd.findMany({ where: { slot: { in: [...adSlots] } }, select: { slot: true, linkUrl: true, name: true, updatedAt: true } }),
   ]);
   const favoriteIds = new Set(favorites.map((f) => f.tradeShowId));
   const countryOptions = countries
@@ -104,30 +107,25 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
   const narrowed = Boolean(q || country || view !== "all");
   const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
   const pageHref = (p: number) => pageLink(`/a/${slug}/trade-shows`, { q, view, country }, p);
-  const title = "Trade shows";
-  const description = "Trade shows around the world, shared by every account.";
-  const adminButtons = (
-    <>
-      <Link href={`/a/${slug}/trade-shows/import`} className="btn-secondary py-2">
-        <Icon name="upload" className="size-4" /> Import
-      </Link>
-      <Link href={`/a/${slug}/trade-shows/new`} className="btn">
-        <Icon name="plus" className="size-4" /> Add trade show
-      </Link>
-    </>
-  );
 
   return (
     <>
-      {useFinder ? (
-        <FetchNewShowsHeader slug={slug} title={title} description={description} centers={finderCenters}>
-          {adminButtons}
-        </FetchNewShowsHeader>
-      ) : (
-        <PageHeader title={title} description={description} action={canEdit && <div className="flex gap-2">{adminButtons}</div>} />
-      )}
+      <PageHeader title="Trade shows" description="Trade shows around the world, shared by every account." />
 
-      {withoutExhibitors > 0 && <FetchAllCard slug={slug} missing={withoutExhibitors} />}
+      <TradeShowsTopRow
+        slug={slug}
+        ads={
+          <DashboardAds
+            slug={slug}
+            slots={adSlots}
+            ads={ads}
+            platformAdmin={canEdit}
+            requester={{ name: user.name ?? "", company: organization.name, email: user.email }}
+          />
+        }
+        admin={canEdit ? { finderCenters: useFinder ? finderCenters : null, withoutExhibitors: useAi ? withoutExhibitors : null } : null}
+      />
+
       {withoutOrganizer > 0 && <OrganizerCard slug={slug} missing={withoutOrganizer} />}
 
       {total === 0 ? (
@@ -141,7 +139,7 @@ export default async function TradeShowsPage({ params, searchParams }: PageProps
           </p>
           {canEdit && (
             <Link href={`/a/${slug}/trade-shows/new`} className="btn mt-2">
-              <Icon name="plus" className="size-4" /> Add trade show
+              <Icon name="plus" className="size-4" /> Add event
             </Link>
           )}
         </section>

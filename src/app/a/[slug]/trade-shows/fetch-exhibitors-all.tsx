@@ -20,15 +20,16 @@ type Progress = {
 type LogLine = { show: string; text: string; ok: boolean };
 
 /**
- * A card above the trade show list that fetches exhibitors for every show
- * that has none yet, one show at a time while the page stays open. A show
- * without an Exhibitor directory URL gets one found by AI on the web first.
- * Each show is tried once, so a show without a public list is not searched
- * again on the next run; a show whose lookup failed is tried again. Under
- * the bar it lists what happened to each show. Contact persons are left to
- * the nightly run.
+ * "Fetch exhibitors" on the Trade shows page (platform admin): fetches
+ * exhibitors for every upcoming show that has none yet, one show at a time
+ * while the page stays open. A show without an Exhibitor directory URL gets
+ * one found by AI on the web first. Each show is tried once, so a show
+ * without a public list is not searched again on the next run; a show whose
+ * lookup failed is tried again. The progress card lists what happened to each
+ * show. Contact persons are left to the nightly run. Gives the button and the
+ * card, which the page places apart.
  */
-export function FetchAllCard({ slug, missing }: { slug: string; missing: number }) {
+export function useFetchAllExhibitors(slug: string, missing: number) {
   const router = useRouter();
   const [progress, setProgress] = useState<Progress>();
   const [message, setMessage] = useState<string>();
@@ -127,26 +128,33 @@ export function FetchAllCard({ slug, missing }: { slug: string; missing: number 
     }
   }
 
-  return (
-    <section className="card flex flex-col gap-3 py-4">
+  const about =
+    "AI reads each show's exhibitor list and adds the exhibitors to the Exhibitors section. A show without an Exhibitor directory URL gets one found on the web first. Contact persons are found by the nightly run.";
+  const waiting = `${missing} upcoming ${missing === 1 ? "trade show has" : "trade shows have"} no exhibitors yet`;
+
+  const button = (
+    <button
+      type="button"
+      className="btn py-1.5"
+      onClick={() => void run()}
+      disabled={running || missing === 0}
+      title={missing === 0 ? "Every upcoming trade show has exhibitors." : `${waiting}. ${about}`}
+    >
+      <Icon name="users" className="size-4" /> {running ? "Fetching exhibitors…" : "Fetch exhibitors"}
+      {!running && missing > 0 && <span className="rounded-full bg-white/25 px-1.5 text-xs leading-5 tabular-nums">{missing}</span>}
+    </button>
+  );
+
+  const panel = (running || message !== undefined || log.length > 0) && (
+    <section className="card flex flex-col gap-3 py-4" aria-live="polite">
       <div className="flex flex-wrap items-center gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
           <Icon name="sparkle" className="size-5" />
         </span>
         <div className="min-w-56 flex-1 text-sm">
-          <p className="font-semibold">
-            {missing} upcoming {missing === 1 ? "trade show has" : "trade shows have"} no exhibitors yet
-          </p>
-          <p className="text-muted">
-            {message ??
-              "AI reads each show's exhibitor list and adds the exhibitors to the Exhibitors section. A show without an Exhibitor directory URL gets one found on the web first. Contact persons are found by the nightly run."}
-          </p>
+          <p className="font-semibold">{running ? `Fetching exhibitors · ${waiting}` : "Exhibitors fetched"}</p>
+          <p className="text-muted">{message ?? about}</p>
         </div>
-        {missing > 0 && (
-          <button type="button" className="btn" onClick={() => void run()} disabled={running}>
-            {running ? "Fetching exhibitors…" : "Fetch exhibitors for all"}
-          </button>
-        )}
       </div>
       {progress && <AllProgress progress={progress} />}
       {log.length > 0 && (
@@ -161,6 +169,8 @@ export function FetchAllCard({ slug, missing }: { slug: string; missing: number 
       )}
     </section>
   );
+
+  return { button, panel };
 }
 
 function AllProgress({ progress: p }: { progress: Progress }) {

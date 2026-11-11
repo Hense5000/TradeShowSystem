@@ -36,15 +36,21 @@ async function prepare(file: File): Promise<File> {
   return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".webp", { type: "image/webp" }) : file;
 }
 
-/** Upload, link and preview for one of the 3 dashboard ad spaces. */
+/** Upload, link and preview for one ad space. */
 export function AdForm({
   slug,
   slot,
+  position,
+  pageName,
   ad,
   boxClass,
 }: {
   slug: string;
   slot: number;
+  /** 1, 2 or 3: the space's place on its page, from the left. */
+  position: number;
+  /** Where the ad is shown, e.g. "dashboard". */
+  pageName: string;
   ad: { imageUrl: string; linkUrl: string; name: string | null } | null;
   boxClass: string;
 }) {
@@ -79,11 +85,11 @@ export function AdForm({
   return (
     <section id={`ad-${slot}`} className="card flex scroll-mt-6 flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-bold">Ad space {slot}</h2>
+        <h3 className="font-bold">Ad space {position}</h3>
         <span className={`pill ${ad ? "pill-ok" : "pill-neutral"}`}>{ad ? "Showing ad" : "Free: shows “Your ad here!”"}</span>
       </div>
 
-      {/* The preview has the size of the space on a wide screen's dashboard. */}
+      {/* The preview has the size of the space on a wide screen. */}
       <div className={`mx-auto grid w-full max-w-[21rem] place-items-center overflow-hidden rounded-xl border border-dashed border-line-strong bg-surface ${boxClass}`}>
         {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -123,14 +129,14 @@ export function AdForm({
             <input id={`ad-name-${slot}`} name="name" className="input" maxLength={200} defaultValue={ad?.name ?? ""} placeholder="Shown when the mouse is over the ad" />
           </div>
           {error && <p className="error">{error}</p>}
-          {saved && <p className="success">Saved. The ad is now on the dashboard.</p>}
+          {saved && <p className="success">Saved. The ad is now on the {pageName}.</p>}
           <div className="flex flex-wrap items-center justify-between gap-2">
             {ad ? (
               <button
                 type="button"
                 className="btn-danger"
                 onClick={() => {
-                  if (!window.confirm(`Remove the ad in space ${slot}? It will show “Your ad here!” again.`)) return;
+                  if (!window.confirm(`Remove the ad in space ${position} on the ${pageName}? It will show “Your ad here!” again.`)) return;
                   startRemove(async () => setRemoveError((await removeAd(slug, slot))?.error));
                 }}
               >
