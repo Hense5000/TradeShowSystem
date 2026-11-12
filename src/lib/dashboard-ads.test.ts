@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adFreeText, adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
+import { adFreeText, adPriceText, adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
   it("accepts 1 to 23 only (3 on the dashboard, 4 on each of 5 other pages)", () => {
@@ -161,5 +161,12 @@ describe("adFreeText", () => {
     expect(adFreeText(3)).toBe("Your ad here - €99 monthly");
     expect(adFreeText(4)).toBe("Your ad here - €69 monthly");
     expect(adFreeText(23)).toBe("Your ad here - €69 monthly");
+  });
+});
+
+describe("adPriceText", () => {
+  it("is €99 per month on the dashboard and €69 on the other pages", () => {
+    expect(adPriceText(2)).toBe("€99 per month");
+    expect(adPriceText(10)).toBe("€69 per month");
   });
 });

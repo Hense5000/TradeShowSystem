@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { adPlace, adSlot, MAX_AD_REQUEST_MESSAGE } from "@/lib/dashboard-ads";
+import { AD_IMAGE_TEXT, adPlace, adPriceText, adSlot, MAX_AD_REQUEST_MESSAGE } from "@/lib/dashboard-ads";
 import { requestAdSpace } from "./ad-actions";
 
 /** The "Get this ad space" button on an empty ad space, and its form popup. */
@@ -64,8 +64,16 @@ function RequestDialog({
           <>
             <h2 id="ad-request-title" className="pr-6 text-xl font-bold">Get this ad space</h2>
             <p className="mt-1 text-sm text-muted">
-              Show your company on the {where(slot)} of every Trade Show System user. Fill in the form and we will contact you with prices and details.
+              Show your company on the {where(slot)} of every Trade Show System user. Fill in the form and we will contact you with the details.
             </p>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border border-line bg-subtle px-4 py-3 text-sm">
+              <dt className="text-muted">Price</dt>
+              <dd className="font-bold">{price(slot)}</dd>
+              <dt className="text-muted">Your ad</dt>
+              <dd>
+                An image: {AD_IMAGE_TEXT}. Send it to us when we contact you, and we put it up with a link to your website.
+              </dd>
+            </dl>
             <form action={action} className="mt-4 flex flex-col gap-3">
               <input type="hidden" name="slot" value={slot} />
               <fieldset disabled={pending} className="contents">
@@ -118,6 +126,11 @@ function RequestDialog({
       </div>
     </div>
   );
+}
+
+/** What the space costs: "€99 per month" on the dashboard, "€69 per month" on the other pages. */
+function price(slot: number) {
+  return adPriceText(adSlot(slot) ?? 1);
 }
 
 /** Where the space is, in the words of the form: "dashboard", "Trade shows page", "Saved lists page" and so on. */

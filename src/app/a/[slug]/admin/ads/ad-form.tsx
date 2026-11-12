@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { AD_IMAGE_TYPES, adFreeText, adSlot, trimBounds } from "@/lib/dashboard-ads";
+import { AD_IMAGE_TEXT, AD_IMAGE_TYPES, adFreeText, adSlot, trimBounds } from "@/lib/dashboard-ads";
 import { removeAd, saveAd } from "./actions";
 
 // Before the upload the image is prepared in the browser: a plain white or
@@ -119,7 +119,7 @@ export function AdForm({
               onChange={(e) => choose(e.target.files?.[0])}
               className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-line-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold hover:file:bg-subtle"
             />
-            <p className="hint">PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels (about 3 : 1). The space has this shape on every screen. A white or transparent frame around the ad is cut away; other sizes fill the space and have their edges cut.</p>
+            <p className="hint">{AD_IMAGE_TEXT} (about 3 : 1). The space has this shape on every screen. A white or transparent frame around the ad is cut away; other sizes fill the space and have their edges cut.</p>
           </div>
           <div>
             <label htmlFor={`ad-link-${slot}`} className="label">Link to the advertiser&apos;s website</label>
