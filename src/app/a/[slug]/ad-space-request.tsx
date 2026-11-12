@@ -64,7 +64,7 @@ function RequestDialog({
           <>
             <h2 id="ad-request-title" className="pr-6 text-xl font-bold">Get this ad space</h2>
             <p className="mt-1 text-sm text-muted">
-              Show your company on the {where(slot)} of every Trade Show System user. Fill in the form and we will contact you with the details.
+              Show your company on the {where(slot)} of every Trade Show System user.
             </p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border border-line bg-subtle px-4 py-3 text-sm">
               <dt className="text-muted">Price</dt>
