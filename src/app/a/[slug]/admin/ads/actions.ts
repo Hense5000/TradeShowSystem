@@ -41,7 +41,7 @@ export async function saveAd(slug: string, _prev: SaveAdState, formData: FormDat
   return { saved: true };
 }
 
-/** Empties an ad space, so it shows "Your ad here!" again. */
+/** Empties an ad space, so it shows "Your ad here - €.. monthly" again. */
 export async function removeAd(slug: string, slotValue: number): Promise<ActionState> {
   await requirePlatformAdmin(slug);
   const slot = adSlot(slotValue);

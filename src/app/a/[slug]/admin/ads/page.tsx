@@ -14,7 +14,7 @@ export default async function AdsPage({ params }: PageProps<"/a/[slug]/admin/ads
     <>
       <PageHeader
         title="Ads"
-        description={`3 ad spaces at the top of every user's dashboard, and 4 at the top of the Trade shows, Exhibitors, Saved lists, Exhibition centers and Exhibition organizers pages. Upload an image and the link to the advertiser's website. A free space shows “Your ad here!” and a “Get this ad space” button; those requests are emailed to ${adNotifyEmail()}.`}
+        description={`3 ad spaces at the top of every user's dashboard, and 4 at the top of the Trade shows, Exhibitors, Saved lists, Exhibition centers and Exhibition organizers pages. Upload an image and the link to the advertiser's website. A free space shows its price (“Your ad here - €99 monthly” on the dashboard, “Your ad here - €69 monthly” on the other pages) and a “Get this ad space” button; those requests are emailed to ${adNotifyEmail()}.`}
       />
       {AD_PAGES.map((page) => (
         <section key={page.key} id={page.key} className="flex scroll-mt-6 flex-col gap-3">

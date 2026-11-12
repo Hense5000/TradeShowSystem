@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { AD_IMAGE_TYPES, trimBounds } from "@/lib/dashboard-ads";
+import { AD_IMAGE_TYPES, adFreeText, adSlot, trimBounds } from "@/lib/dashboard-ads";
 import { removeAd, saveAd } from "./actions";
 
 // Before the upload the image is prepared in the browser: a plain white or
@@ -79,6 +79,7 @@ export function AdForm({
   }
 
   const shown = preview ?? ad?.imageUrl;
+  const freeText = adFreeText(adSlot(slot)!);
   const error = (state && "error" in state ? state.error : undefined) ?? removeError;
   const saved = state && "saved" in state;
 
@@ -86,7 +87,7 @@ export function AdForm({
     <section id={`ad-${slot}`} className="card flex scroll-mt-6 flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-bold">Ad space {position}</h3>
-        <span className={`pill ${ad ? "pill-ok" : "pill-neutral"}`}>{ad ? "Showing ad" : "Free: shows “Your ad here!”"}</span>
+        <span className={`pill ${ad ? "pill-ok" : "pill-neutral"}`}>{ad ? "Showing ad" : `Free: shows “${freeText}”`}</span>
       </div>
 
       {/* The preview has the size of the space on a wide screen. */}
@@ -95,7 +96,7 @@ export function AdForm({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shown} alt="" className="size-full object-cover" />
         ) : (
-          <p className="text-2xl font-extrabold tracking-tight text-faint">Your ad here!</p>
+          <p className="px-3 text-center text-xl leading-tight font-extrabold tracking-tight text-faint">{freeText}</p>
         )}
       </div>
 
@@ -136,7 +137,7 @@ export function AdForm({
                 type="button"
                 className="btn-danger"
                 onClick={() => {
-                  if (!window.confirm(`Remove the ad in space ${position} on the ${pageName}? It will show “Your ad here!” again.`)) return;
+                  if (!window.confirm(`Remove the ad in space ${position} on the ${pageName}? It will show “${freeText}” again.`)) return;
                   startRemove(async () => setRemoveError((await removeAd(slug, slot))?.error));
                 }}
               >

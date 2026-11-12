@@ -2,22 +2,25 @@
 // of the Trade shows page (4-7), the Exhibitors page (8-11), the Saved lists
 // page (12-15), the Exhibition centers page (16-19) and the Exhibition
 // organizers page (20-23). A platform admin uploads an image and a
-// link per space on Super admin → Ads. An empty space shows "Your ad here!"
-// and a "Get this ad space" button, whose form is emailed to AD_NOTIFY_EMAIL
+// link per space on Super admin → Ads. An empty space shows "Your ad here"
+// with the monthly price of a space on that page (adFreeText), and a "Get this ad space" button, whose form is emailed to AD_NOTIFY_EMAIL
 // (Henrik's address when not set).
 
 export const AD_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as const;
 export type AdSlot = (typeof AD_SLOTS)[number];
 
-/** The pages with ad spaces, each with its slots from left to right; `where` is how a sentence names the page. */
+/**
+ * The pages with ad spaces, each with its slots from left to right; `where` is
+ * how a sentence names the page, `price` what one space there costs per month in euro.
+ */
 export const AD_PAGES = [
-  { key: "dashboard", label: "Dashboard", where: "dashboard", slots: [1, 2, 3] },
-  { key: "tradeShows", label: "Trade shows page", where: "Trade shows page", slots: [4, 5, 6, 7] },
-  { key: "exhibitors", label: "Exhibitors page", where: "Exhibitors page", slots: [8, 9, 10, 11] },
-  { key: "savedLists", label: "Saved lists page", where: "Saved lists page", slots: [12, 13, 14, 15] },
-  { key: "centers", label: "Exhibition centers page", where: "Exhibition centers page", slots: [16, 17, 18, 19] },
-  { key: "organizers", label: "Exhibition organizers page", where: "Exhibition organizers page", slots: [20, 21, 22, 23] },
-] as const satisfies readonly { key: string; label: string; where: string; slots: readonly AdSlot[] }[];
+  { key: "dashboard", label: "Dashboard", where: "dashboard", price: 99, slots: [1, 2, 3] },
+  { key: "tradeShows", label: "Trade shows page", where: "Trade shows page", price: 69, slots: [4, 5, 6, 7] },
+  { key: "exhibitors", label: "Exhibitors page", where: "Exhibitors page", price: 69, slots: [8, 9, 10, 11] },
+  { key: "savedLists", label: "Saved lists page", where: "Saved lists page", price: 69, slots: [12, 13, 14, 15] },
+  { key: "centers", label: "Exhibition centers page", where: "Exhibition centers page", price: 69, slots: [16, 17, 18, 19] },
+  { key: "organizers", label: "Exhibition organizers page", where: "Exhibition organizers page", price: 69, slots: [20, 21, 22, 23] },
+] as const satisfies readonly { key: string; label: string; where: string; price: number; slots: readonly AdSlot[] }[];
 export type AdPageKey = (typeof AD_PAGES)[number]["key"];
 
 /** The slots of one page, left to right. */
@@ -29,6 +32,11 @@ export function adPageSlots(key: AdPageKey): readonly AdSlot[] {
 export function adPlace(slot: AdSlot) {
   const page = AD_PAGES.find((p) => (p.slots as readonly number[]).includes(slot))!;
   return { page, position: (page.slots as readonly number[]).indexOf(slot) + 1 };
+}
+
+/** What a free space shows, with the monthly price of a space on its page: "Your ad here - €99 monthly". */
+export function adFreeText(slot: AdSlot): string {
+  return `Your ad here - €${adPlace(slot).page.price} monthly`;
 }
 
 /** The images an ad may be. SVG is left out, since it can carry scripts. */
