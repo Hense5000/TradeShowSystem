@@ -39,6 +39,14 @@ export function adFreeText(slot: AdSlot): string {
   return `Your ad here - €${adPlace(slot).page.price} monthly`;
 }
 
+/** The monthly price of a space, in the words of the request form and email: "€99 per month". */
+export function adPriceText(slot: AdSlot): string {
+  return `€${adPlace(slot).page.price} per month`;
+}
+
+/** What the advertiser's image must be, the same on every page (the spaces all have the shape of 1050 x 360). */
+export const AD_IMAGE_TEXT = "PNG, JPG, WebP or GIF, max 2 MB. Best size: 1050 x 360 pixels";
+
 /** The images an ad may be. SVG is left out, since it can carry scripts. */
 export const AD_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 export const MAX_AD_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -114,6 +122,7 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
     ["Phone", request.phone],
     ["Website", request.website],
     ["Ad space", request.slot ? `${adPlace(request.slot).page.label}, space ${adPlace(request.slot).position} of ${adPlace(request.slot).page.slots.length}` : "Any"],
+    ["Price", request.slot ? adPriceText(request.slot) : ""],
     ["Sent from account", `${account.name} (${account.userEmail})`],
   ];
   const shown = rows.filter(([, v]) => v);
