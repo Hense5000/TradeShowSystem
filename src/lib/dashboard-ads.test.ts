@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
+import { adFreeText, adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
   it("accepts 1 to 23 only (3 on the dashboard, 4 on each of 5 other pages)", () => {
@@ -152,5 +152,14 @@ describe("trimBounds", () => {
   });
   it("ignores a frame of a pixel or two", () => {
     expect(trimBounds(image(30, 12, white, green, [1, 1, 28, 10]), 30, 12)).toBeNull();
+  });
+});
+
+describe("adFreeText", () => {
+  it("shows €99 on the dashboard and €69 on the other pages", () => {
+    expect(adFreeText(1)).toBe("Your ad here - €99 monthly");
+    expect(adFreeText(3)).toBe("Your ad here - €99 monthly");
+    expect(adFreeText(4)).toBe("Your ad here - €69 monthly");
+    expect(adFreeText(23)).toBe("Your ad here - €69 monthly");
   });
 });

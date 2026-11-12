@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { type AdSlot, adImageUrl } from "@/lib/dashboard-ads";
+import { type AdSlot, adFreeText, adImageUrl } from "@/lib/dashboard-ads";
 import { AdSpaceRequest } from "./ad-space-request";
 
 // The spaces have the shape of a 1050 x 360 ad image, so such an image is shown
@@ -10,8 +10,8 @@ export const AD_BOX = "aspect-[1050/360]";
 type Ad = { slot: number; linkUrl: string; name: string | null; updatedAt: Date };
 
 /**
- * A row of ad spaces: the advertiser's image, or "Your ad here!" while the
- * space is free. Used on the dashboard (slots 1-3) and the list pages (4 each, see AD_PAGES).
+ * A row of ad spaces: the advertiser's image, or "Your ad here - €99 monthly"
+ * (the price of a space on that page) while the space is free. Used on the dashboard (slots 1-3) and the list pages (4 each, see AD_PAGES).
  */
 export function DashboardAds({
   slug,
@@ -45,7 +45,7 @@ export function DashboardAds({
               </a>
             ) : (
               <div className={`card flex flex-col items-center justify-center gap-2 px-3 py-2 text-center ${AD_BOX}`}>
-                <p className="text-xl font-extrabold tracking-tight min-[1600px]:text-2xl">Your ad here!</p>
+                <p className="text-lg leading-tight font-extrabold tracking-tight min-[1600px]:text-xl">{adFreeText(slot)}</p>
                 <AdSpaceRequest slug={slug} slot={slot} defaults={requester} />
               </div>
             )}
