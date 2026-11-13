@@ -584,7 +584,7 @@ model FavoriteShow {
 // One row (id 1) with the switch and the result of the last run.
 model ShowFinderSettings {
   id             Int       @id @default(1)
-  enabled        Boolean   @default(false) // runs on its own when on
+  enabled        Boolean   @default(false) // unused: the cleanup only runs from the button on Feature control
   lastRunAt      DateTime?
   lastRunSummary String?
   updatedAt      DateTime  @updatedAt
@@ -643,7 +643,7 @@ model NightlyUpdateSettings {
 
 model TradeShowCleanupSettings {
   id             Int       @id @default(1)
-  enabled        Boolean   @default(false) // runs on its own when on
+  enabled        Boolean   @default(false) // unused: the cleanup only runs from the button on Feature control
   lastRunAt      DateTime?
   lastRunDeleted Int? // trade shows deleted by the last run
   updatedAt      DateTime  @updatedAt

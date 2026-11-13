@@ -10,6 +10,7 @@ import { billingConfigured, removeUnknownBillingData, stripeTestMode } from "@/l
 import { featureSchema } from "@/lib/features";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { requirePlatformAdmin } from "@/lib/tenant";
+import { oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
 import { firstError } from "@/lib/validation";
 
 function parse(formData: FormData) {
@@ -74,12 +75,23 @@ export async function deleteFeature(slug: string, id: string): Promise<ActionSta
   redirect(`/a/${slug}/admin`);
 }
 
-/** Switches the daily cleanup of trade shows older than three years on or off. */
-export async function setCleanupEnabled(slug: string, enabled: boolean): Promise<ActionState> {
+export type DeleteOldShowsState = { done?: string; error?: string } | undefined;
+
+/** Deletes the trade shows that ended more than three years ago, with their exhibitors. Run by hand from Feature control. */
+export async function deleteOldTradeShows(slug: string): Promise<DeleteOldShowsState> {
   await requirePlatformAdmin(slug);
-  await db.tradeShowCleanupSettings.upsert({ where: { id: 1 }, create: { id: 1, enabled }, update: { enabled } });
-  revalidatePath(`/a/${slug}/admin`);
-  return undefined;
+  try {
+    const { count } = await db.tradeShow.deleteMany({ where: oldTradeShowsWhere() });
+    await db.tradeShowCleanupSettings.upsert({
+      where: { id: 1 },
+      create: { id: 1, lastRunAt: new Date(), lastRunDeleted: count },
+      update: { lastRunAt: new Date(), lastRunDeleted: count },
+    });
+    revalidatePath("/a/[slug]", "layout");
+    return { done: count === 0 ? "Nothing to delete." : `Deleted ${count} ${count === 1 ? "trade show" : "trade shows"}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** Switches the weekly update (new trade shows and their exhibitors, Sunday 03:00 Danish time) on or off. */

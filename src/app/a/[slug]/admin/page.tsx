@@ -12,7 +12,8 @@ import { cleanupCutoff, oldTradeShowsWhere } from "@/lib/trade-show-cleanup";
 import { emailSender } from "@/lib/email";
 import { deviceCheckOffReason } from "@/lib/login-guard";
 import { billingConfigured, stripeTestMode } from "@/lib/stripe";
-import { removeTestBillingData, sendTestEmail, setCleanupEnabled, setNightlyUpdateEnabled } from "./actions";
+import { deleteOldTradeShows, removeTestBillingData, sendTestEmail, setNightlyUpdateEnabled } from "./actions";
+import { DeleteOldShowsButton } from "./delete-old-shows-button";
 import { RemoveTestBillingButton } from "./remove-test-billing-button";
 import { TestEmailButton } from "./test-email-button";
 
@@ -48,7 +49,6 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
   ]);
   // On until it is switched off.
   const nightlyOn = nightly?.enabled ?? true;
-  const cleanupOn = Boolean(cleanup?.enabled);
   const cutoff = updated(cleanupCutoff());
   const codeOffReason = deviceCheckOffReason();
   const lastCheck = (groupId: string) => lastChecks.find((l) => l.showsGroupId === groupId)?._max.showsCheckedAt ?? null;
@@ -140,14 +140,13 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
           <span>
             <span className="flex flex-wrap items-center gap-2 font-semibold">
               Delete old trade shows
-              <span className={`pill ${cleanupOn ? "pill-ok" : "pill-neutral"}`}>{cleanupOn ? "On" : "Off"}</span>
             </span>
             <span className="block text-sm text-muted">
-              Once a day, deletes trade shows that ended more than 3 years ago, together with their exhibitors. This cannot be undone.
+              Deletes trade shows that ended more than 3 years ago, together with their exhibitors. Only runs when you press the button. This cannot be undone.
             </span>
             <span className="mt-1 block text-sm">
               {oldShows === 0
-                ? `No trade shows ended before ${cutoff}, so nothing would be deleted now.`
+                ? `No trade shows ended before ${cutoff}, so there is nothing to delete now.`
                 : `${oldShows} ${oldShows === 1 ? "trade show" : "trade shows"} ended before ${cutoff} and would be deleted, with ${oldExhibitors} ${oldExhibitors === 1 ? "exhibitor" : "exhibitors"}.`}
             </span>
             {cleanup?.lastRunAt && (
@@ -157,16 +156,11 @@ export default async function FeatureControlPage({ params }: PageProps<"/a/[slug
             )}
           </span>
         </div>
-        <ActionForm
-          action={setCleanupEnabled.bind(null, slug, !cleanupOn)}
-          confirmMessage={
-            cleanupOn
-              ? undefined
-              : `Switch on? From the next daily run, trade shows that ended before ${cutoff} are deleted with their exhibitors (${oldShows} now). This cannot be undone.`
-          }
-        >
-          <button className={cleanupOn ? "btn-secondary" : "btn"}>{cleanupOn ? "Switch off" : "Switch on"}</button>
-        </ActionForm>
+        <DeleteOldShowsButton
+          action={deleteOldTradeShows.bind(null, slug)}
+          disabled={oldShows === 0}
+          confirmMessage={`Delete ${oldShows} ${oldShows === 1 ? "trade show" : "trade shows"} that ended before ${cutoff}, with ${oldExhibitors} ${oldExhibitors === 1 ? "exhibitor" : "exhibitors"}? This cannot be undone.`}
+        />
       </section>
 
       <section className="card flex flex-wrap items-center justify-between gap-3">
