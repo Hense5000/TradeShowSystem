@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adFreeText, adPriceText, adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
+import { adFreeText, adImageFileName, adPriceText, adNotifyEmail, adPageSlots, adPlace, adRequestEmailContent, adRequestImage, adSlot, checkAdImage, checkAdLink, checkAdRequest, trimBounds } from "./dashboard-ads";
 
 describe("adSlot", () => {
   it("accepts 1 to 23 only (3 on the dashboard, 4 on each of 5 other pages)", () => {
@@ -83,6 +83,41 @@ describe("adRequestEmailContent", () => {
     expect(mail.text).toContain("Message:\nCall me");
     expect(mail.html).toContain("Anna &lt;Hansen&gt;");
     expect(mail.html).toContain("Acme &amp; Co");
+    expect(mail.text).toContain("Ad image: Not attached");
+  });
+  it("names the attached ad image", () => {
+    const mail = adRequestEmailContent(
+      { name: "Anna", company: "Acme", email: "a@acme.com", phone: "", website: "", message: "", slot: 1 },
+      { name: "Buyer Ltd", userEmail: "anna@buyer.com" },
+      "acme-ad.png",
+    );
+    expect(mail.text).toContain("Ad image: acme-ad.png (attached)");
+  });
+});
+
+describe("adImageFileName", () => {
+  it("keeps safe characters and the extension of the type", () => {
+    expect(adImageFileName("Acme ad (final).PNG", "image/png")).toBe("Acme-ad-final.png");
+    expect(adImageFileName("banner.jpeg", "image/jpeg")).toBe("banner.jpg");
+    expect(adImageFileName("../../evil.webp", "image/webp")).toBe("evil.webp");
+    expect(adImageFileName("æøå.gif", "image/gif")).toBe("ad-image.gif");
+  });
+});
+
+describe("adRequestImage", () => {
+  const withImage = (file?: File) => {
+    const data = new FormData();
+    if (file) data.set("image", file);
+    return data;
+  };
+  it("is null when no image is chosen", () => {
+    expect(adRequestImage(withImage())).toBeNull();
+    expect(adRequestImage(withImage(new File([], "", { type: "application/octet-stream" })))).toBeNull();
+  });
+  it("returns an allowed image and refuses others", () => {
+    const png = new File([new Uint8Array(10)], "ad.png", { type: "image/png" });
+    expect(adRequestImage(withImage(png))).toBe(png);
+    expect(adRequestImage(withImage(new File(["<svg/>"], "ad.svg", { type: "image/svg+xml" })))).toEqual({ error: expect.stringContaining("PNG") });
   });
 });
 
