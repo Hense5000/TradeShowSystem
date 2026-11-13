@@ -45,7 +45,7 @@ export function DashboardAds({
               </a>
             ) : (
               <div className={`card flex flex-col items-center justify-center gap-2 px-3 py-2 text-center ${AD_BOX}`}>
-                <p className="text-lg leading-tight font-extrabold tracking-tight min-[1600px]:text-xl">{adFreeText(slot)}</p>
+                <p className="text-base leading-tight font-extrabold tracking-tight text-faint min-[1600px]:text-lg">{adFreeText(slot)}</p>
                 <AdSpaceRequest slug={slug} slot={slot} defaults={requester} />
               </div>
             )}
