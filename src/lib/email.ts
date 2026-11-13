@@ -26,11 +26,36 @@ export function isEmailConfigured(): boolean {
   return Boolean(apiKey() && emailSender());
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo }: { to: string; subject: string; html: string; text: string; replyTo?: string }) {
+/** A file sent with an email; `content` is the file as base64. */
+export type EmailAttachment = { filename: string; content: string };
+
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  text,
+  replyTo,
+  attachments,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+  attachments?: EmailAttachment[];
+}) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: emailSender(), to, subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    body: JSON.stringify({
+      from: emailSender(),
+      to,
+      subject,
+      html,
+      text,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Resend answered ${response.status}: ${(await response.text()).slice(0, 300)}`);
 }

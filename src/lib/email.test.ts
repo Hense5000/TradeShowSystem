@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { emailSender } = await import("./email");
+const { emailSender, sendEmail } = await import("./email");
 
 describe("emailSender", () => {
   it("keeps a correct sender as is", () => {
@@ -16,5 +16,19 @@ describe("emailSender", () => {
 
   it("is empty when not set", () => {
     expect(emailSender("")).toBe("");
+  });
+});
+
+describe("sendEmail", () => {
+  it("sends attachments to Resend only when there are some", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mail = { to: "a@b.com", subject: "S", html: "<p>H</p>", text: "H" };
+    await sendEmail({ ...mail, attachments: [{ filename: "ad.png", content: "aGk=" }] });
+    await sendEmail(mail);
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String((call as unknown as [string, RequestInit])[1].body)));
+    expect(bodies[0].attachments).toEqual([{ filename: "ad.png", content: "aGk=" }]);
+    expect(bodies[1]).not.toHaveProperty("attachments");
+    vi.unstubAllGlobals();
   });
 });

@@ -90,6 +90,34 @@ export function adNotifyEmail(value = process.env.AD_NOTIFY_EMAIL): string {
 
 export const MAX_AD_REQUEST_MESSAGE = 2000;
 
+const AD_IMAGE_EXTENSIONS: Record<(typeof AD_IMAGE_TYPES)[number], string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/**
+ * A safe file name for the ad image attached to a request: letters, digits, "-", "_" and "." only,
+ * ending in the extension of its type. "Acme ad (final).PNG" becomes "Acme-ad-final.png".
+ */
+export function adImageFileName(name: string, type: string): string {
+  const ext = AD_IMAGE_EXTENSIONS[type as keyof typeof AD_IMAGE_EXTENSIONS] ?? "png";
+  const base = name
+    .replace(/\.[^.]*$/, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${base || "ad-image"}.${ext}`;
+}
+
+/** The ad image from the "Get this ad space" form: null when none is chosen, or the reason it cannot be used. */
+export function adRequestImage(formData: FormData): File | null | { error: string } {
+  const file = formData.get("image");
+  if (!(file instanceof File) || file.size === 0) return null;
+  return checkAdImage(file) ?? file;
+}
+
 export type AdRequest = { name: string; company: string; email: string; phone: string; website: string; message: string; slot: AdSlot | null };
 
 const field = (formData: FormData, key: string, max = 200) => String(formData.get(key) ?? "").trim().slice(0, max);
@@ -114,7 +142,7 @@ export function checkAdRequest(formData: FormData): AdRequest | { error: string 
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 /** The email to the platform owner about a company that wants an ad space. */
-export function adRequestEmailContent(request: AdRequest, account: { name: string; userEmail: string }) {
+export function adRequestEmailContent(request: AdRequest, account: { name: string; userEmail: string }, imageFileName?: string) {
   const rows: [string, string][] = [
     ["Name", request.name],
     ["Company", request.company],
@@ -123,6 +151,7 @@ export function adRequestEmailContent(request: AdRequest, account: { name: strin
     ["Website", request.website],
     ["Ad space", request.slot ? `${adPlace(request.slot).page.label}, space ${adPlace(request.slot).position} of ${adPlace(request.slot).page.slots.length}` : "Any"],
     ["Price", request.slot ? adPriceText(request.slot) : ""],
+    ["Ad image", imageFileName ? `${imageFileName} (attached)` : "Not attached"],
     ["Sent from account", `${account.name} (${account.userEmail})`],
   ];
   const shown = rows.filter(([, v]) => v);
