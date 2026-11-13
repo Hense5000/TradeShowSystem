@@ -96,7 +96,7 @@ export function AdForm({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shown} alt="" className="size-full object-cover" />
         ) : (
-          <p className="px-3 text-center text-xl leading-tight font-extrabold tracking-tight text-faint">{freeText}</p>
+          <p className="px-3 text-center text-lg leading-tight font-extrabold tracking-tight text-faint">{freeText}</p>
         )}
       </div>
 
